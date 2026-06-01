@@ -1,4 +1,4 @@
-name: Deploy demo
+name: Publish demo
 
 on:
   push:
@@ -6,16 +6,10 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
+  contents: write
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -35,18 +29,17 @@ jobs:
         env:
           GITHUB_PAGES: "true"
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Publish to gh-pages
+        run: |
+          rm -rf /tmp/molecule-pages
+          mkdir -p /tmp/molecule-pages
+          cp -R dist/. /tmp/molecule-pages/
+          touch /tmp/molecule-pages/.nojekyll
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan gh-pages
+          git rm -rf .
+          cp -R /tmp/molecule-pages/. .
+          git add .
+          git commit -m "Publish GitHub Pages demo"
+          git push --force origin gh-pages
