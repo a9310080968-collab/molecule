@@ -670,14 +670,14 @@ button {
 }
 
 .process-glow {
-  stroke-width: 16;
-  opacity: 0.12;
+  stroke-width: 5.5;
+  opacity: 0.08;
 }
 
 .process-line {
-  stroke-width: 5.5;
-  stroke-dasharray: 9 9;
-  animation: process-flow 5s linear infinite;
+  stroke-width: 1.75;
+  stroke-dasharray: 7 10;
+  animation: process-flow 6s linear infinite;
 }
 
 .process-group.inactive .process-line {
@@ -687,13 +687,13 @@ button {
 
 .process-group.selected .process-line,
 .process-group.matched .process-line {
-  stroke-width: 7.5;
+  stroke-width: 2.55;
 }
 
 .process-hit {
   fill: none;
   stroke: transparent;
-  stroke-width: 24;
+  stroke-width: 14;
   pointer-events: stroke;
   cursor: pointer;
 }
@@ -713,17 +713,23 @@ button {
   align-items: center;
   gap: 7px;
   max-width: 184px;
-  min-height: 28px;
-  padding: 0 10px;
+  min-height: 24px;
+  padding: 0 8px;
   border: 1px solid rgba(171, 205, 255, 0.14);
   border-radius: 999px;
   background: rgba(7, 13, 27, 0.72);
   color: rgba(238, 246, 255, 0.86);
-  font-size: var(--fs-11);
+  font-size: var(--fs-10);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   pointer-events: auto;
+}
+
+.process-document-label {
+  max-width: 144px;
+  min-height: 23px;
+  background: rgba(7, 13, 27, 0.58);
 }
 
 .process-label span {
@@ -887,6 +893,26 @@ button {
 .node-document .node-label em {
   font-size: var(--fs-9);
   -webkit-line-clamp: 2;
+}
+
+.node-status-badge {
+  position: absolute;
+  z-index: 3;
+  bottom: -5px;
+  left: 50%;
+  min-height: 20px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 101, 122, 0.48);
+  border-radius: 999px;
+  background: rgba(42, 8, 18, 0.88);
+  box-shadow: 0 0 16px rgba(255, 101, 122, 0.3);
+  color: #ffc0ca;
+  font-size: var(--fs-10);
+  font-weight: 720;
+  line-height: 19px;
+  pointer-events: none;
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
 
 .node-plus {
@@ -1638,7 +1664,14 @@ button {
   margin-top: 8px;
 }
 
-.document-row button {
+.document-row.with-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.document-row > button:first-child {
   display: grid;
   grid-template-columns: 28px 1fr auto;
   gap: 9px;
@@ -1652,8 +1685,24 @@ button {
   text-align: left;
 }
 
-.document-row button:hover {
+.document-row > button:first-child:hover {
   background: rgba(152, 174, 215, 0.13);
+}
+
+.document-reject-button {
+  min-width: 84px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 101, 122, 0.35);
+  border-radius: 12px;
+  background: rgba(60, 12, 25, 0.52);
+  color: #ffc0ca;
+  font-size: var(--fs-11);
+  font-weight: 680;
+}
+
+.document-reject-button:hover {
+  border-color: rgba(255, 101, 122, 0.58);
+  background: rgba(89, 18, 35, 0.72);
 }
 
 .document-row span {

@@ -13,7 +13,6 @@ import {
   Send,
   Trash2,
   UserRound,
-  XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
@@ -54,6 +53,7 @@ type RightPanelProps = {
   onOpenDocument: (document: ProcessDocument) => void;
   onMoveDocumentNode: (documentNodeId: string, targetNodeId: string | null) => void;
   onAddRandomFile: (targetNodeId?: string) => void;
+  onRejectProcessDocument: (processId: string, documentId: string) => void;
   onAttachInboxDocument: (processId: string, documentId: string) => void;
   onReceiveMail: (processId?: string) => void;
   onReceiveChat: (processId?: string) => void;
@@ -74,6 +74,7 @@ export function RightPanel({
   onOpenDocument,
   onMoveDocumentNode,
   onAddRandomFile,
+  onRejectProcessDocument,
   onAttachInboxDocument,
   onReceiveMail,
   onReceiveChat,
@@ -87,6 +88,7 @@ export function RightPanel({
           onProcessUpdate={onProcessUpdate}
           onDeleteProcess={onDeleteProcess}
           onOpenDocument={onOpenDocument}
+          onRejectProcessDocument={onRejectProcessDocument}
           onAttachInboxDocument={onAttachInboxDocument}
           onReceiveMail={onReceiveMail}
           onReceiveChat={onReceiveChat}
@@ -243,7 +245,7 @@ function DocumentNodeInfo({
   const document = getDocumentFromNode(node);
   const color = getFileTypeColor(document.fileType);
   const attachTargets = getLevelNodes(project, level).filter((target) =>
-    target.id !== node.id && target.type !== "document" && target.type !== "central" && (target.childrenLevelId || target.id === level.centralNodeId),
+    target.id !== node.id && target.type !== "document" && target.type !== "central",
   );
 
   return (
@@ -262,9 +264,9 @@ function DocumentNodeInfo({
           <ExternalLink size={17} />
           Открыть документ
         </button>
-        {node.documentOwnerNodeId ? (
+        {false && node.documentOwnerNodeId ? (
           <button onClick={() => onMoveDocumentNode(node.id, null)}>
-            <XCircle size={17} />
+            <ExternalLink size={17} />
             Вынести из ноды
           </button>
         ) : null}
@@ -273,7 +275,7 @@ function DocumentNodeInfo({
       {!node.documentOwnerNodeId && attachTargets.length ? (
         <section className="document-targets">
           <h3>Вложить вручную</h3>
-          {attachTargets.slice(0, 6).map((target) => (
+          {attachTargets.map((target) => (
             <button key={target.id} onClick={() => onMoveDocumentNode(node.id, target.id)}>
               <span>{target.shortCode ?? target.title}</span>
               <b>{target.title}</b>
@@ -295,6 +297,7 @@ function ProcessInfo({
   onProcessUpdate,
   onDeleteProcess,
   onOpenDocument,
+  onRejectProcessDocument,
   onAttachInboxDocument,
   onReceiveMail,
   onReceiveChat,
@@ -304,6 +307,7 @@ function ProcessInfo({
   onProcessUpdate: (processId: string, edit: ProcessEdit) => void;
   onDeleteProcess: (processId: string) => void;
   onOpenDocument: (document: ProcessDocument) => void;
+  onRejectProcessDocument: (processId: string, documentId: string) => void;
   onAttachInboxDocument: (processId: string, documentId: string) => void;
   onReceiveMail: (processId?: string) => void;
   onReceiveChat: (processId?: string) => void;
@@ -389,7 +393,12 @@ function ProcessInfo({
       </div>
 
       <AttachInbox project={project} process={process} onAttachInboxDocument={onAttachInboxDocument} />
-      <DocumentList title="Документы на проверку" documents={process.documents} onOpenDocument={onOpenDocument} />
+      <DocumentList
+        title="Документы на проверку"
+        documents={process.documents}
+        onOpenDocument={onOpenDocument}
+        onRejectDocument={(documentId) => onRejectProcessDocument(process.id, documentId)}
+      />
 
       <div className="panel-note">
         Связь здесь работает как контейнер бизнес-процесса: у нее есть статус, направление, описание, документы и история принятия в работу. Параллельные контейнеры между теми же нодами отображаются отдельными дугами.
@@ -470,10 +479,12 @@ function DocumentList({
   title,
   documents,
   onOpenDocument,
+  onRejectDocument,
 }: {
   title: string;
   documents: ProcessDocument[];
   onOpenDocument: (document: ProcessDocument) => void;
+  onRejectDocument?: (documentId: string) => void;
 }) {
   if (!documents.length) {
     return (
@@ -488,7 +499,7 @@ function DocumentList({
     <section className="document-list">
       <h3>{title}</h3>
       {documents.map((document) => (
-        <article key={document.id} className="document-row">
+        <article key={document.id} className={clsx("document-row", onRejectDocument && "with-action")}>
           <button onClick={() => onOpenDocument(document)}>
             <span style={{ color: getFileTypeColor(document.fileType) }}>
               <FileText size={17} />
@@ -499,6 +510,11 @@ function DocumentList({
             </div>
             <em>{document.version}</em>
           </button>
+          {onRejectDocument ? (
+            <button className="document-reject-button" onClick={() => onRejectDocument(document.id)}>
+              Не принято
+            </button>
+          ) : null}
         </article>
       ))}
     </section>

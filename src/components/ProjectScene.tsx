@@ -11,6 +11,7 @@ import {
 } from "react";
 import { ChevronUp, Plus } from "lucide-react";
 import {
+  getFileLabel,
   getNodeVisualTone,
   getProcessStatusColor,
   getProcessStatusText,
@@ -273,21 +274,35 @@ export function ProjectScene({
     drag.moved = true;
     drag.currentPosition = next;
     setPositions((current) => ({ ...current, [node.id]: next }));
+
+    if (node.type === "document") {
+      const dropPositions = { ...positions, [node.id]: next };
+      const target = findDocumentDropTarget(node, nodes, dropPositions, centerNodeId, 5.6);
+      if (target) {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        dragRef.current = null;
+        onMoveDocumentNode(node.id, target.id);
+      }
+    }
   };
 
-  const handleNodePointerUp = (event: ReactPointerEvent<HTMLButtonElement>, node: ProjectNode) => {
+  const finishNodeDrag = (event: ReactPointerEvent<HTMLButtonElement>, node: ProjectNode) => {
     const drag = dragRef.current;
     if (!drag || drag.nodeId !== node.id || drag.pointerId !== event.pointerId) {
       return;
     }
 
     event.stopPropagation();
-    event.currentTarget.releasePointerCapture(event.pointerId);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
     dragRef.current = null;
 
     if (drag.moved && node.type === "document") {
       const dropPositions = { ...positions, [node.id]: drag.currentPosition };
-      const target = findDocumentDropTarget(node, nodes, dropPositions, centerNodeId);
+      const target = findDocumentDropTarget(node, nodes, dropPositions, centerNodeId, 7.2);
       const position = dropPositions[node.id];
       if (target) {
         onMoveDocumentNode(node.id, target.id);
@@ -304,6 +319,10 @@ export function ProjectScene({
         onSelectNode(node.id);
       }
     }
+  };
+
+  const handleNodePointerUp = (event: ReactPointerEvent<HTMLButtonElement>, node: ProjectNode) => {
+    finishNodeDrag(event, node);
   };
 
   return (
@@ -343,11 +362,11 @@ export function ProjectScene({
 
       <svg className="process-layer" aria-hidden="true">
         <defs>
-          <marker id="arrow-end" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
-            <path d="M 0 1 L 9 5 L 0 9 z" fill="rgba(242,247,255,0.88)" />
+          <marker id="arrow-end" markerWidth="5" markerHeight="5" refX="4.4" refY="2.5" orient="auto" markerUnits="strokeWidth">
+            <path d="M 0 0.9 L 4.8 2.5 L 0 4.1 z" fill="context-stroke" />
           </marker>
-          <marker id="arrow-start" markerWidth="10" markerHeight="10" refX="2" refY="5" orient="auto" markerUnits="strokeWidth">
-            <path d="M 9 1 L 0 5 L 9 9 z" fill="rgba(242,247,255,0.88)" />
+          <marker id="arrow-start" markerWidth="5" markerHeight="5" refX="0.6" refY="2.5" orient="auto" markerUnits="strokeWidth">
+            <path d="M 4.8 0.9 L 0 2.5 L 4.8 4.1 z" fill="context-stroke" />
           </marker>
         </defs>
         {processes.map((process) => (
@@ -426,6 +445,7 @@ export function ProjectScene({
               <strong>{isCenter ? node.title : node.shortCode ?? node.title}</strong>
               <em>{isCenter ? `${progress}%` : node.title}</em>
             </span>
+            {node.type === "document" && node.status === "comments" ? <span className="node-status-badge">Не принято</span> : null}
             {node.type !== "central" && node.type !== "document" ? (
               <span
                 className={clsx("node-plus", (hoveredNodeId === node.id || linkingFromId) && "visible")}
@@ -478,27 +498,39 @@ function ProcessPath({
 
   const radiusFrom = getNodeRadius(fromNode, centralNodeId);
   const radiusTo = getNodeRadius(toNode, centralNodeId);
-  const path = buildProcessPath(from, to, radiusFrom, radiusTo, process.parallelIndex ?? 0);
-  const color = getProcessStatusColor(process.status);
+  const documents = process.documents;
+  const flows = documents.length ? documents : [undefined];
   const inactive = process.status === "accepted" || process.status === "in_work";
 
   return (
     <g className={clsx("process-group", selected && "selected", matched && "matched", dimmed && "dimmed", inactive && "inactive")}>
-      <path className="process-glow" d={path} style={{ stroke: color }} />
-      <path
-        className="process-line"
-        d={path}
-        style={{ stroke: color }}
-        markerEnd={process.direction === "forward" || process.direction === "both" ? "url(#arrow-end)" : undefined}
-        markerStart={process.direction === "backward" || process.direction === "both" ? "url(#arrow-start)" : undefined}
-      />
-      <path className="process-hit" d={path} onClick={onSelect} />
-      <foreignObject x={(from.x + to.x) / 2 - 92} y={(from.y + to.y) / 2 - 18} width="184" height="36">
-        <button className="process-label" onClick={onSelect} title={process.description}>
-          <span style={{ background: color }} />
-          {getProcessStatusText(process.status)}
-        </button>
-      </foreignObject>
+      {flows.map((document, index) => {
+        const flowOffset = (process.parallelIndex ?? 0) * 2.2 + (index - (flows.length - 1) / 2) * 1.08;
+        const geometry = buildProcessGeometry(from, to, radiusFrom, radiusTo, flowOffset);
+        const direction = getDocumentFlowDirection(process, document);
+        const color = getDocumentFlowColor(process, document);
+        const label = document ? getShortDocumentLabel(document) : getProcessStatusText(process.status);
+
+        return (
+          <g key={document?.id ?? `${process.id}-empty`} className={clsx("process-document-flow", document?.status === "comments" && "rejected-doc")}>
+            <path className="process-glow" d={geometry.path} style={{ stroke: color }} />
+            <path
+              className="process-line"
+              d={geometry.path}
+              style={{ stroke: color }}
+              markerEnd={direction === "forward" || direction === "both" ? "url(#arrow-end)" : undefined}
+              markerStart={direction === "backward" || direction === "both" ? "url(#arrow-start)" : undefined}
+            />
+            <path className="process-hit" d={geometry.path} onClick={onSelect} />
+            <foreignObject x={geometry.label.x - 72} y={geometry.label.y - 13} width="144" height="28">
+              <button className="process-label process-document-label" onClick={onSelect} title={document ? document.title : process.description}>
+                <span style={{ background: color }} />
+                {label}
+              </button>
+            </foreignObject>
+          </g>
+        );
+      })}
     </g>
   );
 }
@@ -606,7 +638,7 @@ function addDelta(deltas: Record<string, Vec2>, id: string, x: number, y: number
   deltas[id].y += y;
 }
 
-function findDocumentDropTarget(documentNode: ProjectNode, nodes: ProjectNode[], positions: Record<string, Vec2>, centralNodeId: string) {
+function findDocumentDropTarget(documentNode: ProjectNode, nodes: ProjectNode[], positions: Record<string, Vec2>, centralNodeId: string, maxDistance = 7.2) {
   const documentPosition = positions[documentNode.id];
   if (!documentPosition) {
     return undefined;
@@ -618,17 +650,13 @@ function findDocumentDropTarget(documentNode: ProjectNode, nodes: ProjectNode[],
       return;
     }
 
-    if (!node.childrenLevelId && node.id !== centralNodeId) {
-      return;
-    }
-
     const position = positions[node.id];
     if (!position) {
       return;
     }
 
     const distance = Math.hypot(documentPosition.x - position.x, documentPosition.y - position.y);
-    if (distance < 5.8 && (!best || distance < best.distance)) {
+    if (distance < maxDistance && (!best || distance < best.distance)) {
       best = { node, distance };
     }
   });
@@ -636,7 +664,32 @@ function findDocumentDropTarget(documentNode: ProjectNode, nodes: ProjectNode[],
   return best?.node;
 }
 
-function buildProcessPath(from: Vec2, to: Vec2, radiusFrom: number, radiusTo: number, offsetIndex: number) {
+function getDocumentFlowDirection(process: BusinessProcess, document?: ProcessDocument) {
+  if (document?.status === "comments" || process.status === "rejected") {
+    return "backward";
+  }
+
+  return process.direction;
+}
+
+function getDocumentFlowColor(process: BusinessProcess, document?: ProcessDocument) {
+  if (!document) {
+    return getProcessStatusColor(process.status);
+  }
+
+  if (document.status === "approved") return "#2ed8a3";
+  if (document.status === "comments") return "#ff657a";
+  if (document.status === "review") return "#35d9ff";
+  if (document.status === "draft") return "#8b93a6";
+  return getProcessStatusColor(process.status);
+}
+
+function getShortDocumentLabel(document: ProcessDocument) {
+  const cleanTitle = document.title.replace(/\.[a-z0-9]+$/i, "");
+  return `${getFileLabel(document.fileType)} · ${cleanTitle.slice(0, 18)}`;
+}
+
+function buildProcessGeometry(from: Vec2, to: Vec2, radiusFrom: number, radiusTo: number, offsetIndex: number) {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const distance = Math.max(Math.hypot(dx, dy), 0.001);
@@ -645,13 +698,19 @@ function buildProcessPath(from: Vec2, to: Vec2, radiusFrom: number, radiusTo: nu
   const start = { x: from.x + ux * radiusFrom, y: from.y + uy * radiusFrom };
   const end = { x: to.x - ux * radiusTo, y: to.y - uy * radiusTo };
   const normal = { x: -uy, y: ux };
-  const bend = offsetIndex * 56;
+  const bend = offsetIndex * 94;
   const mid = {
     x: (start.x + end.x) / 2 + normal.x * bend,
     y: (start.y + end.y) / 2 + normal.y * bend,
   };
 
-  return `M ${start.x} ${start.y} Q ${mid.x} ${mid.y} ${end.x} ${end.y}`;
+  return {
+    path: `M ${start.x} ${start.y} Q ${mid.x} ${mid.y} ${end.x} ${end.y}`,
+    label: {
+      x: (start.x + end.x) / 2 + normal.x * bend * 0.62,
+      y: (start.y + end.y) / 2 + normal.y * bend * 0.62,
+    },
+  };
 }
 
 function worldToScreen(position: Vec2, size: { width: number; height: number }, view: ViewState): Vec2 {

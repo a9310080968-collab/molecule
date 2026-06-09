@@ -331,6 +331,75 @@ export default function App() {
     showToast("Задание вручную прикручено к выбранной связи.");
   }
 
+  function rejectProcessDocument(processId: string, documentId: string) {
+    const process = getProcessById(activeProject, processId);
+    const document = process?.documents.find((item) => item.id === documentId);
+    if (!process || !document) {
+      return;
+    }
+
+    const rejectedDocument: ProcessDocument = {
+      ...document,
+      status: "comments",
+      updatedAt: "только что",
+    };
+    const documentNodeId = `node-${rejectedDocument.id}`;
+    const existingNode = getNodeById(activeProject, documentNodeId);
+    const rejectedNode: ProjectNode = existingNode
+      ? {
+          ...existingNode,
+          levelId: process.levelId,
+          documentOwnerNodeId: undefined,
+          description: "Не принято. Документ выброшен наружу для доработки.",
+          status: "comments",
+          updatedAt: "только что",
+          document: rejectedDocument,
+        }
+      : {
+          ...createDocumentNode(activeProject.id, process.levelId, rejectedDocument),
+          description: "Не принято. Документ выброшен наружу для доработки.",
+          status: "comments",
+        };
+
+    updateActiveProject((project) => ({
+      ...project,
+      processes: project.processes.map((item) =>
+        item.id === processId
+          ? {
+              ...item,
+              status: "rejected",
+              documents: item.documents.map((itemDocument) => (itemDocument.id === documentId ? rejectedDocument : itemDocument)),
+            }
+          : item,
+      ),
+      nodes: project.nodes.some((node) => node.id === rejectedNode.id)
+        ? project.nodes.map((node) => (node.id === rejectedNode.id ? rejectedNode : node))
+        : [rejectedNode, ...project.nodes],
+      levels: project.levels.map((level) => ({
+        ...level,
+        nodeIds:
+          level.id === process.levelId
+            ? appendUnique(level.nodeIds.filter((id) => id !== rejectedNode.id), rejectedNode.id)
+            : level.nodeIds.filter((id) => id !== rejectedNode.id),
+      })),
+      inboxDocuments: project.inboxDocuments.some((item) => item.id === rejectedDocument.id)
+        ? project.inboxDocuments.map((item) => (item.id === rejectedDocument.id ? rejectedDocument : item))
+        : [rejectedDocument, ...project.inboxDocuments],
+      updatedAt: "только что",
+    }));
+
+    setActiveLevelId(process.levelId);
+    setSelectedNodeId(rejectedNode.id);
+    setSelectedProcessId(null);
+    pushNotification({
+      title: "Документ не принят",
+      description: `Файл «${rejectedDocument.title}» выброшен наружу для доработки.`,
+      targetNodeId: rejectedNode.id,
+      targetProcessId: process.id,
+    });
+    showToast("Документ не принят и выброшен наружу как малая нода.");
+  }
+
   function receiveMail(processId?: string) {
     const targetProcess = processId ? getProcessById(activeProject, processId) : findBestProcessForIncoming(activeProject, activeLevel.id, "АР");
     const document = createDocumentFromName("АР_пакет_из_почты_новое.pdf", "mail");
@@ -704,6 +773,7 @@ export default function App() {
           onOpenDocument={setModalDocument}
           onMoveDocumentNode={moveDocumentNode}
           onAddRandomFile={addRandomFile}
+          onRejectProcessDocument={rejectProcessDocument}
           onAttachInboxDocument={attachInboxDocument}
           onReceiveMail={receiveMail}
           onReceiveChat={receiveChat}
