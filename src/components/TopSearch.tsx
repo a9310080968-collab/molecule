@@ -1,7 +1,7 @@
 import { Bell, Menu, Search, SlidersHorizontal, X } from "lucide-react";
 import { useState } from "react";
-import { project } from "../data/mockProject";
-import type { DemoNotification } from "../types";
+import clsx from "clsx";
+import type { DemoNotification, DemoProject } from "../types";
 
 type TopSearchProps = {
   value: string;
@@ -9,6 +9,9 @@ type TopSearchProps = {
   hasNoResults: boolean;
   matchCount: number;
   onMenuClick: () => void;
+  projects: DemoProject[];
+  activeProjectId: string;
+  onProjectChange: (projectId: string) => void;
   notifications: DemoNotification[];
   onNotificationClick: (notification: DemoNotification) => void;
 };
@@ -19,11 +22,16 @@ export function TopSearch({
   hasNoResults,
   matchCount,
   onMenuClick,
+  projects,
+  activeProjectId,
+  onProjectChange,
   notifications,
   onNotificationClick,
 }: TopSearchProps) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const unreadCount = notifications.filter((notification) => notification.unread).length;
+  const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0];
+  const projectNotifications = notifications.filter((notification) => notification.projectId === activeProjectId);
+  const unreadCount = projectNotifications.filter((notification) => notification.unread).length;
 
   return (
     <header className="topbar">
@@ -31,13 +39,25 @@ export function TopSearch({
         <Menu size={20} />
       </button>
 
+      <div className="project-tabs glass-panel" aria-label="Проекты">
+        {projects.map((project) => (
+          <button
+            key={project.id}
+            className={clsx(project.id === activeProjectId && "active")}
+            onClick={() => onProjectChange(project.id)}
+          >
+            <span>{project.title}</span>
+            <small>{project.address}</small>
+          </button>
+        ))}
+      </div>
+
       <div className="search-wrap">
         <Search size={22} />
         <input
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          onInput={(event) => onChange(event.currentTarget.value)}
-          placeholder="Поиск по документам и узлам..."
+          placeholder="Поиск по нодам, бизнес-процессам, документам и чату..."
         />
         {value ? (
           <button className="clear-search" onClick={() => onChange("")} aria-label="Очистить поиск">
@@ -57,12 +77,12 @@ export function TopSearch({
         <span>ПА</span>
         <div>
           <b>Павел Андреев</b>
-          <small>{project.title}</small>
+          <small>{activeProject.title}</small>
         </div>
         <button
           className="icon-button"
           aria-label="Уведомления"
-          onClick={() => setNotificationsOpen((value) => !value)}
+          onClick={() => setNotificationsOpen((current) => !current)}
         >
           <Bell size={18} />
           {unreadCount ? <i>{unreadCount}</i> : null}
@@ -70,23 +90,27 @@ export function TopSearch({
         {notificationsOpen ? (
           <div className="notifications-popover glass-panel">
             <header>
-              <b>События демо</b>
+              <b>События проекта</b>
               <span>{unreadCount ? `${unreadCount} новых` : "нет новых"}</span>
             </header>
-            {notifications.map((notification) => (
-              <button
-                key={notification.id}
-                className={notification.unread ? "unread" : ""}
-                onClick={() => {
-                  onNotificationClick(notification);
-                  setNotificationsOpen(false);
-                }}
-              >
-                <strong>{notification.title}</strong>
-                <span>{notification.description}</span>
-                <em>{notification.time}</em>
-              </button>
-            ))}
+            {projectNotifications.length ? (
+              projectNotifications.map((notification) => (
+                <button
+                  key={notification.id}
+                  className={notification.unread ? "unread" : ""}
+                  onClick={() => {
+                    onNotificationClick(notification);
+                    setNotificationsOpen(false);
+                  }}
+                >
+                  <strong>{notification.title}</strong>
+                  <span>{notification.description}</span>
+                  <em>{notification.time}</em>
+                </button>
+              ))
+            ) : (
+              <p className="popover-empty">Событий пока нет</p>
+            )}
           </div>
         ) : null}
       </div>

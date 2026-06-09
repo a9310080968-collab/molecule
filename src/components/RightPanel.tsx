@@ -1,361 +1,348 @@
 import {
+  ArrowLeftRight,
   CheckCircle2,
   Clock3,
   ExternalLink,
   FileText,
   GitBranch,
-  Layers3,
+  Inbox,
+  Mail,
+  MessageCircle,
+  Plus,
+  Send,
+  Trash2,
   UserRound,
-  X,
+  XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
-import { project } from "../data/mockProject";
 import {
-  getEffectiveParentId,
   getFileLabel,
   getFileTypeColor,
-  getLinkDefaults,
-  getNodeById,
+  getNodeDocuments,
+  getNodeProcesses,
+  getNodeVisualTone,
+  getProcessStatusColor,
+  getProcessStatusText,
   getProjectProgress,
-  getSectionDocuments,
-  type ParentMap,
+  getStatusText,
 } from "../lib/graph";
-import type { LinkEdit, ProjectLink, NodeEdit, ProjectNode, SectionReviews, StatusLabels } from "../types";
+import type {
+  BusinessProcess,
+  DemoProject,
+  MapLevel,
+  NodeEdit,
+  ProcessDocument,
+  ProcessEdit,
+  ProcessStatus,
+  ProjectNode,
+} from "../types";
 
 type RightPanelProps = {
+  project: DemoProject;
+  level: MapLevel;
   node: ProjectNode;
-  link: ProjectLink | null;
-  linkEdit?: LinkEdit;
-  nodes: ProjectNode[];
-  parentMap: ParentMap;
-  statusLabels: StatusLabels;
-  sectionReviews: SectionReviews;
-  onNodeUpdate: (id: string, edit: NodeEdit) => void;
-  onLinkUpdate: (id: string, edit: LinkEdit) => void;
-  onDeleteLink: (id: string) => void;
-  onPinLink: (id: string) => void;
-  onDeadlineSet: (nodeId: string, deadlineAt?: string) => void;
-  onReleaseDocument: (documentId: string) => void;
-  onSendSectionReview: (sectionId: string, documentIds: string[]) => void;
-  onDecideSectionReview: (sectionId: string, approvedDocumentIds: string[], allDocumentIds: string[]) => void;
-  onStartLink: (fromId: string) => void;
-  onCloseLink: () => void;
-  onOpenDocument: (node: ProjectNode) => void;
+  process: BusinessProcess | null;
+  onNodeUpdate: (nodeId: string, edit: NodeEdit) => void;
+  onProcessUpdate: (processId: string, edit: ProcessEdit) => void;
+  onDeleteProcess: (processId: string) => void;
+  onStartLink: (nodeId: string) => void;
+  onOpenNodeLevel: (node: ProjectNode) => void;
+  onOpenDocument: (document: ProcessDocument) => void;
+  onAttachInboxDocument: (processId: string, documentId: string) => void;
+  onReceiveMail: (processId?: string) => void;
+  onReceiveChat: (processId?: string) => void;
 };
 
-const SECTION_APPROVED_COLOR = "#a970ff";
-const SECTION_LOCKED_COLOR = "#8a92a6";
-const CENTRAL_LOCKED_COLOR = "#8b93a6";
+const processStatuses: ProcessStatus[] = ["draft", "sent", "in_work", "rejected", "accepted"];
 
 export function RightPanel({
+  project,
+  level,
   node,
-  link,
-  linkEdit,
-  nodes,
-  parentMap,
-  statusLabels,
-  sectionReviews,
+  process,
   onNodeUpdate,
-  onLinkUpdate,
-  onDeleteLink,
-  onPinLink,
-  onDeadlineSet,
-  onReleaseDocument,
-  onSendSectionReview,
-  onDecideSectionReview,
+  onProcessUpdate,
+  onDeleteProcess,
   onStartLink,
-  onCloseLink,
+  onOpenNodeLevel,
   onOpenDocument,
+  onAttachInboxDocument,
+  onReceiveMail,
+  onReceiveChat,
 }: RightPanelProps) {
   return (
     <aside className="right-panel glass-panel">
-      {link ? (
-        <LinkInfo
-          link={link}
-          linkEdit={linkEdit}
-          nodes={nodes}
-          onLinkUpdate={onLinkUpdate}
-          onDeleteLink={onDeleteLink}
-          onPinLink={onPinLink}
-          onStartLink={onStartLink}
-          onClose={onCloseLink}
-        />
-      ) : node.type === "central" ? (
-        <CentralInfo node={node} nodes={nodes} parentMap={parentMap} onNodeUpdate={onNodeUpdate} onDeadlineSet={onDeadlineSet} />
-      ) : node.type === "section" ? (
-        <SectionInfo
-          node={node}
-          nodes={nodes}
-          parentMap={parentMap}
-          statusLabels={statusLabels}
-          review={sectionReviews[node.id]}
-          onNodeUpdate={onNodeUpdate}
-          onDeadlineSet={onDeadlineSet}
-          onReleaseDocument={onReleaseDocument}
-          onSendReview={onSendSectionReview}
-          onDecideReview={onDecideSectionReview}
+      {process ? (
+        <ProcessInfo
+          project={project}
+          process={process}
+          onProcessUpdate={onProcessUpdate}
+          onDeleteProcess={onDeleteProcess}
           onOpenDocument={onOpenDocument}
+          onAttachInboxDocument={onAttachInboxDocument}
+          onReceiveMail={onReceiveMail}
+          onReceiveChat={onReceiveChat}
         />
       ) : (
-        <DocumentInfo
+        <NodeInfo
+          project={project}
+          level={level}
           node={node}
-          nodes={nodes}
-          parentMap={parentMap}
-          statusLabels={statusLabels}
           onNodeUpdate={onNodeUpdate}
-          onDeadlineSet={onDeadlineSet}
+          onStartLink={onStartLink}
+          onOpenNodeLevel={onOpenNodeLevel}
           onOpenDocument={onOpenDocument}
+          onReceiveMail={onReceiveMail}
+          onReceiveChat={onReceiveChat}
         />
       )}
     </aside>
   );
 }
 
-function CentralInfo({
+function NodeInfo({
+  project,
+  level,
   node,
-  nodes,
-  parentMap,
   onNodeUpdate,
-  onDeadlineSet,
-}: {
-  node: ProjectNode;
-  nodes: ProjectNode[];
-  parentMap: ParentMap;
-  onNodeUpdate: (id: string, edit: NodeEdit) => void;
-  onDeadlineSet: (nodeId: string, deadlineAt?: string) => void;
-}) {
-  const progress = getProjectProgress(nodes, parentMap);
-  const color = CENTRAL_LOCKED_COLOR;
-  const sectionCount = nodes.filter((item) => item.type === "section").length;
-  const documentCount = nodes.filter((item) => item.type === "document").length;
-
-  return (
-    <>
-      <PanelHeader eyebrow="Проект" status="Живая карта" statusColor={color} title={node.title} />
-      <NodeEditor node={node} onNodeUpdate={onNodeUpdate} />
-      <DeadlineEditor node={node} onDeadlineSet={onDeadlineSet} />
-      <div className="progress-block">
-        <div>
-          <span>Готовность документации</span>
-          <b>{progress}%</b>
-        </div>
-        <div className="progress-track">
-          <i style={{ width: `${progress}%`, background: `linear-gradient(90deg, #b755ff, ${color})` }} />
-        </div>
-      </div>
-      <div className="info-grid">
-        <Metric label="Разделов" value={String(sectionCount)} />
-        <Metric label="Документов" value={String(documentCount)} />
-        <Metric label="Обновлено" value={project.updatedAt} />
-        <Metric label="Хранилище" value="247 ГБ" />
-      </div>
-      <div className="panel-note">
-        Центральная нода показывает состояние всего документационного трека и собирает прогресс
-        ключевых разделов проекта.
-      </div>
-    </>
-  );
-}
-
-function SectionInfo({
-  node,
-  nodes,
-  parentMap,
-  statusLabels,
-  review,
-  onNodeUpdate,
-  onDeadlineSet,
-  onReleaseDocument,
-  onSendReview,
-  onDecideReview,
+  onStartLink,
+  onOpenNodeLevel,
   onOpenDocument,
+  onReceiveMail,
+  onReceiveChat,
 }: {
+  project: DemoProject;
+  level: MapLevel;
   node: ProjectNode;
-  nodes: ProjectNode[];
-  parentMap: ParentMap;
-  statusLabels: StatusLabels;
-  review?: SectionReviews[string];
-  onNodeUpdate: (id: string, edit: NodeEdit) => void;
-  onDeadlineSet: (nodeId: string, deadlineAt?: string) => void;
-  onReleaseDocument: (documentId: string) => void;
-  onSendReview: (sectionId: string, documentIds: string[]) => void;
-  onDecideReview: (sectionId: string, approvedDocumentIds: string[], allDocumentIds: string[]) => void;
-  onOpenDocument: (node: ProjectNode) => void;
+  onNodeUpdate: (nodeId: string, edit: NodeEdit) => void;
+  onStartLink: (nodeId: string) => void;
+  onOpenNodeLevel: (node: ProjectNode) => void;
+  onOpenDocument: (document: ProcessDocument) => void;
+  onReceiveMail: (processId?: string) => void;
+  onReceiveChat: (processId?: string) => void;
 }) {
-  const docs = getSectionDocuments(node.id, parentMap, nodes);
-  const status = node.status ? statusLabels[node.status] : "Без статуса";
-  const color = node.status === "approved" ? SECTION_APPROVED_COLOR : SECTION_LOCKED_COLOR;
-  const docKey = docs.map((document) => document.id).join("|");
-  const docIds = useMemo(() => (docKey ? docKey.split("|") : []), [docKey]);
-  const [checkedDocIds, setCheckedDocIds] = useState<string[]>(docIds);
-
-  useEffect(() => {
-    setCheckedDocIds(review?.approvedDocumentIds?.length ? review.approvedDocumentIds : docIds);
-  }, [docIds, review?.approvedDocumentIds]);
+  const tone = getNodeVisualTone(node);
+  const processes = getNodeProcesses(project, node.id);
+  const documents = getNodeDocuments(project, node.id);
+  const progress = getProjectProgress(project, level);
 
   return (
     <>
-      <PanelHeader
-        eyebrow={node.shortCode ?? "Раздел"}
-        status={status}
-        statusColor={color}
-        title={node.title}
-      />
-      <NodeEditor node={node} onNodeUpdate={onNodeUpdate} />
-      <DeadlineEditor node={node} onDeadlineSet={onDeadlineSet} />
-      <TagsEditor node={node} onNodeUpdate={onNodeUpdate} />
-      <NodeRoleSwitcher node={node} onNodeUpdate={onNodeUpdate} />
-      <SectionApproval
-        node={node}
-        docs={docs}
-        review={review}
-        checkedDocIds={checkedDocIds}
-        onCheckedChange={setCheckedDocIds}
-        onSendReview={() => onSendReview(node.id, docIds)}
-        onApproveAll={() => onDecideReview(node.id, docIds, docIds)}
-        onApprovePartial={() => onDecideReview(node.id, checkedDocIds, docIds)}
-        onReject={() => onDecideReview(node.id, [], docIds)}
-      />
+      <PanelHeader eyebrow={node.shortCode ?? "Нода"} title={node.title} status={getStatusText(node.status)} statusColor={tone.glow} />
 
-      <div className="info-grid">
-        <Metric label="Документов" value={String(docs.length)} />
-        <Metric label="Версия раздела" value={node.version ?? "v1.0"} />
-        <Metric label="Ответственный" value={node.responsible ?? "Не назначен"} />
-        <Metric label="Обновлено" value={node.updatedAt ?? "Сегодня"} />
-      </div>
-
-      <section className="document-list">
-        <h3>Документы на проверку</h3>
-        {docs.map((document) => (
-          <article key={document.id} className="document-row">
-          <button onClick={() => onOpenDocument(document)}>
-            <span style={{ color: getFileTypeColor(document.fileType) }}>
-              <FileText size={17} />
-            </span>
-            <div>
-              <b>{document.title}</b>
-              <small>{document.status ? statusLabels[document.status] : "Без статуса"}</small>
-            </div>
-            <em>{document.version}</em>
-          </button>
-          {document.absorbed ? (
-            <button className="document-release" onClick={() => onReleaseDocument(document.id)}>
-              вынести
-            </button>
-          ) : null}
-          </article>
-        ))}
+      <section className="node-editor">
+        <label>
+          <span>Название ноды</span>
+          <input value={node.title} onChange={(event) => onNodeUpdate(node.id, { title: event.currentTarget.value })} />
+        </label>
+        <label>
+          <span>Описание</span>
+          <textarea value={node.description ?? ""} onChange={(event) => onNodeUpdate(node.id, { description: event.currentTarget.value })} />
+        </label>
       </section>
 
-      <button className="primary-action">
-        Открыть раздел
-        <ExternalLink size={18} />
-      </button>
+      <TagsEditor node={node} onNodeUpdate={onNodeUpdate} />
+
+      <section className="quick-actions">
+        {node.type !== "central" ? (
+          <button onClick={() => onStartLink(node.id)}>
+            <GitBranch size={17} />
+            Связать с нодой
+          </button>
+        ) : null}
+        {node.childrenLevelId ? (
+          <button onClick={() => onOpenNodeLevel(node)}>
+            <ExternalLink size={17} />
+            Провалиться внутрь
+          </button>
+        ) : null}
+        <button onClick={() => onReceiveMail()}>
+          <Mail size={17} />
+          Получить письмо
+        </button>
+        <button onClick={() => onReceiveChat()}>
+          <MessageCircle size={17} />
+          Сообщение в чат
+        </button>
+      </section>
+
+      <div className="info-grid">
+        <Metric icon={<GitBranch size={16} />} label="Связей" value={String(processes.length)} />
+        <Metric icon={<FileText size={16} />} label="Документов в связях" value={String(documents.length)} />
+        <Metric icon={<UserRound size={16} />} label="Ответственный" value={node.responsible ?? "Не назначен"} wide />
+        <Metric icon={<Clock3 size={16} />} label="Обновлено" value={node.updatedAt ?? "сегодня"} />
+        {node.type === "central" ? <Metric icon={<CheckCircle2 size={16} />} label="Готовность уровня" value={`${progress}%`} /> : null}
+      </div>
+
+      <section className="process-list">
+        <h3>Связанные бизнес-процессы</h3>
+        {processes.length ? processes.slice(0, 6).map((process) => (
+          <article key={process.id}>
+            <i style={{ background: getProcessStatusColor(process.status) }} />
+            <div>
+              <b>{process.title}</b>
+              <span>{getProcessStatusText(process.status)}</span>
+            </div>
+            <em>{process.documents.length}</em>
+          </article>
+        )) : <p>У ноды пока нет ручных контейнеров связей.</p>}
+      </section>
+
+      <DocumentList title="Документы в процессах" documents={documents.slice(0, 6)} onOpenDocument={onOpenDocument} />
     </>
   );
 }
 
-function DocumentInfo({
-  node,
-  nodes,
-  parentMap,
-  statusLabels,
-  onNodeUpdate,
-  onDeadlineSet,
+function ProcessInfo({
+  project,
+  process,
+  onProcessUpdate,
+  onDeleteProcess,
   onOpenDocument,
+  onAttachInboxDocument,
+  onReceiveMail,
+  onReceiveChat,
 }: {
-  node: ProjectNode;
-  nodes: ProjectNode[];
-  parentMap: ParentMap;
-  statusLabels: StatusLabels;
-  onNodeUpdate: (id: string, edit: NodeEdit) => void;
-  onDeadlineSet: (nodeId: string, deadlineAt?: string) => void;
-  onOpenDocument: (node: ProjectNode) => void;
+  project: DemoProject;
+  process: BusinessProcess;
+  onProcessUpdate: (processId: string, edit: ProcessEdit) => void;
+  onDeleteProcess: (processId: string) => void;
+  onOpenDocument: (document: ProcessDocument) => void;
+  onAttachInboxDocument: (processId: string, documentId: string) => void;
+  onReceiveMail: (processId?: string) => void;
+  onReceiveChat: (processId?: string) => void;
 }) {
-  const parent = getNodeById(getEffectiveParentId(node, parentMap) ?? "", nodes);
-  const status = node.status ? statusLabels[node.status] : "Без статуса";
-  const color = getFileTypeColor(node.fileType);
-  const parentLabel = parent?.type === "document" ? "Связана с" : "Раздел";
-  const parentValue = parent?.type === "document" ? parent.title : parent?.shortCode ?? "Без раздела";
+  const from = project.nodes.find((node) => node.id === process.from);
+  const to = project.nodes.find((node) => node.id === process.to);
+  const color = getProcessStatusColor(process.status);
 
   return (
     <>
-      <PanelHeader eyebrow={getFileLabel(node.fileType)} status={status} statusColor={color} title={node.title} />
-      <NodeEditor node={node} onNodeUpdate={onNodeUpdate} />
-      <DeadlineEditor node={node} onDeadlineSet={onDeadlineSet} />
-      <NodeRoleSwitcher node={node} onNodeUpdate={onNodeUpdate} />
-      <div className="document-summary">
-        <span style={{ color }}>
-          <FileText size={42} />
-        </span>
-        <div>
-          <b>{node.version}</b>
-          <p>{node.updatedAt}</p>
+      <PanelHeader eyebrow="Бизнес-процесс" title={process.title} status={getProcessStatusText(process.status)} statusColor={color} />
+
+      <section className="link-editor">
+        <div className="link-endpoints">
+          <span>{from?.shortCode ?? from?.title ?? "Источник"}</span>
+          <ArrowLeftRight size={18} />
+          <span>{to?.shortCode ?? to?.title ?? "Получатель"}</span>
         </div>
-      </div>
+
+        <label>
+          <span>Название процесса</span>
+          <input value={process.title} onChange={(event) => onProcessUpdate(process.id, { title: event.currentTarget.value })} />
+        </label>
+
+        <label>
+          <span>Описание / суть передачи</span>
+          <textarea value={process.description} onChange={(event) => onProcessUpdate(process.id, { description: event.currentTarget.value })} />
+        </label>
+
+        <div className="process-status-editor">
+          {processStatuses.map((status) => (
+            <button
+              key={status}
+              className={clsx(process.status === status && "active")}
+              style={{ "--status-color": getProcessStatusColor(status) } as React.CSSProperties}
+              onClick={() => onProcessUpdate(process.id, { status, validationAt: status === "accepted" || status === "in_work" ? "сегодня" : process.validationAt })}
+            >
+              {getProcessStatusText(status)}
+            </button>
+          ))}
+        </div>
+
+        <div className="inline-form-grid">
+          <label>
+            <span>Направление</span>
+            <select value={process.direction} onChange={(event) => onProcessUpdate(process.id, { direction: event.currentTarget.value as BusinessProcess["direction"] })}>
+              <option value="forward">В одну сторону</option>
+              <option value="backward">Обратно</option>
+              <option value="both">В обе стороны</option>
+            </select>
+          </label>
+          <label>
+            <span>Дата валидации</span>
+            <input value={process.validationAt ?? ""} onChange={(event) => onProcessUpdate(process.id, { validationAt: event.currentTarget.value })} placeholder="сегодня / дата" />
+          </label>
+        </div>
+      </section>
+
+      <section className="quick-actions">
+        <button onClick={() => onProcessUpdate(process.id, { status: "sent" })}>
+          <Send size={17} />
+          Отправить
+        </button>
+        <button onClick={() => onReceiveMail(process.id)}>
+          <Mail size={17} />
+          Получить из почты
+        </button>
+        <button onClick={() => onReceiveChat(process.id)}>
+          <MessageCircle size={17} />
+          Получить из чата
+        </button>
+        <button className="danger" onClick={() => onDeleteProcess(process.id)}>
+          <Trash2 size={17} />
+          Удалить
+        </button>
+      </section>
 
       <div className="info-grid">
-        <Metric label="Тип файла" value={getFileLabel(node.fileType)} />
-        <Metric label="Версия" value={node.version ?? "v1.0"} />
-        <Metric label="Ответственный" value={node.responsible ?? "Не назначен"} />
-        <Metric label={parentLabel} value={parentValue} />
+        <Metric icon={<UserRound size={16} />} label="От кого" value={process.sender} />
+        <Metric icon={<UserRound size={16} />} label="Кому" value={process.receiver} />
+        <Metric icon={<Clock3 size={16} />} label="Создано" value={process.createdAt} />
+        <Metric icon={<Inbox size={16} />} label="Документов" value={String(process.documents.length)} />
       </div>
 
-      <button className="primary-action" onClick={() => onOpenDocument(node)}>
-        Открыть документ
-        <ExternalLink size={18} />
-      </button>
+      <AttachInbox project={project} process={process} onAttachInboxDocument={onAttachInboxDocument} />
+      <DocumentList title="Документы на проверку" documents={process.documents} onOpenDocument={onOpenDocument} />
+
+      <div className="panel-note">
+        Связь здесь работает как контейнер бизнес-процесса: у нее есть статус, направление, описание, документы и история принятия в работу. Параллельные контейнеры между теми же нодами отображаются отдельными дугами.
+      </div>
     </>
   );
 }
 
-function NodeEditor({
-  node,
-  onNodeUpdate,
+function AttachInbox({
+  project,
+  process,
+  onAttachInboxDocument,
 }: {
-  node: ProjectNode;
-  onNodeUpdate: (id: string, edit: NodeEdit) => void;
+  project: DemoProject;
+  process: BusinessProcess;
+  onAttachInboxDocument: (processId: string, documentId: string) => void;
 }) {
-  return (
-    <section className="node-editor" aria-label="Редактирование ноды">
-      <label>
-        <span>Название ноды</span>
-        <input
-          value={node.title}
-          onChange={(event) => onNodeUpdate(node.id, { title: event.currentTarget.value })}
-        />
-      </label>
-    </section>
-  );
-}
+  const [selectedDocumentId, setSelectedDocumentId] = useState(project.inboxDocuments[0]?.id ?? "");
 
-function DeadlineEditor({
-  node,
-  onDeadlineSet,
-}: {
-  node: ProjectNode;
-  onDeadlineSet: (nodeId: string, deadlineAt?: string) => void;
-}) {
-  const value = node.deadlineAt ? toDateTimeInputValue(node.deadlineAt) : "";
-  const deadlineText = node.deadlineAt ? getDeadlineText(node.deadlineAt) : "Таймер не задан";
+  useEffect(() => {
+    setSelectedDocumentId(project.inboxDocuments[0]?.id ?? "");
+  }, [project.inboxDocuments]);
+
+  if (!project.inboxDocuments.length) {
+    return (
+      <section className="attach-inbox empty">
+        <Inbox size={18} />
+        <span>Входящих без связи нет</span>
+      </section>
+    );
+  }
 
   return (
-    <section className="deadline-editor" aria-label="Таймер ноды">
+    <section className="attach-inbox">
       <label>
-        <span>Дедлайн / таймер</span>
-        <input
-          type="datetime-local"
-          value={value}
-          onChange={(event) => onDeadlineSet(node.id, event.currentTarget.value || undefined)}
-        />
+        <span>Прикрутить задание вручную</span>
+        <select value={selectedDocumentId} onChange={(event) => setSelectedDocumentId(event.currentTarget.value)}>
+          {project.inboxDocuments.map((document) => (
+            <option key={document.id} value={document.id}>
+              {document.title}
+            </option>
+          ))}
+        </select>
       </label>
-      <div>
-        <b>{deadlineText}</b>
-        <button onClick={() => onDeadlineSet(node.id, addDeadlineDays(1))}>+1 день</button>
-        <button onClick={() => onDeadlineSet(node.id, addDeadlineDays(7))}>+7 дней</button>
-        <button className="muted" onClick={() => onDeadlineSet(node.id, undefined)}>снять</button>
-      </div>
+      <button onClick={() => selectedDocumentId && onAttachInboxDocument(process.id, selectedDocumentId)}>
+        <Plus size={17} />
+        Прикрепить
+      </button>
     </section>
   );
 }
@@ -365,7 +352,7 @@ function TagsEditor({
   onNodeUpdate,
 }: {
   node: ProjectNode;
-  onNodeUpdate: (id: string, edit: NodeEdit) => void;
+  onNodeUpdate: (nodeId: string, edit: NodeEdit) => void;
 }) {
   const [value, setValue] = useState((node.tags ?? []).join(", "));
 
@@ -374,282 +361,64 @@ function TagsEditor({
   }, [node.id, node.tags]);
 
   return (
-    <section className="tags-editor" aria-label="Теги автосортировки">
+    <section className="tags-editor">
       <label>
-        <span>Теги автосортировки</span>
-        <input
-          value={value}
-          placeholder="АР, ПЛАН, ФАСАД"
-          onChange={(event) => setValue(event.currentTarget.value)}
-          onBlur={() =>
-            onNodeUpdate(node.id, {
-              tags: value
-                .split(",")
-                .map((tag) => tag.trim())
-                .filter(Boolean),
-            })
-          }
-        />
+        <span>Теги автопривязки</span>
+        <input value={value} onChange={(event) => setValue(event.currentTarget.value)} onBlur={() => onNodeUpdate(node.id, { tags: value.split(",").map((tag) => tag.trim()).filter(Boolean) })} placeholder="АР, ТЗ, фасад" />
       </label>
-      <p>Если имя файла или вложения содержит тег, документ автоматически попадет внутрь этой средней сферы.</p>
+      <p>Если письмо или загруженный файл содержит тег, демо подсветит подходящую связь или предложит ручную привязку.</p>
     </section>
   );
 }
 
-function SectionApproval({
-  node,
-  docs,
-  review,
-  checkedDocIds,
-  onCheckedChange,
-  onSendReview,
-  onApproveAll,
-  onApprovePartial,
-  onReject,
+function DocumentList({
+  title,
+  documents,
+  onOpenDocument,
 }: {
-  node: ProjectNode;
-  docs: ProjectNode[];
-  review?: SectionReviews[string];
-  checkedDocIds: string[];
-  onCheckedChange: (ids: string[]) => void;
-  onSendReview: () => void;
-  onApproveAll: () => void;
-  onApprovePartial: () => void;
-  onReject: () => void;
+  title: string;
+  documents: ProcessDocument[];
+  onOpenDocument: (document: ProcessDocument) => void;
 }) {
-  const approved = node.status === "approved";
-  const sent = review?.status === "sent";
-  const statusText =
-    review?.status === "approved"
-      ? "Согласовано ГИП"
-      : review?.status === "partial"
-        ? "Согласовано частично"
-        : review?.status === "rejected"
-          ? "Не согласовано"
-          : sent
-            ? "На рассмотрении у ГИП"
-            : approved
-              ? "Согласовано ГИП"
-              : "Пакет еще не отправлен";
-
-  function toggleDocument(id: string) {
-    onCheckedChange(
-      checkedDocIds.includes(id)
-        ? checkedDocIds.filter((item) => item !== id)
-        : [...checkedDocIds, id],
+  if (!documents.length) {
+    return (
+      <section className="document-list">
+        <h3>{title}</h3>
+        <p>Документов пока нет.</p>
+      </section>
     );
   }
 
   return (
-    <section className="approval-card">
-      <span>Согласование пакета ГИП</span>
-      <strong>{statusText}</strong>
-      <p>
-        Сотрудники загружают рабочие малые сферы внутрь раздела. На согласование отправляется средняя сфера с вложенным
-        списком документов; малые сферы отдельно не согласовываются.
-      </p>
-      {sent ? (
-        <div className="approval-checklist">
-          {docs.map((document) => (
-            <label key={document.id}>
-              <input
-                type="checkbox"
-                checked={checkedDocIds.includes(document.id)}
-                onChange={() => toggleDocument(document.id)}
-              />
-              <span style={{ color: getFileTypeColor(document.fileType) }} />
+    <section className="document-list">
+      <h3>{title}</h3>
+      {documents.map((document) => (
+        <article key={document.id} className="document-row">
+          <button onClick={() => onOpenDocument(document)}>
+            <span style={{ color: getFileTypeColor(document.fileType) }}>
+              <FileText size={17} />
+            </span>
+            <div>
               <b>{document.title}</b>
-            </label>
-          ))}
-        </div>
-      ) : null}
-      <div className="approval-actions">
-        {!sent ? (
-          <button onClick={onSendReview} disabled={!docs.length}>
-            Отправить на согласование
+              <small>{getFileLabel(document.fileType)} · {document.from}</small>
+            </div>
+            <em>{document.version}</em>
           </button>
-        ) : (
-          <>
-            <button onClick={onApproveAll}>Согласовать все</button>
-            <button onClick={onApprovePartial} disabled={!checkedDocIds.length || checkedDocIds.length === docs.length}>
-              Согласовать частично
-            </button>
-            <button className="muted" onClick={onReject}>
-              Не согласовать
-            </button>
-          </>
-        )}
-      </div>
+        </article>
+      ))}
     </section>
   );
-}
-
-function LinkInfo({
-  link,
-  linkEdit,
-  nodes,
-  onLinkUpdate,
-  onDeleteLink,
-  onPinLink,
-  onStartLink,
-  onClose,
-}: {
-  link: ProjectLink;
-  linkEdit?: LinkEdit;
-  nodes: ProjectNode[];
-  onLinkUpdate: (id: string, edit: LinkEdit) => void;
-  onDeleteLink: (id: string) => void;
-  onPinLink: (id: string) => void;
-  onStartLink: (fromId: string) => void;
-  onClose: () => void;
-}) {
-  const from = getNodeById(link.from, nodes);
-  const to = getNodeById(link.to, nodes);
-  const defaults = getLinkDefaults(link, nodes);
-  const title = linkEdit?.title ?? defaults.title;
-  const description = linkEdit?.description ?? defaults.description;
-
-  return (
-    <>
-      <header className="panel-header link-panel-header">
-        <div className="panel-kicker">
-          <span>Связь</span>
-          <button className="icon-button" onClick={onClose} aria-label="Закрыть связь">
-            <X size={18} />
-          </button>
-        </div>
-        <h2>{title}</h2>
-      </header>
-
-      <section className="link-editor">
-        <div className="link-endpoints">
-          <span>{from?.shortCode ?? from?.title ?? "Источник"}</span>
-          <i />
-          <span>{to?.shortCode ?? to?.title ?? "Цель"}</span>
-        </div>
-        <label>
-          <span>Название связи</span>
-          <input value={title} onChange={(event) => onLinkUpdate(link.id, { title: event.currentTarget.value })} />
-        </label>
-        <label>
-          <span>Суть взаимосвязи</span>
-          <textarea
-            value={description}
-            onChange={(event) => onLinkUpdate(link.id, { description: event.currentTarget.value })}
-          />
-        </label>
-        <div className="link-actions">
-          <button onClick={() => onStartLink(link.from)}>Настроить связь</button>
-          {link.source === "auto" && !link.pinned ? <button onClick={() => onPinLink(link.id)}>Закрепить связь</button> : <span>Закреплена</span>}
-          <button className="danger" onClick={() => onDeleteLink(link.id)}>Удалить</button>
-        </div>
-      </section>
-
-      <div className="panel-note">
-        Текст этой связи участвует в поиске. Delete на клавиатуре удаляет выбранную связь; ручные и закрепленные связи
-        не рвутся от расстояния.
-      </div>
-    </>
-  );
-}
-
-function NodeRoleSwitcher({
-  node,
-  onNodeUpdate,
-}: {
-  node: ProjectNode;
-  onNodeUpdate: (id: string, edit: NodeEdit) => void;
-}) {
-  const isSection = node.type === "section";
-
-  return (
-    <section className="node-role-switcher" aria-label="Роль ноды">
-      <span>Роль в молекуле</span>
-      <div>
-        <button
-          className={!isSection ? "active" : ""}
-          onClick={() =>
-            onNodeUpdate(node.id, {
-              type: "document",
-              progress: undefined,
-              fileType: node.fileType ?? "unknown",
-              version: node.version ?? "v1",
-            })
-          }
-        >
-          Малая
-        </button>
-        <button
-          className={isSection ? "active" : ""}
-          onClick={() =>
-            onNodeUpdate(node.id, {
-              type: "section",
-              shortCode: node.shortCode ?? buildShortCode(node.title),
-              progress: node.progress ?? 0,
-            })
-          }
-        >
-          Средняя
-        </button>
-      </div>
-    </section>
-  );
-}
-
-function buildShortCode(title: string) {
-  return title
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0])
-    .join("")
-    .toLocaleUpperCase("ru-RU")
-    .slice(0, 3) || "НД";
-}
-
-function addDeadlineDays(days: number) {
-  const date = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
-  return toDateTimeInputValue(date.toISOString());
-}
-
-function toDateTimeInputValue(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
-  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
-}
-
-function getDeadlineText(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  const diffMs = date.getTime() - Date.now();
-  const absMs = Math.abs(diffMs);
-  const hour = 60 * 60 * 1000;
-  const day = 24 * hour;
-  const years = 365 * day;
-  const unit =
-    absMs >= years ? { label: "лет", value: Math.round(absMs / years) }
-      : absMs >= day ? { label: "дн.", value: Math.round(absMs / day) }
-        : absMs >= hour ? { label: "ч.", value: Math.round(absMs / hour) }
-          : { label: "мин.", value: Math.max(1, Math.round(absMs / 60000)) };
-  return diffMs >= 0 ? `До сдачи: ${unit.value} ${unit.label}` : `Просрочено: ${unit.value} ${unit.label}`;
 }
 
 function PanelHeader({
   eyebrow,
   status,
-  statusColor = "#22d3ee",
+  statusColor,
   title,
 }: {
   eyebrow: string;
   status: string;
-  statusColor?: string;
+  statusColor: string;
   title: string;
 }) {
   return (
@@ -666,12 +435,10 @@ function PanelHeader({
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  const Icon = label.includes("Ответ") ? UserRound : label.includes("Обнов") ? Clock3 : label.includes("Док") ? Layers3 : label.includes("Раздел") ? GitBranch : CheckCircle2;
-
+function Metric({ icon, label, value, wide }: { icon: React.ReactNode; label: string; value: string; wide?: boolean }) {
   return (
-    <div className={clsx("metric", value.length > 14 && "wide")}>
-      <Icon size={16} />
+    <div className={clsx("metric", wide && "wide")}>
+      {icon}
       <span>{label}</span>
       <b>{value}</b>
     </div>

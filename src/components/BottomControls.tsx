@@ -1,6 +1,6 @@
-import { Focus, Maximize2, Network, Redo2, RotateCcw, ScanSearch, Sparkles, Type, Undo2, Waypoints } from "lucide-react";
-import { getFileTypeColor } from "../lib/graph";
-import type { FileType } from "../types";
+import { Focus, Maximize2, Redo2, RotateCcw, Sparkles, Type, Undo2, Waypoints } from "lucide-react";
+import { processStatusColors, processStatusLabels } from "../data/mockProject";
+import type { ProcessStatus } from "../types";
 
 type BottomControlsProps = {
   onUndo: () => void;
@@ -10,20 +10,11 @@ type BottomControlsProps = {
   onNormalize: () => void;
   onReset: () => void;
   onFocus: () => void;
-  autoRotate: boolean;
   fontScale: number;
   onFontScaleChange: (scale: number) => void;
-  onToggleAutoRotate: () => void;
 };
 
-const fileLegend: Array<{ type: FileType; label: string }> = [
-  { type: "txt", label: "TXT" },
-  { type: "docx", label: "DOC/DOCX" },
-  { type: "xlsx", label: "XLS/XLSX" },
-  { type: "pptx", label: "PPT/PPTX" },
-  { type: "pdf", label: "PDF" },
-  { type: "unknown", label: "Другое" },
-];
+const statusOrder: ProcessStatus[] = ["sent", "rejected", "accepted", "in_work", "draft"];
 
 export function BottomControls({
   onUndo,
@@ -33,19 +24,14 @@ export function BottomControls({
   onNormalize,
   onReset,
   onFocus,
-  autoRotate,
   fontScale,
   onFontScaleChange,
-  onToggleAutoRotate,
 }: BottomControlsProps) {
   return (
     <footer className="bottom-controls">
       <div className="view-tools glass-panel">
-        <button title="2D-карта" className="active">
+        <button title="Карта процессов" className="active">
           <Waypoints size={20} />
-        </button>
-        <button title="Связи">
-          <Network size={20} />
         </button>
         <button title="Отменить действие (Ctrl+Z)" onClick={onUndo} disabled={!canUndo}>
           <Undo2 size={20} />
@@ -62,33 +48,29 @@ export function BottomControls({
         <button title="Сбросить вид" onClick={onReset}>
           <RotateCcw size={20} />
         </button>
-        <button title="Автовращение" className={autoRotate ? "active" : ""} onClick={onToggleAutoRotate}>
-          <ScanSearch size={20} />
-        </button>
       </div>
 
       <div className="font-control glass-panel" title="Общий размер шрифта">
         <Type size={18} />
         <button
           type="button"
-          onClick={() => onFontScaleChange(Math.max(0.8, Number((fontScale - 0.05).toFixed(2))))}
+          onClick={() => onFontScaleChange(Math.max(0.85, Number((fontScale - 0.05).toFixed(2))))}
           aria-label="Уменьшить общий шрифт"
         >
           A-
         </button>
         <input
           type="range"
-          min="0.8"
-          max="1.3"
+          min="0.85"
+          max="1.25"
           step="0.05"
           value={fontScale}
           onChange={(event) => onFontScaleChange(Number(event.currentTarget.value))}
-          onInput={(event) => onFontScaleChange(Number(event.currentTarget.value))}
           aria-label="Общий размер шрифта"
         />
         <button
           type="button"
-          onClick={() => onFontScaleChange(Math.min(1.3, Number((fontScale + 0.05).toFixed(2))))}
+          onClick={() => onFontScaleChange(Math.min(1.25, Number((fontScale + 0.05).toFixed(2))))}
           aria-label="Увеличить общий шрифт"
         >
           A+
@@ -96,17 +78,11 @@ export function BottomControls({
         <b>{Math.round(fontScale * 100)}%</b>
       </div>
 
-      <div className="status-legend file-type-legend glass-panel" title="Цвет документа зависит от типа файла">
-        {fileLegend.map((item) => (
-          <span key={item.type}>
-            <i
-              style={{
-                borderColor: getFileTypeColor(item.type),
-                background: getFileTypeColor(item.type),
-                color: getFileTypeColor(item.type),
-              }}
-            />
-            {item.label}
+      <div className="status-legend glass-panel" title="Цвет линии показывает статус бизнес-процесса">
+        {statusOrder.map((status) => (
+          <span key={status}>
+            <i style={{ borderColor: processStatusColors[status], background: processStatusColors[status] }} />
+            {processStatusLabels[status]}
           </span>
         ))}
       </div>

@@ -1,275 +1,319 @@
-import { documents, project, projectNodes, sections, statusLabels } from "../data/mockProject";
-import type { LinkEdits, ProjectLink, ProjectNode, SearchMatches, StatusLabels, Vec3 } from "../types";
+import { nodeStatusLabels, processStatusColors, processStatusLabels } from "../data/mockProject";
+import type {
+  BusinessProcess,
+  DemoProject,
+  FileType,
+  MapLevel,
+  ProcessDocument,
+  ProcessStatus,
+  ProjectNode,
+  SearchMatches,
+} from "../types";
 
-export type ParentMap = Record<string, string | null>;
+export function getDefaultLevel(project: DemoProject) {
+  return project.levels[0];
+}
 
-export const centralNode = projectNodes.find((node) => node.type === "central")!;
+export function getLevelById(project: DemoProject, levelId: string) {
+  return project.levels.find((level) => level.id === levelId) ?? getDefaultLevel(project);
+}
 
-export function getProjectProgress(nodes = projectNodes, parentMap: ParentMap = {}) {
-  const sceneSections = nodes.filter((node) => node.type === "section");
-  const sectionIds = new Set(sceneSections.map((section) => section.id));
-  const reviewDocuments = nodes.filter((node) => {
-    if (node.type !== "document") {
-      return false;
-    }
-
-    const parentId = getEffectiveParentId(node, parentMap);
-    return parentId ? sectionIds.has(parentId) : false;
-  });
-
-  if (reviewDocuments.length) {
-    const approvedDocuments = reviewDocuments.filter((document) => document.status === "approved").length;
-    return Math.round((approvedDocuments / reviewDocuments.length) * 100);
+export function getNodeById(project: DemoProject, nodeId?: string | null) {
+  if (!nodeId) {
+    return undefined;
   }
 
-  const approved = sceneSections.filter((section) => section.status === "approved").length;
-  return sceneSections.length ? Math.round((approved / sceneSections.length) * 100) : 0;
+  return project.nodes.find((node) => node.id === nodeId);
 }
 
-export function getEffectiveParentId(node: ProjectNode, parentMap: ParentMap) {
-  if (Object.prototype.hasOwnProperty.call(parentMap, node.id)) {
-    return parentMap[node.id] ?? undefined;
+export function getProcessById(project: DemoProject, processId?: string | null) {
+  if (!processId) {
+    return undefined;
   }
 
-  return node.parentId;
+  return project.processes.find((process) => process.id === processId);
 }
 
-export function getSectionDocuments(sectionId: string, parentMap: ParentMap, nodes = projectNodes) {
-  return nodes.filter((node) => node.type === "document" && getEffectiveParentId(node, parentMap) === sectionId);
+export function getLevelNodes(project: DemoProject, level: MapLevel) {
+  const byId = new Map(project.nodes.map((node) => [node.id, node]));
+  return level.nodeIds.map((id) => byId.get(id)).filter(Boolean) as ProjectNode[];
 }
 
-export function buildInitialPositions(): Record<string, Vec3> {
-  const positions: Record<string, Vec3> = {
-    [project.id]: [0, 0, 0],
-  };
-  const radius = 3.72;
-  const zOffsets = [0.15, -0.15, 0.45, -0.45, 0.25, -0.25, 0.55, -0.55];
-
-  sections.forEach((section, index) => {
-    const angle = index * ((Math.PI * 2) / sections.length) - Math.PI / 9;
-    const sectionPosition: Vec3 = [
-      Math.cos(angle) * radius,
-      Math.sin(angle) * radius,
-      zOffsets[index] ?? 0,
-    ];
-    positions[section.id] = sectionPosition;
-
-    const sectionDocs = documents.filter((doc) => doc.parentId === section.id);
-    const outward = normalize2(sectionPosition[0], sectionPosition[1]);
-    const tangent = [-outward[1], outward[0]];
-    const docSpread = 0.68;
-    const baseOffset = sectionDocs.length > 4 ? 1.72 : 1.58;
-
-    sectionDocs.forEach((document, docIndex) => {
-      const local = (docIndex - (sectionDocs.length - 1) / 2) * docSpread;
-      const depth = docIndex % 2 === 0 ? 0.45 : -0.28;
-      positions[document.id] = [
-        sectionPosition[0] + outward[0] * baseOffset + tangent[0] * local,
-        sectionPosition[1] + outward[1] * baseOffset + tangent[1] * local,
-        sectionPosition[2] + depth,
-      ];
-    });
-  });
-
-  return positions;
+export function getLevelProcesses(project: DemoProject, level: MapLevel) {
+  return project.processes.filter((process) => process.levelId === level.id);
 }
 
-export function getLinkId(from: string, to: string) {
-  return `${from}__${to}`;
+export function getNodeProcesses(project: DemoProject, nodeId: string) {
+  return project.processes.filter((process) => process.from === nodeId || process.to === nodeId);
 }
 
-export function getManualLinkId(from: string, to: string) {
-  return `manual__${from}__${to}__${Date.now()}__${Math.round(Math.random() * 10000)}`;
+export function getNodeDocuments(project: DemoProject, nodeId: string) {
+  return getNodeProcesses(project, nodeId).flatMap((process) => process.documents);
 }
 
-export function getLinks(parentMap: ParentMap, nodes = projectNodes): ProjectLink[] {
-  const sceneSections = nodes.filter((node) => node.type === "section");
-  const sceneDocuments = nodes.filter((node) => node.type === "document");
-
-  const sectionLinks = sceneSections.map((section) => ({
-    id: getLinkId(project.id, section.id),
-    from: project.id,
-    to: section.id,
-    strength: "primary" as const,
-    source: "auto" as const,
-  }));
-
-  const docLinks = sceneDocuments.flatMap((document) => {
-    const parentId = getEffectiveParentId(document, parentMap);
-    if (!parentId) {
-      return [];
-    }
-    const parent = nodes.find((node) => node.id === parentId);
-
-    return [{
-      id: getLinkId(parentId, document.id),
-      from: parentId,
-      to: document.id,
-      strength: parent?.type === "document" ? ("tertiary" as const) : ("secondary" as const),
-      source: "auto" as const,
-    }];
-  });
-
-  return [...sectionLinks, ...docLinks];
-}
-
-export function getSearchMatches(
-  query: string,
-  parentMap: ParentMap,
-  nodes = projectNodes,
-  labels: StatusLabels = statusLabels,
-  linkEdits: LinkEdits = {},
-  links: ProjectLink[] = getLinks(parentMap, nodes),
-): SearchMatches {
-  const normalizedQuery = normalizeText(query);
-  if (!normalizedQuery) {
-    return { nodeIds: new Set<string>(), linkIds: new Set<string>() };
+export function getProjectProgress(project: DemoProject, level: MapLevel) {
+  const nodes = getLevelNodes(project, level).filter((node) => node.type !== "central");
+  if (!nodes.length) {
+    return 0;
   }
 
-  const directMatches = nodes.filter((node) => nodeMatches(node, normalizedQuery, labels));
-  const nodeIds = new Set(directMatches.map((node) => node.id));
-  const linkIds = new Set<string>();
-
-  directMatches.forEach((node) => {
-    if (node.type === "section") {
-      getSectionDocuments(node.id, parentMap, nodes).forEach((document) => nodeIds.add(document.id));
-    }
-
-    if (node.type === "document") {
-      const parentId = getEffectiveParentId(node, parentMap);
-      if (parentId) {
-        nodeIds.add(parentId);
-      }
-    }
-  });
-
-  links.forEach((link) => {
-    const linkText = getLinkSearchText(link, nodes, linkEdits);
-    if (!normalizeText(linkText).includes(normalizedQuery)) {
-      return;
-    }
-
-    linkIds.add(link.id);
-    nodeIds.add(link.from);
-    nodeIds.add(link.to);
-  });
-
-  return { nodeIds, linkIds };
+  const approved = nodes.filter((node) => node.status === "approved").length;
+  return Math.round((approved / nodes.length) * 100);
 }
 
-export function getNodeById(id: string, nodes = projectNodes) {
-  return nodes.find((node) => node.id === id);
+export function getStatusText(status?: ProjectNode["status"]) {
+  return status ? nodeStatusLabels[status] : "Без статуса";
 }
 
-export function getFileLabel(fileType?: ProjectNode["fileType"]) {
-  if (!fileType || fileType === "unknown") {
-    return "Файл";
-  }
-
-  if (fileType === "docx") {
-    return "DOC/DOCX";
-  }
-
-  if (fileType === "xlsx") {
-    return "XLS/XLSX";
-  }
-
-  if (fileType === "pptx") {
-    return "PPT/PPTX";
-  }
-
-  return fileType.toUpperCase();
+export function getProcessStatusText(status: ProcessStatus) {
+  return processStatusLabels[status];
 }
 
-export function getFileTypeColor(fileType?: ProjectNode["fileType"]) {
-  switch (fileType) {
-    case "txt":
-      return "#f4f8ff";
-    case "docx":
-      return "#2f80ff";
-    case "xlsx":
-      return "#1fcf7a";
-    case "pptx":
-      return "#ffd43b";
-    case "pdf":
-      return "#ff4c5f";
-    default:
-      return "#8ea0bf";
-  }
+export function getProcessStatusColor(status: ProcessStatus) {
+  return processStatusColors[status];
 }
 
-export function getLinkDefaults(link: ProjectLink, nodes = projectNodes) {
-  const from = getNodeById(link.from, nodes);
-  const to = getNodeById(link.to, nodes);
-
-  if (link.strength === "primary") {
+export function getNodeVisualTone(node: ProjectNode) {
+  if (node.type === "central") {
     return {
-      title: "Состав проектного трека",
-      description: `${to?.title ?? "Раздел"} входит в общую структуру проекта и влияет на готовность центральной ноды.`,
+      fill: "#7f8798",
+      glow: "#35d9ff",
+      label: "Центральная нода",
     };
   }
 
-  if (link.strength === "tertiary") {
+  if (node.status === "approved") {
     return {
-      title: "Связанный документ",
-      description: `${to?.title ?? "Документ"} зависит от документа ${from?.title ?? "выше"} и используется как уточнение или приложение.`,
+      fill: "#d7bb78",
+      glow: "#ffe2a4",
+      label: "Согласовано",
+    };
+  }
+
+  if (node.status === "comments") {
+    return {
+      fill: "#8f91a0",
+      glow: "#ff9a6c",
+      label: "Есть замечания",
+    };
+  }
+
+  if (node.status === "review") {
+    return {
+      fill: "#929caf",
+      glow: "#35d9ff",
+      label: "На проверке",
     };
   }
 
   return {
-    title: "Документ внутри раздела",
-    description: `${to?.title ?? "Документ"} относится к разделу ${from?.title ?? "проекта"} и наследует его контекст согласования.`,
+    fill: "#747d91",
+    glow: "#9aa5bd",
+    label: "Не согласовано",
   };
 }
 
-function nodeMatches(node: ProjectNode, normalizedQuery: string, labels: StatusLabels) {
-  const status = node.status ? labels[node.status] : "";
-  const searchable = [
+export function getFileLabel(fileType?: FileType) {
+  if (!fileType || fileType === "unknown") return "Файл";
+  if (fileType === "docx") return "DOC/DOCX";
+  if (fileType === "xlsx") return "XLS/XLSX";
+  if (fileType === "pptx") return "PPT/PPTX";
+  return fileType.toUpperCase();
+}
+
+export function getFileTypeColor(fileType?: FileType) {
+  switch (fileType) {
+    case "txt":
+      return "#f5f8ff";
+    case "docx":
+      return "#2f80ff";
+    case "xlsx":
+      return "#22c96f";
+    case "pptx":
+      return "#ffd43b";
+    case "pdf":
+      return "#ff4c5f";
+    case "dwg":
+      return "#42d6c8";
+    default:
+      return "#9aa5bd";
+  }
+}
+
+export function getFileExtension(fileType?: FileType) {
+  switch (fileType) {
+    case "docx":
+      return "docx";
+    case "xlsx":
+      return "xlsx";
+    case "pptx":
+      return "pptx";
+    case "pdf":
+      return "pdf";
+    case "txt":
+      return "txt";
+    case "dwg":
+      return "dwg";
+    default:
+      return "file";
+  }
+}
+
+export function getProcessDocuments(project: DemoProject, processId: string) {
+  return getProcessById(project, processId)?.documents ?? [];
+}
+
+export function getAcceptedAssignments(project: DemoProject) {
+  return project.processes
+    .filter((process) => process.status === "accepted" || process.status === "in_work")
+    .sort((a, b) => (b.validationAt ?? b.createdAt).localeCompare(a.validationAt ?? a.createdAt));
+}
+
+export function getChecks(project: DemoProject) {
+  return project.processes.filter((process) => process.status === "sent" || process.status === "rejected");
+}
+
+export function getAllDocuments(project: DemoProject) {
+  const processDocs = project.processes.flatMap((process) =>
+    process.documents.map((document) => ({
+      ...document,
+      processId: process.id,
+      processTitle: process.title,
+    })),
+  );
+
+  return [...processDocs, ...project.inboxDocuments.map((document) => ({ ...document, processId: "", processTitle: "Входящие без связи" }))];
+}
+
+export function getSearchMatches(query: string, project: DemoProject, level: MapLevel): SearchMatches {
+  const normalized = normalizeText(query);
+  if (!normalized) {
+    return { nodeIds: new Set(), processIds: new Set() };
+  }
+
+  const nodes = getLevelNodes(project, level);
+  const processes = getLevelProcesses(project, level);
+  const nodeIds = new Set<string>();
+  const processIds = new Set<string>();
+
+  nodes.forEach((node) => {
+    if (normalizeText(getNodeSearchText(node)).includes(normalized)) {
+      nodeIds.add(node.id);
+    }
+  });
+
+  processes.forEach((process) => {
+    const processText = normalizeText(getProcessSearchText(process, project));
+    if (processText.includes(normalized)) {
+      processIds.add(process.id);
+      nodeIds.add(process.from);
+      nodeIds.add(process.to);
+    }
+  });
+
+  project.chatMessages.forEach((message) => {
+    if (!normalizeText(message.text).includes(normalized)) {
+      return;
+    }
+    if (message.processId) {
+      processIds.add(message.processId);
+      const process = getProcessById(project, message.processId);
+      if (process) {
+        nodeIds.add(process.from);
+        nodeIds.add(process.to);
+      }
+    }
+    if (message.nodeId) {
+      nodeIds.add(message.nodeId);
+    }
+  });
+
+  return { nodeIds, processIds };
+}
+
+export function createProcessId(from: string, to: string) {
+  return `bp-${from}-${to}-${Date.now()}-${Math.round(Math.random() * 10000)}`;
+}
+
+export function createDocumentFromName(name: string, source: ProcessDocument["source"] = "drop", fileUrl?: string, fileText?: string, mimeType?: string, size?: string): ProcessDocument {
+  return {
+    id: `doc-${Date.now()}-${Math.round(Math.random() * 10000)}`,
+    title: name,
+    fileType: inferFileType(name),
+    version: "v1",
+    status: "draft",
+    from: source === "mail" ? "Почта" : source === "chat" ? "Чат" : "Импорт",
+    updatedAt: "только что",
+    source,
+    fileUrl,
+    fileText,
+    mimeType,
+    size,
+  };
+}
+
+export function inferFileType(name: string): FileType {
+  const ext = name.split(".").pop()?.toLowerCase();
+  if (ext === "pdf") return "pdf";
+  if (ext === "doc" || ext === "docx") return "docx";
+  if (ext === "xls" || ext === "xlsx" || ext === "csv") return "xlsx";
+  if (ext === "ppt" || ext === "pptx" || ext === "pptm") return "pptx";
+  if (ext === "txt" || ext === "md" || ext === "rtf") return "txt";
+  if (ext === "dwg" || ext === "dxf") return "dwg";
+  return "unknown";
+}
+
+export function formatBytes(bytes: number) {
+  if (!bytes) return "0 Б";
+  const units = ["Б", "КБ", "МБ", "ГБ"];
+  const power = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / 1024 ** power).toFixed(power === 0 ? 0 : 1)} ${units[power]}`;
+}
+
+function getNodeSearchText(node: ProjectNode) {
+  return [
     node.title,
     node.shortCode,
     node.description,
-    node.version,
-    status,
-    node.fileType,
+    node.status ? nodeStatusLabels[node.status] : "",
     node.responsible,
-    node.fileText,
-    node.sourceUrl,
-    node.source,
     node.tags?.join(" "),
     node.deadlineAt,
-    node.isNew ? "новое new" : "",
   ]
     .filter(Boolean)
     .join(" ");
-
-  return normalizeText(searchable).includes(normalizedQuery);
 }
 
-function getLinkSearchText(link: ProjectLink, nodes: ProjectNode[], linkEdits: LinkEdits) {
-  const defaults = getLinkDefaults(link, nodes);
-  const edit = linkEdits[link.id];
-  const from = getNodeById(link.from, nodes);
-  const to = getNodeById(link.to, nodes);
-
+function getProcessSearchText(process: BusinessProcess, project: DemoProject) {
+  const from = getNodeById(project, process.from);
+  const to = getNodeById(project, process.to);
   return [
-    defaults.title,
-    defaults.description,
-    edit?.title,
-    edit?.description,
+    process.title,
+    process.description,
+    processStatusLabels[process.status],
+    process.sender,
+    process.receiver,
+    process.tag,
     from?.title,
     from?.shortCode,
     to?.title,
     to?.shortCode,
+    ...process.documents.flatMap((document) => [
+      document.title,
+      getFileLabel(document.fileType),
+      document.version,
+      document.from,
+      nodeStatusLabels[document.status],
+    ]),
   ]
     .filter(Boolean)
     .join(" ");
 }
 
 function normalizeText(value: string) {
-  return value.toLocaleLowerCase("ru-RU").replace(/ё/g, "е").trim();
-}
-
-function normalize2(x: number, y: number): [number, number] {
-  const length = Math.hypot(x, y) || 1;
-  return [x / length, y / length];
+  return value
+    .toLocaleLowerCase("ru-RU")
+    .replace(/ё/g, "е")
+    .replace(/\s+/g, " ")
+    .trim();
 }

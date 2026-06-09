@@ -1,149 +1,121 @@
-export type NodeStatus =
-  | "approved"
-  | "review"
-  | "comments"
-  | "unchecked"
-  | "draft";
+export type NodeStatus = "approved" | "review" | "comments" | "unchecked" | "draft";
 
 export type FileType = "pdf" | "docx" | "xlsx" | "pptx" | "txt" | "dwg" | "unknown";
 
-export type DocumentSource = "project" | "drop" | "mail" | "ai";
+export type NodeKind = "central" | "section" | "ird" | "subsection" | "package";
+
+export type ProcessStatus = "draft" | "sent" | "in_work" | "rejected" | "accepted";
+
+export type ProcessDirection = "forward" | "backward" | "both";
 
 export type ProjectNode = {
   id: string;
-  type: "central" | "section" | "document" | "planned";
+  projectId: string;
+  levelId: string;
+  type: NodeKind;
   title: string;
-  color?: string;
   shortCode?: string;
   description?: string;
-  progress?: number;
   status?: NodeStatus;
-  version?: string;
-  parentId?: string;
   responsible?: string;
   updatedAt?: string;
-  fileType?: FileType;
+  tags?: string[];
+  deadlineAt?: string;
+  childrenLevelId?: string;
+};
+
+export type ProcessDocument = {
+  id: string;
+  title: string;
+  fileType: FileType;
+  version: string;
+  status: NodeStatus;
+  from: string;
+  updatedAt: string;
+  size?: string;
+  source?: "demo" | "mail" | "chat" | "drop" | "manual";
   fileUrl?: string;
   fileText?: string;
-  fileSize?: string;
   mimeType?: string;
-  sourceUrl?: string;
-  source?: DocumentSource;
-  isNew?: boolean;
-  deadlineAt?: string;
-  tags?: string[];
-  absorbed?: boolean;
-  children?: string[];
 };
 
-export type NodeEdit = {
-  title?: string;
-  color?: string;
-  type?: "section" | "document";
-  shortCode?: string;
-  progress?: number;
-  status?: NodeStatus;
-  version?: string;
-  parentId?: string;
-  fileType?: FileType;
-  isNew?: boolean;
-  deadlineAt?: string;
-  tags?: string[];
-  absorbed?: boolean;
-};
-
-export type NodeEdits = Record<string, NodeEdit>;
-
-export type ProjectLink = {
+export type BusinessProcess = {
   id: string;
+  projectId: string;
+  levelId: string;
   from: string;
   to: string;
-  strength: "primary" | "secondary" | "tertiary";
-  source: "auto" | "manual";
-  pinned?: boolean;
-  parallelOffset?: number;
+  title: string;
+  description: string;
+  status: ProcessStatus;
+  direction: ProcessDirection;
+  sender: string;
+  receiver: string;
+  createdAt: string;
+  validationAt?: string;
+  parallelIndex?: number;
+  source: "demo" | "manual" | "mail" | "chat";
+  tag?: string;
+  documents: ProcessDocument[];
 };
 
-export type LinkEdit = {
-  title?: string;
-  description?: string;
-};
-
-export type LinkEdits = Record<string, LinkEdit>;
-
-export type SearchMatches = {
-  nodeIds: Set<string>;
-  linkIds: Set<string>;
-};
-
-export type StatusLabels = Record<NodeStatus, string>;
-
-export type StatusColors = Record<NodeStatus, string>;
-
-export type Vec3 = [number, number, number];
-
-export type DropPlacement = {
+export type MapLevel = {
   id: string;
-  x: number;
-  y: number;
-  offset: number;
-  nonce: number;
+  projectId: string;
+  title: string;
+  subtitle: string;
+  centralNodeId: string;
+  nodeIds: string[];
+  parentLevelId?: string;
+  parentNodeId?: string;
 };
 
-export type SectionReviewStatus = "idle" | "sent" | "approved" | "partial" | "rejected";
-
-export type SectionReview = {
-  status: SectionReviewStatus;
-  approvedDocumentIds: string[];
-  submittedAt?: string;
-  decidedAt?: string;
+export type ChatMessage = {
+  id: string;
+  projectId: string;
+  author: string;
+  role: string;
+  text: string;
+  time: string;
+  processId?: string;
+  nodeId?: string;
 };
 
-export type SectionReviews = Record<string, SectionReview>;
+export type DemoProject = {
+  id: string;
+  title: string;
+  address: string;
+  updatedAt: string;
+  storageUsedGb: number;
+  storageLimitGb: number;
+  levels: MapLevel[];
+  nodes: ProjectNode[];
+  processes: BusinessProcess[];
+  inboxDocuments: ProcessDocument[];
+  chatMessages: ChatMessage[];
+};
 
 export type DemoNotification = {
   id: string;
+  projectId: string;
   title: string;
   description: string;
   time: string;
-  targetId?: string;
+  targetNodeId?: string;
+  targetProcessId?: string;
   unread?: boolean;
 };
 
-export type IntakeBucketId = "unsorted" | "mail";
+export type NodeEdit = Partial<Pick<ProjectNode, "title" | "shortCode" | "description" | "status" | "responsible" | "tags" | "deadlineAt">>;
 
-export type IntakeItem = {
-  id: string;
-  nodeId: string;
-  bucket: IntakeBucketId;
-  title: string;
-  fileType?: FileType;
-  source: DocumentSource;
-  matchedSectionId?: string;
-  createdAt: string;
-  tag?: string;
+export type ProcessEdit = Partial<Pick<BusinessProcess, "title" | "description" | "status" | "direction" | "sender" | "receiver" | "validationAt">>;
+
+export type SearchMatches = {
+  nodeIds: Set<string>;
+  processIds: Set<string>;
 };
 
-export type AiSuggestionStatus = "pending" | "applied" | "dismissed";
-
-export type AiSuggestedLink = {
-  targetId: string;
-  targetTitle: string;
-  reason: string;
-};
-
-export type AiSuggestion = {
-  id: string;
-  itemId: string;
-  nodeId: string;
-  title: string;
-  suggestedSectionId?: string;
-  suggestedSectionTitle?: string;
-  suggestedSectionCode?: string;
-  confidence: number;
-  summary: string;
-  reasons: string[];
-  detectedTags: string[];
-  suggestedLinks: AiSuggestedLink[];
-  status: AiSuggestionStatus;
+export type Vec2 = {
+  x: number;
+  y: number;
 };

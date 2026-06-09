@@ -6,14 +6,15 @@ import {
   FileStack,
   GitBranch,
   LayoutDashboard,
-  MessageCircleWarning,
+  MessageCircle,
   Settings,
   Sparkles,
   Users,
   type LucideIcon,
 } from "lucide-react";
 import clsx from "clsx";
-import { plannedFeatures, project } from "../data/mockProject";
+import { plannedFeatures } from "../data/mockProject";
+import type { DemoProject } from "../types";
 
 export type SidebarMenuId =
   | "map"
@@ -21,35 +22,43 @@ export type SidebarMenuId =
   | "tasks"
   | "checks"
   | "versions"
+  | "chat"
   | "participants"
   | "settings";
 
 type SidebarProps = {
   isOpen: boolean;
   activeMenu: SidebarMenuId;
+  project: DemoProject;
   onMenuSelect: (menu: SidebarMenuId) => void;
   onClose: () => void;
   onPlannedClick: () => void;
 };
 
 const navItems = [
-  { id: "map", label: "2D-карта проекта", icon: GitBranch },
+  { id: "map", label: "Карта процессов", icon: GitBranch },
   { id: "documents", label: "Документы", icon: FileStack },
-  { id: "tasks", label: "Задачи", icon: ClipboardCheck, badge: "12" },
+  { id: "tasks", label: "Задания", icon: ClipboardCheck },
   { id: "checks", label: "Проверки ГИП", icon: CheckCircle2 },
   { id: "versions", label: "Версии", icon: Archive },
+  { id: "chat", label: "Чат проекта", icon: MessageCircle },
   { id: "participants", label: "Участники", icon: Users },
   { id: "settings", label: "Настройки", icon: Settings },
-] satisfies Array<{ id: SidebarMenuId; label: string; icon: LucideIcon; badge?: string }>;
+] satisfies Array<{ id: SidebarMenuId; label: string; icon: LucideIcon }>;
 
-export function Sidebar({ isOpen, activeMenu, onMenuSelect, onClose, onPlannedClick }: SidebarProps) {
+export function Sidebar({ isOpen, activeMenu, project, onMenuSelect, onClose, onPlannedClick }: SidebarProps) {
+  const sent = project.processes.filter((process) => process.status === "sent").length;
+  const rejected = project.processes.filter((process) => process.status === "rejected").length;
+  const accepted = project.processes.filter((process) => process.status === "accepted").length;
+  const storagePercent = Math.round((project.storageUsedGb / project.storageLimitGb) * 100);
+
   return (
     <>
       <aside className={clsx("sidebar glass-panel", isOpen && "is-open")}>
         <div className="project-switch">
           <LayoutDashboard size={20} />
           <div>
-            <span>Проект</span>
+            <span>Текущий проект</span>
             <strong>{project.address}</strong>
           </div>
         </div>
@@ -60,7 +69,7 @@ export function Sidebar({ isOpen, activeMenu, onMenuSelect, onClose, onPlannedCl
             return (
               <button
                 className={clsx("nav-item", activeMenu === item.id && "active")}
-                key={item.label}
+                key={item.id}
                 onClick={() => {
                   onMenuSelect(item.id);
                   onClose();
@@ -68,7 +77,6 @@ export function Sidebar({ isOpen, activeMenu, onMenuSelect, onClose, onPlannedCl
               >
                 <Icon size={19} />
                 <span>{item.label}</span>
-                {item.badge ? <em>{item.badge}</em> : null}
               </button>
             );
           })}
@@ -77,19 +85,19 @@ export function Sidebar({ isOpen, activeMenu, onMenuSelect, onClose, onPlannedCl
         <section className="storage-card">
           <div className="card-row">
             <span>Хранилище</span>
-            <b>247 ГБ из 500 ГБ</b>
+            <b>{project.storageUsedGb} ГБ из {project.storageLimitGb} ГБ</b>
           </div>
           <div className="progress-track">
-            <i style={{ width: "49%" }} />
+            <i style={{ width: `${storagePercent}%` }} />
           </div>
-          <button>Управление хранилищем</button>
+          <button onClick={onPlannedClick}>Управление хранилищем</button>
         </section>
 
         <section className="review-card">
-          <h2>Проверки ГИП</h2>
-          <StatusCounter label="На проверке" value="14" tone="review" />
-          <StatusCounter label="С замечаниями" value="8" tone="comments" />
-          <StatusCounter label="Утверждено" value="128" tone="approved" />
+          <h2>Контейнеры связей</h2>
+          <StatusCounter label="Отправлено" value={String(sent)} tone="sent" />
+          <StatusCounter label="Не принято" value={String(rejected)} tone="rejected" />
+          <StatusCounter label="Принято" value={String(accepted)} tone="accepted" />
         </section>
 
         <section className="planned-card">
@@ -104,8 +112,7 @@ export function Sidebar({ isOpen, activeMenu, onMenuSelect, onClose, onPlannedCl
         </section>
 
         <p className="hint">
-          Перетаскивайте ноды для перемещения. Один клик выбирает ноду, двойной открывает документ.
-          Используйте поиск, чтобы подсветить нужные документы.
+          Двойной клик по разделу проваливает внутрь его молекулы. Наведите на ноду и нажмите плюс, чтобы вручную построить бизнес-процесс. Клик по линии открывает контейнер передачи документов.
         </p>
       </aside>
       {isOpen ? <button className="mobile-scrim" aria-label="Закрыть меню" onClick={onClose} /> : null}
@@ -120,7 +127,7 @@ function StatusCounter({
 }: {
   label: string;
   value: string;
-  tone: "review" | "comments" | "approved";
+  tone: "sent" | "rejected" | "accepted";
 }) {
   return (
     <div className="status-counter">

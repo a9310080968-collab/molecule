@@ -1,47 +1,48 @@
 import { ExternalLink, FileSpreadsheet, FileText, FolderOpen, X } from "lucide-react";
 import { getFileLabel, getFileTypeColor } from "../lib/graph";
-import type { ProjectNode, StatusLabels } from "../types";
+import { nodeStatusLabels } from "../data/mockProject";
+import type { ProcessDocument } from "../types";
 
 type DocumentModalProps = {
-  node: ProjectNode | null;
-  statusLabels: StatusLabels;
-  onShowInFolder: (node: ProjectNode) => void;
+  document: ProcessDocument | null;
+  onShowInFolder: (document: ProcessDocument) => void;
   onClose: () => void;
 };
 
-export function DocumentModal({ node, statusLabels, onShowInFolder, onClose }: DocumentModalProps) {
-  if (!node) {
+export function DocumentModal({ document, onShowInFolder, onClose }: DocumentModalProps) {
+  if (!document) {
     return null;
   }
-  const accentColor = getFileTypeColor(node.fileType);
+
+  const accentColor = getFileTypeColor(document.fileType);
 
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true">
       <article className="document-modal glass-panel">
         <header>
           <div>
-            <span style={accentColor ? { color: accentColor } : undefined}>
+            <span style={{ color: accentColor }}>
               <FileText size={18} />
-              {getFileLabel(node.fileType)}
+              {getFileLabel(document.fileType)}
             </span>
-            <h2>{node.title}</h2>
+            <h2>{document.title}</h2>
           </div>
           <button className="icon-button" onClick={onClose} aria-label="Закрыть просмотр">
             <X size={20} />
           </button>
         </header>
 
-        <DocumentPreview node={node} />
+        <DocumentPreview document={document} />
 
         <footer>
-          <span>{node.version}</span>
-          <span>{node.status ? statusLabels[node.status] : "Без статуса"}</span>
-          <span>{node.updatedAt}</span>
-          <button onClick={() => node.fileUrl ? window.open(node.fileUrl, "_blank", "noopener,noreferrer") : undefined}>
+          <span>{document.version}</span>
+          <span>{nodeStatusLabels[document.status]}</span>
+          <span>{document.updatedAt}</span>
+          <button onClick={() => document.fileUrl ? window.open(document.fileUrl, "_blank", "noopener,noreferrer") : undefined}>
             Открыть документ
             <ExternalLink size={17} />
           </button>
-          <button onClick={() => onShowInFolder(node)}>
+          <button onClick={() => onShowInFolder(document)}>
             Показать в папке
             <FolderOpen size={17} />
           </button>
@@ -51,30 +52,30 @@ export function DocumentModal({ node, statusLabels, onShowInFolder, onClose }: D
   );
 }
 
-function DocumentPreview({ node }: { node: ProjectNode }) {
-  if (node.fileType === "pdf" && node.fileUrl) {
+function DocumentPreview({ document }: { document: ProcessDocument }) {
+  if (document.fileType === "pdf" && document.fileUrl) {
     return (
       <div className="document-preview live-preview">
-        <iframe src={node.fileUrl} title={node.title} />
+        <iframe src={document.fileUrl} title={document.title} />
       </div>
     );
   }
 
-  if (node.fileType === "txt" && node.fileText) {
+  if (document.fileType === "txt" && document.fileText) {
     return (
       <div className="document-preview live-preview">
-        <pre>{node.fileText}</pre>
+        <pre>{document.fileText}</pre>
       </div>
     );
   }
 
-  if (node.fileType === "xlsx") {
+  if (document.fileType === "xlsx") {
     return (
       <div className="document-preview">
         <div className="sheet-preview">
           <FileSpreadsheet size={34} />
-          <b>{node.title}</b>
-          <span>{node.fileSize ?? "Демо-таблица"}</span>
+          <b>{document.title}</b>
+          <span>{document.size ?? "Демо-таблица"}</span>
           <div>
             {Array.from({ length: 24 }).map((_, index) => <i key={index} />)}
           </div>
@@ -86,12 +87,10 @@ function DocumentPreview({ node }: { node: ProjectNode }) {
   return (
     <div className="document-preview">
       <div className="preview-page">
-        <p>{node.title}</p>
-        <h3>{node.fileUrl ? "Файл загружен в демо" : "Демонстрационный просмотр документа"}</h3>
+        <p>{document.title}</p>
+        <h3>{document.fileUrl ? "Файл загружен в демо" : "Демонстрационный просмотр документа"}</h3>
         <span>
-          {node.fileUrl
-            ? "Документ доступен по кнопке открытия. PDF и TXT показываются прямо здесь, DOC/DOCX и Excel открываются отдельным просмотром браузера или системного приложения."
-            : "В полноценной версии здесь будет отображаться PDF/DOCX-превью, история версий, комментарии и согласования."}
+          В рабочей версии здесь будет отображаться PDF/DOCX/XLSX-превью, история передачи по контейнеру связи, комментарии и решения валидации.
         </span>
         <div className="preview-lines">
           <i />
