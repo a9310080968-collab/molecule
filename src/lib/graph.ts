@@ -43,8 +43,45 @@ export function getLevelProcesses(project: DemoProject, level: MapLevel) {
   return project.processes.filter((process) => process.levelId === level.id);
 }
 
+function getDescendantLevelIds(project: DemoProject, rootLevelId: string) {
+  const result = new Set<string>();
+  const queue = [rootLevelId];
+
+  while (queue.length) {
+    const levelId = queue.shift();
+    if (!levelId || result.has(levelId)) {
+      continue;
+    }
+
+    result.add(levelId);
+    project.levels
+      .filter((level) => level.parentLevelId === levelId)
+      .forEach((level) => queue.push(level.id));
+  }
+
+  return result;
+}
+
 export function getNodeProcesses(project: DemoProject, nodeId: string) {
-  return project.processes.filter((process) => process.from === nodeId || process.to === nodeId);
+  const node = getNodeById(project, nodeId);
+  const processesById = new Map<string, BusinessProcess>();
+
+  project.processes
+    .filter((process) => process.from === nodeId || process.to === nodeId)
+    .forEach((process) => processesById.set(process.id, process));
+
+  if (node?.childrenLevelId) {
+    const nestedLevelIds = getDescendantLevelIds(project, node.childrenLevelId);
+    project.processes
+      .filter((process) => nestedLevelIds.has(process.levelId))
+      .forEach((process) => processesById.set(process.id, process));
+  }
+
+  if (node?.id === getDefaultLevel(project).centralNodeId) {
+    project.processes.forEach((process) => processesById.set(process.id, process));
+  }
+
+  return Array.from(processesById.values());
 }
 
 export function getNodeDocuments(project: DemoProject, nodeId: string) {
@@ -52,7 +89,7 @@ export function getNodeDocuments(project: DemoProject, nodeId: string) {
 }
 
 export function getProjectProgress(project: DemoProject, level: MapLevel) {
-  const nodes = getLevelNodes(project, level).filter((node) => node.type !== "central");
+  const nodes = getLevelNodes(project, level).filter((node) => node.id !== level.centralNodeId);
   if (!nodes.length) {
     return 0;
   }
@@ -199,6 +236,16 @@ export function getSearchMatches(query: string, project: DemoProject, level: Map
   nodes.forEach((node) => {
     if (normalizeText(getNodeSearchText(node)).includes(normalized)) {
       nodeIds.add(node.id);
+    }
+
+    if (node.childrenLevelId) {
+      const nestedLevelIds = getDescendantLevelIds(project, node.childrenLevelId);
+      const hasNestedMatch = project.processes.some(
+        (process) => nestedLevelIds.has(process.levelId) && normalizeText(getProcessSearchText(process, project)).includes(normalized),
+      );
+      if (hasNestedMatch) {
+        nodeIds.add(node.id);
+      }
     }
   });
 

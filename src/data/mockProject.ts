@@ -96,16 +96,16 @@ function createSiriusProject(): DemoProject {
       "node-sirius-pos",
       "node-sirius-est",
     ]),
-    level(projectId, ird, "ИРД / Общие данные", "ТЗ, задания, исходные разрешительные документы", "node-sirius-ird-root", [
-      "node-sirius-ird-root",
+    level(projectId, ird, "ИРД / Общие данные", "ТЗ, задания, исходные разрешительные документы", "node-sirius-ird", [
+      "node-sirius-ird",
       "node-sirius-tz",
       "node-sirius-gpzu",
       "node-sirius-survey",
       "node-sirius-design-task",
       "node-sirius-tech-conditions",
     ], top, "node-sirius-ird"),
-    level(projectId, ar, "АР / Архитектурные решения", "Внутренняя инфраструктура раздела АР", "node-sirius-ar-root", [
-      "node-sirius-ar-root",
+    level(projectId, ar, "АР / Архитектурные решения", "Внутренняя инфраструктура раздела АР", "node-sirius-ar", [
+      "node-sirius-ar",
       "node-sirius-ar-plans",
       "node-sirius-ar-facades",
       "node-sirius-ar-specs",
@@ -113,16 +113,16 @@ function createSiriusProject(): DemoProject {
       "node-sirius-ar-gip",
       "node-sirius-ar-issues",
     ], top, "node-sirius-ar"),
-    level(projectId, kr, "КР / Конструктивные решения", "Подразделы конструктива и расчетов", "node-sirius-kr-root", [
-      "node-sirius-kr-root",
+    level(projectId, kr, "КР / Конструктивные решения", "Подразделы конструктива и расчетов", "node-sirius-kr", [
+      "node-sirius-kr",
       "node-sirius-kr-kzh",
       "node-sirius-kr-km",
       "node-sirius-kr-loads",
       "node-sirius-kr-units",
       "node-sirius-kr-gip",
     ], top, "node-sirius-kr"),
-    level(projectId, arFacade, "АР / Фасады", "Детализация фасадной ветки", "node-sirius-facade-root", [
-      "node-sirius-facade-root",
+    level(projectId, arFacade, "АР / Фасады", "Детализация фасадной ветки", "node-sirius-ar-facades", [
+      "node-sirius-ar-facades",
       "node-sirius-facade-east",
       "node-sirius-facade-west",
       "node-sirius-facade-materials",

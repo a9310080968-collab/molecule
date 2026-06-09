@@ -126,6 +126,8 @@ function NodeInfo({
   const processes = getNodeProcesses(project, node.id);
   const documents = getNodeDocuments(project, node.id);
   const progress = getProjectProgress(project, level);
+  const isLevelCenter = node.id === level.centralNodeId;
+  const canDrill = Boolean(node.childrenLevelId && node.childrenLevelId !== level.id);
 
   return (
     <>
@@ -151,7 +153,7 @@ function NodeInfo({
             Связать с нодой
           </button>
         ) : null}
-        {node.childrenLevelId ? (
+        {canDrill ? (
           <button onClick={() => onOpenNodeLevel(node)}>
             <ExternalLink size={17} />
             Провалиться внутрь
@@ -172,7 +174,7 @@ function NodeInfo({
         <Metric icon={<FileText size={16} />} label="Документов в связях" value={String(documents.length)} />
         <Metric icon={<UserRound size={16} />} label="Ответственный" value={node.responsible ?? "Не назначен"} wide />
         <Metric icon={<Clock3 size={16} />} label="Обновлено" value={node.updatedAt ?? "сегодня"} />
-        {node.type === "central" ? <Metric icon={<CheckCircle2 size={16} />} label="Готовность уровня" value={`${progress}%`} /> : null}
+        {isLevelCenter ? <Metric icon={<CheckCircle2 size={16} />} label="Готовность уровня" value={`${progress}%`} /> : null}
       </div>
 
       <section className="process-list">

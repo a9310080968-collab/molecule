@@ -166,6 +166,12 @@ button {
   transition: background 180ms ease, color 180ms ease;
 }
 
+.nav-item span {
+  font-size: var(--fs-14);
+  font-weight: 620;
+  line-height: 1.18;
+}
+
 .nav-item:hover,
 .nav-item.active {
   background: linear-gradient(90deg, rgba(109, 126, 150, 0.28), rgba(31, 215, 255, 0.08));
@@ -179,6 +185,7 @@ button {
   border-radius: 14px;
   background: rgba(7, 15, 31, 0.48);
   padding: 10px;
+  font-size: var(--fs-13);
 }
 
 .storage-card {
@@ -297,8 +304,14 @@ button {
 
 .planned-card em {
   color: rgba(198, 207, 226, 0.56);
-  font-size: var(--fs-11);
+  font-size: var(--fs-12);
   font-style: normal;
+}
+
+.planned-card button span {
+  font-size: var(--fs-13);
+  font-weight: 620;
+  line-height: 1.2;
 }
 
 .hint {
@@ -362,14 +375,14 @@ button {
 }
 
 .project-tabs span {
-  font-size: var(--fs-13);
+  font-size: var(--fs-14);
   font-weight: 700;
 }
 
 .project-tabs small {
   margin-top: 2px;
   color: rgba(212, 224, 248, 0.58);
-  font-size: var(--fs-11);
+  font-size: var(--fs-12);
 }
 
 .search-wrap {
@@ -930,7 +943,7 @@ button {
   max-width: 720px;
   margin: 8px 0 0;
   color: rgba(219, 232, 255, 0.72);
-  font-size: var(--fs-13);
+  font-size: var(--fs-14);
   line-height: 1.45;
 }
 
@@ -981,7 +994,7 @@ button {
 .workspace-row strong {
   overflow: hidden;
   color: #fff;
-  font-size: var(--fs-14);
+  font-size: var(--fs-15);
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -990,7 +1003,7 @@ button {
 .workspace-row span,
 .workspace-row em {
   color: rgba(211, 224, 248, 0.66);
-  font-size: var(--fs-12);
+  font-size: var(--fs-13);
 }
 
 .workspace-row em {

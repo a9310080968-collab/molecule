@@ -87,9 +87,10 @@ export function ProjectScene({
   const panRef = useRef<{ pointerId: number; x: number; y: number; panX: number; panY: number } | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [view, setView] = useState<ViewState>(INITIAL_VIEW);
-  const [positions, setPositions] = useState<Record<string, Vec2>>(() => buildInitialPositions(nodes, level.id));
+  const [positions, setPositions] = useState<Record<string, Vec2>>(() => buildInitialPositions(nodes, level.id, level.centralNodeId));
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const nodeMap = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
+  const centerNodeId = level.centralNodeId;
   const projectProgress = getProjectProgress(project, level);
   const scale = getBaseScale(size) * view.zoom;
 
@@ -123,7 +124,7 @@ export function ProjectScene({
         }
       });
 
-      const fallback = buildInitialPositions(nodes, level.id);
+      const fallback = buildInitialPositions(nodes, level.id, centerNodeId);
       nodes.forEach((node) => {
         if (!next[node.id]) {
           next[node.id] = fallback[node.id] ?? { x: 0, y: 0 };
@@ -133,7 +134,7 @@ export function ProjectScene({
 
       return changed ? next : current;
     });
-  }, [level.id, nodes]);
+  }, [centerNodeId, level.id, nodes]);
 
   const screenPositions = useMemo(() => {
     return Object.fromEntries(
@@ -158,16 +159,16 @@ export function ProjectScene({
   useEffect(() => {
     sceneRef.current = {
       reset: () => {
-        setPositions(buildInitialPositions(nodes, level.id));
+        setPositions(buildInitialPositions(nodes, level.id, centerNodeId));
         setView(INITIAL_VIEW);
       },
       normalize: () => {
-        setPositions(buildNormalizedPositions(nodes, processes, level.id));
+        setPositions(buildNormalizedPositions(nodes, processes, level.id, centerNodeId));
       },
       focusNode,
       focusSelected: () => focusNode(selectedNodeId),
     };
-  }, [focusNode, level.id, nodes, processes, sceneRef, selectedNodeId]);
+  }, [centerNodeId, focusNode, level.id, nodes, processes, sceneRef, selectedNodeId]);
 
   const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -222,7 +223,7 @@ export function ProjectScene({
 
   const handleNodePointerDown = (event: ReactPointerEvent<HTMLButtonElement>, node: ProjectNode) => {
     event.stopPropagation();
-    if (node.type === "central") {
+    if (node.id === centerNodeId || node.type === "central") {
       return;
     }
 
@@ -328,6 +329,7 @@ export function ProjectScene({
             to={screenPositions[process.to]}
             fromNode={nodeMap.get(process.from)}
             toNode={nodeMap.get(process.to)}
+            centralNodeId={centerNodeId}
             selected={selectedProcessId === process.id}
             matched={matchedProcessIds.has(process.id)}
             dimmed={isSearching && !matchedProcessIds.has(process.id) && !matchedNodeIds.has(process.from) && !matchedNodeIds.has(process.to)}
@@ -342,12 +344,13 @@ export function ProjectScene({
           return null;
         }
 
-        const tone = getNodeVisualTone(node);
+        const isCenter = node.id === centerNodeId;
+        const tone = getNodeVisualTone(isCenter ? { ...node, type: "central" } : node);
         const selected = selectedNodeId === node.id;
         const matched = matchedNodeIds.has(node.id);
         const dimmed = isSearching && !matched;
-        const canDrill = Boolean(node.childrenLevelId);
-        const progress = node.type === "central" ? projectProgress : undefined;
+        const canDrill = Boolean(node.childrenLevelId && node.childrenLevelId !== level.id);
+        const progress = isCenter ? projectProgress : undefined;
         const isLinkSource = linkingFromId === node.id;
         const canCompleteLink = linkingFromId && linkingFromId !== node.id;
 
@@ -356,7 +359,7 @@ export function ProjectScene({
             key={node.id}
             className={clsx(
               "map-node",
-              `node-${node.type}`,
+              `node-${isCenter ? "central" : node.type}`,
               selected && "selected",
               matched && "matched",
               dimmed && "dimmed",
@@ -377,18 +380,18 @@ export function ProjectScene({
             onMouseLeave={() => setHoveredNodeId((current) => (current === node.id ? null : current))}
             onDoubleClick={(event) => {
               event.stopPropagation();
-              if (node.childrenLevelId) {
+              if (canDrill) {
                 onOpenNodeLevel(node);
               }
             }}
             title={canDrill ? "Двойной клик: провалиться внутрь" : tone.label}
           >
             <span className="node-orb">
-              {node.type === "central" ? <i style={{ height: `${progress}%` }} /> : null}
+              {isCenter ? <i style={{ height: `${progress}%` }} /> : null}
             </span>
             <span className="node-label">
-              <strong>{node.type === "central" ? node.title : node.shortCode ?? node.title}</strong>
-              <em>{node.type === "central" ? `${progress}%` : node.title}</em>
+              <strong>{isCenter ? node.title : node.shortCode ?? node.title}</strong>
+              <em>{isCenter ? `${progress}%` : node.title}</em>
             </span>
             {node.type !== "central" ? (
               <span
@@ -419,6 +422,7 @@ function ProcessPath({
   to,
   fromNode,
   toNode,
+  centralNodeId,
   selected,
   matched,
   dimmed,
@@ -429,6 +433,7 @@ function ProcessPath({
   to?: Vec2;
   fromNode?: ProjectNode;
   toNode?: ProjectNode;
+  centralNodeId: string;
   selected: boolean;
   matched: boolean;
   dimmed: boolean;
@@ -438,8 +443,8 @@ function ProcessPath({
     return null;
   }
 
-  const radiusFrom = getNodeRadius(fromNode);
-  const radiusTo = getNodeRadius(toNode);
+  const radiusFrom = getNodeRadius(fromNode, centralNodeId);
+  const radiusTo = getNodeRadius(toNode, centralNodeId);
   const path = buildProcessPath(from, to, radiusFrom, radiusTo, process.parallelIndex ?? 0);
   const color = getProcessStatusColor(process.status);
   const inactive = process.status === "accepted" || process.status === "in_work";
@@ -465,14 +470,14 @@ function ProcessPath({
   );
 }
 
-function buildInitialPositions(nodes: ProjectNode[], levelId: string) {
+function buildInitialPositions(nodes: ProjectNode[], levelId: string, centralNodeId: string) {
   const positions: Record<string, Vec2> = {};
-  const central = nodes.find((node) => node.type === "central");
+  const central = nodes.find((node) => node.id === centralNodeId) ?? nodes.find((node) => node.type === "central");
   if (central) {
     positions[central.id] = { x: 0, y: 0 };
   }
 
-  const orbitNodes = nodes.filter((node) => node.type !== "central");
+  const orbitNodes = nodes.filter((node) => node.id !== central?.id);
   const wide = levelId.includes("root");
   const radiusX = wide ? 18.5 : 14.5;
   const radiusY = wide ? 11.5 : 9.2;
@@ -490,11 +495,11 @@ function buildInitialPositions(nodes: ProjectNode[], levelId: string) {
   return positions;
 }
 
-function buildNormalizedPositions(nodes: ProjectNode[], processes: BusinessProcess[], levelId: string) {
-  const positions = buildInitialPositions(nodes, levelId);
+function buildNormalizedPositions(nodes: ProjectNode[], processes: BusinessProcess[], levelId: string, centralNodeId: string) {
+  const positions = buildInitialPositions(nodes, levelId, centralNodeId);
   const ids = nodes.map((node) => node.id);
   const vectors = Object.fromEntries(ids.map((id) => [id, { ...(positions[id] ?? { x: 0, y: 0 }) }])) as Record<string, Vec2>;
-  const central = nodes.find((node) => node.type === "central")?.id;
+  const central = nodes.some((node) => node.id === centralNodeId) ? centralNodeId : nodes.find((node) => node.type === "central")?.id;
 
   for (let iteration = 0; iteration < 44; iteration += 1) {
     const deltas = Object.fromEntries(ids.map((id) => [id, { x: 0, y: 0 }])) as Record<string, Vec2>;
@@ -595,8 +600,8 @@ function getBaseScale(size: { width: number; height: number }) {
   return Math.max(12, Math.min(size.width / 54, size.height / 34));
 }
 
-function getNodeRadius(node: ProjectNode) {
-  if (node.type === "central") return 82;
+function getNodeRadius(node: ProjectNode, centralNodeId?: string) {
+  if (node.id === centralNodeId || node.type === "central") return 82;
   if (node.type === "section" || node.type === "ird") return 62;
   if (node.type === "package") return 54;
   return 56;
