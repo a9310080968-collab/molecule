@@ -2,7 +2,7 @@ export type NodeStatus = "approved" | "review" | "comments" | "unchecked" | "dra
 
 export type FileType = "pdf" | "docx" | "xlsx" | "pptx" | "txt" | "dwg" | "unknown";
 
-export type NodeKind = "central" | "section" | "ird" | "subsection" | "package";
+export type NodeKind = "central" | "section" | "ird" | "subsection" | "package" | "document";
 
 export type ProcessStatus = "draft" | "sent" | "in_work" | "rejected" | "accepted";
 
@@ -22,6 +22,9 @@ export type ProjectNode = {
   tags?: string[];
   deadlineAt?: string;
   childrenLevelId?: string;
+  documentOwnerNodeId?: string;
+  fileType?: FileType;
+  document?: ProcessDocument;
 };
 
 export type ProcessDocument = {

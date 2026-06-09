@@ -16,7 +16,7 @@ import {
   getProcessStatusText,
   getProjectProgress,
 } from "../lib/graph";
-import type { BusinessProcess, DemoProject, MapLevel, ProjectNode, Vec2 } from "../types";
+import type { BusinessProcess, DemoProject, MapLevel, ProcessDocument, ProjectNode, Vec2 } from "../types";
 
 export type SceneHandle = {
   reset: () => void;
@@ -42,6 +42,8 @@ type ProjectSceneProps = {
   onSelectProcess: (processId: string) => void;
   onStartLink: (nodeId: string) => void;
   onCompleteLink: (nodeId: string) => void;
+  onOpenDocument: (document: ProcessDocument) => void;
+  onMoveDocumentNode: (documentNodeId: string, targetNodeId: string | null) => void;
   sceneRef: MutableRefObject<SceneHandle | null>;
 };
 
@@ -56,6 +58,7 @@ type DragState = {
   pointerId: number;
   startPointer: Vec2;
   startPosition: Vec2;
+  currentPosition: Vec2;
   moved: boolean;
 };
 
@@ -80,6 +83,8 @@ export function ProjectScene({
   onSelectProcess,
   onStartLink,
   onCompleteLink,
+  onOpenDocument,
+  onMoveDocumentNode,
   sceneRef,
 }: ProjectSceneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -136,6 +141,10 @@ export function ProjectScene({
     });
   }, [centerNodeId, level.id, nodes]);
 
+  useEffect(() => {
+    setView(INITIAL_VIEW);
+  }, [level.id]);
+
   const screenPositions = useMemo(() => {
     return Object.fromEntries(
       Object.entries(positions).map(([id, position]) => [id, worldToScreen(position, size, view)]),
@@ -188,7 +197,7 @@ export function ProjectScene({
   };
 
   const handleScenePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0 || (event.target as HTMLElement).closest(".map-node, .process-hit, .node-plus")) {
+    if (event.button !== 0 || (event.target as HTMLElement).closest(".map-node, .process-hit, .node-plus, .level-chip, .linking-hint")) {
       return;
     }
 
@@ -239,6 +248,7 @@ export function ProjectScene({
       pointerId: event.pointerId,
       startPointer: clientToWorld(event.clientX, event.clientY, rect, view),
       startPosition: position,
+      currentPosition: position,
       moved: false,
     };
   };
@@ -261,6 +271,7 @@ export function ProjectScene({
     };
 
     drag.moved = true;
+    drag.currentPosition = next;
     setPositions((current) => ({ ...current, [node.id]: next }));
   };
 
@@ -273,6 +284,18 @@ export function ProjectScene({
     event.stopPropagation();
     event.currentTarget.releasePointerCapture(event.pointerId);
     dragRef.current = null;
+
+    if (drag.moved && node.type === "document") {
+      const dropPositions = { ...positions, [node.id]: drag.currentPosition };
+      const target = findDocumentDropTarget(node, nodes, dropPositions, centerNodeId);
+      const position = dropPositions[node.id];
+      if (target) {
+        onMoveDocumentNode(node.id, target.id);
+      } else if (node.documentOwnerNodeId && position && Math.hypot(position.x, position.y) > 17) {
+        onMoveDocumentNode(node.id, null);
+      }
+      return;
+    }
 
     if (!drag.moved) {
       if (linkingFromId && linkingFromId !== node.id) {
@@ -299,7 +322,13 @@ export function ProjectScene({
           <small>{level.subtitle}</small>
         </div>
         {level.parentLevelId ? (
-          <button onClick={onBackLevel}>
+          <button
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onBackLevel();
+            }}
+          >
             <ChevronUp size={17} />
             Уровень выше
           </button>
@@ -380,6 +409,10 @@ export function ProjectScene({
             onMouseLeave={() => setHoveredNodeId((current) => (current === node.id ? null : current))}
             onDoubleClick={(event) => {
               event.stopPropagation();
+              if (node.type === "document" && node.document) {
+                onOpenDocument(node.document);
+                return;
+              }
               if (canDrill) {
                 onOpenNodeLevel(node);
               }
@@ -393,7 +426,7 @@ export function ProjectScene({
               <strong>{isCenter ? node.title : node.shortCode ?? node.title}</strong>
               <em>{isCenter ? `${progress}%` : node.title}</em>
             </span>
-            {node.type !== "central" ? (
+            {node.type !== "central" && node.type !== "document" ? (
               <span
                 className={clsx("node-plus", (hoveredNodeId === node.id || linkingFromId) && "visible")}
                 onPointerDown={(event) => event.stopPropagation()}
@@ -478,17 +511,28 @@ function buildInitialPositions(nodes: ProjectNode[], levelId: string, centralNod
   }
 
   const orbitNodes = nodes.filter((node) => node.id !== central?.id);
+  const structureNodes = orbitNodes.filter((node) => node.type !== "document");
+  const documentNodes = orbitNodes.filter((node) => node.type === "document");
   const wide = levelId.includes("root");
   const radiusX = wide ? 18.5 : 14.5;
   const radiusY = wide ? 11.5 : 9.2;
 
-  orbitNodes.forEach((node, index) => {
-    const angle = index * ((Math.PI * 2) / Math.max(orbitNodes.length, 1)) - Math.PI / 2.35;
+  structureNodes.forEach((node, index) => {
+    const angle = index * ((Math.PI * 2) / Math.max(structureNodes.length, 1)) - Math.PI / 2.35;
     const jitter = seededJitter(node.id);
     const uneven = 0.86 + ((index % 3) * 0.12);
     positions[node.id] = {
       x: Math.cos(angle) * radiusX * uneven + jitter.x * (wide ? 2.8 : 1.7),
       y: Math.sin(angle) * radiusY * uneven + jitter.y * (wide ? 2.1 : 1.3),
+    };
+  });
+
+  documentNodes.forEach((node, index) => {
+    const angle = index * ((Math.PI * 2) / Math.max(documentNodes.length, 1)) + Math.PI / 6;
+    const jitter = seededJitter(node.id);
+    positions[node.id] = {
+      x: Math.cos(angle) * (radiusX + (wide ? 7.2 : 5.2)) + jitter.x * 1.6,
+      y: Math.sin(angle) * (radiusY + (wide ? 4.2 : 3.4)) + jitter.y * 1.4,
     };
   });
 
@@ -562,6 +606,36 @@ function addDelta(deltas: Record<string, Vec2>, id: string, x: number, y: number
   deltas[id].y += y;
 }
 
+function findDocumentDropTarget(documentNode: ProjectNode, nodes: ProjectNode[], positions: Record<string, Vec2>, centralNodeId: string) {
+  const documentPosition = positions[documentNode.id];
+  if (!documentPosition) {
+    return undefined;
+  }
+
+  let best: { node: ProjectNode; distance: number } | undefined;
+  nodes.forEach((node) => {
+    if (node.id === documentNode.id || node.type === "document" || node.type === "central") {
+      return;
+    }
+
+    if (!node.childrenLevelId && node.id !== centralNodeId) {
+      return;
+    }
+
+    const position = positions[node.id];
+    if (!position) {
+      return;
+    }
+
+    const distance = Math.hypot(documentPosition.x - position.x, documentPosition.y - position.y);
+    if (distance < 5.8 && (!best || distance < best.distance)) {
+      best = { node, distance };
+    }
+  });
+
+  return best?.node;
+}
+
 function buildProcessPath(from: Vec2, to: Vec2, radiusFrom: number, radiusTo: number, offsetIndex: number) {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
@@ -602,6 +676,7 @@ function getBaseScale(size: { width: number; height: number }) {
 
 function getNodeRadius(node: ProjectNode, centralNodeId?: string) {
   if (node.id === centralNodeId || node.type === "central") return 82;
+  if (node.type === "document") return 39;
   if (node.type === "section" || node.type === "ird") return 62;
   if (node.type === "package") return 54;
   return 56;

@@ -95,6 +95,8 @@ function createSiriusProject(): DemoProject {
       "node-sirius-eom",
       "node-sirius-pos",
       "node-sirius-est",
+      "node-doc-sirius-inbox-tu-vk",
+      "node-doc-sirius-inbox-client-task",
     ]),
     level(projectId, ird, "ИРД / Общие данные", "ТЗ, задания, исходные разрешительные документы", "node-sirius-ird", [
       "node-sirius-ird",
@@ -112,6 +114,8 @@ function createSiriusProject(): DemoProject {
       "node-sirius-ar-color",
       "node-sirius-ar-gip",
       "node-sirius-ar-issues",
+      "node-doc-sirius-ar-plan-1",
+      "node-doc-sirius-ar-spec",
     ], top, "node-sirius-ar"),
     level(projectId, kr, "КР / Конструктивные решения", "Подразделы конструктива и расчетов", "node-sirius-kr", [
       "node-sirius-kr",
@@ -127,6 +131,7 @@ function createSiriusProject(): DemoProject {
       "node-sirius-facade-west",
       "node-sirius-facade-materials",
       "node-sirius-facade-comments",
+      "node-doc-sirius-facade-east",
     ], ar, "node-sirius-ar-facades"),
   ];
 
@@ -170,6 +175,14 @@ function createSiriusProject(): DemoProject {
     node(projectId, arFacade, "node-sirius-facade-materials", "subsection", "Материалы", "МАТ", "Паспорта материалов и оттенки.", "comments", "Виктория Романова"),
     node(projectId, arFacade, "node-sirius-facade-comments", "package", "Комментарии заказчика", "КМТ", "Пакет замечаний по фасадам.", "comments", "Павел Андреев"),
   ];
+
+  nodes.push(
+    documentNode(projectId, top, "node-doc-sirius-inbox-tu-vk", doc("inbox-sirius-1", "ТУ_ВК_без_тега.pdf", "pdf", "v1", "draft", "Почта", "mail")),
+    documentNode(projectId, top, "node-doc-sirius-inbox-client-task", doc("inbox-sirius-2", "Задание от заказчика.docx", "docx", "v1", "draft", "Чат", "chat")),
+    documentNode(projectId, ar, "node-doc-sirius-ar-plan-1", doc("visual-sirius-plan-1", "План 1 этажа v4.pdf", "pdf", "v4", "review", "АР"), "node-sirius-ar"),
+    documentNode(projectId, ar, "node-doc-sirius-ar-spec", doc("visual-sirius-spec-ar", "Ведомость элементов.xlsx", "xlsx", "v1", "review", "АР"), "node-sirius-ar"),
+    documentNode(projectId, arFacade, "node-doc-sirius-facade-east", doc("visual-sirius-east-facade", "Восточный фасад_материалы.pptx", "pptx", "v1", "comments", "АР"), "node-sirius-ar-facades"),
+  );
 
   const processes: BusinessProcess[] = [
     process(projectId, top, "bp-sirius-ird-ar", "node-sirius-ird", "node-sirius-ar", "Передача ИРД в АР", "ТЗ, ГПЗУ и задание на проектирование переданы архитектуре как базовые исходные данные.", "accepted", "both", "Мария Соколова", "Анна Лебедева", 0, [
@@ -348,6 +361,30 @@ function node(
     updatedAt: "сегодня",
     childrenLevelId,
     tags,
+  };
+}
+
+function documentNode(
+  projectId: string,
+  levelId: string,
+  id: string,
+  document: ProcessDocument,
+  ownerNodeId?: string,
+): ProjectNode {
+  return {
+    id,
+    projectId,
+    levelId,
+    type: "document",
+    title: document.title,
+    shortCode: document.fileType.toUpperCase(),
+    description: ownerNodeId ? "Файл находится внутри ноды раздела." : "Бесхозный файл. Перетащите его в раздел, чтобы разобрать.",
+    status: document.status,
+    responsible: document.from,
+    updatedAt: document.updatedAt,
+    documentOwnerNodeId: ownerNodeId,
+    fileType: document.fileType,
+    document,
   };
 }
 

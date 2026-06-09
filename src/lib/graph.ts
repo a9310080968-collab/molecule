@@ -43,6 +43,14 @@ export function getLevelProcesses(project: DemoProject, level: MapLevel) {
   return project.processes.filter((process) => process.levelId === level.id);
 }
 
+export function getOrphanDocumentNodes(project: DemoProject) {
+  return project.nodes.filter((node) => node.type === "document" && !node.documentOwnerNodeId);
+}
+
+export function getOwnedDocumentNodes(project: DemoProject, nodeId: string) {
+  return project.nodes.filter((node) => node.type === "document" && node.documentOwnerNodeId === nodeId);
+}
+
 function getDescendantLevelIds(project: DemoProject, rootLevelId: string) {
   const result = new Set<string>();
   const queue = [rootLevelId];
@@ -85,11 +93,14 @@ export function getNodeProcesses(project: DemoProject, nodeId: string) {
 }
 
 export function getNodeDocuments(project: DemoProject, nodeId: string) {
-  return getNodeProcesses(project, nodeId).flatMap((process) => process.documents);
+  return [
+    ...getOwnedDocumentNodes(project, nodeId).map((node) => getDocumentFromNode(node)),
+    ...getNodeProcesses(project, nodeId).flatMap((process) => process.documents),
+  ];
 }
 
 export function getProjectProgress(project: DemoProject, level: MapLevel) {
-  const nodes = getLevelNodes(project, level).filter((node) => node.id !== level.centralNodeId);
+  const nodes = getLevelNodes(project, level).filter((node) => node.id !== level.centralNodeId && node.type !== "document");
   if (!nodes.length) {
     return 0;
   }
@@ -111,6 +122,15 @@ export function getProcessStatusColor(status: ProcessStatus) {
 }
 
 export function getNodeVisualTone(node: ProjectNode) {
+  if (node.type === "document") {
+    const color = getFileTypeColor(node.fileType ?? node.document?.fileType);
+    return {
+      fill: color,
+      glow: color,
+      label: getFileLabel(node.fileType ?? node.document?.fileType),
+    };
+  }
+
   if (node.type === "central") {
     return {
       fill: "#7f8798",
@@ -222,6 +242,38 @@ export function getAllDocuments(project: DemoProject) {
   return [...processDocs, ...project.inboxDocuments.map((document) => ({ ...document, processId: "", processTitle: "Входящие без связи" }))];
 }
 
+export function getAllVisibleDocuments(project: DemoProject) {
+  const seen = new Set<string>();
+  const processDocs = project.processes.flatMap((process) =>
+    process.documents.map((document) => {
+      seen.add(document.id);
+      return {
+        ...document,
+        processId: process.id,
+        processTitle: process.title,
+      };
+    }),
+  );
+
+  const nodeDocs = project.nodes
+    .filter((node) => node.type === "document" && node.document && !seen.has(node.document.id))
+    .map((node) => {
+      const document = getDocumentFromNode(node);
+      seen.add(document.id);
+      return {
+        ...document,
+        processId: "",
+        processTitle: node.documentOwnerNodeId ? `Внутри ноды: ${getNodeById(project, node.documentOwnerNodeId)?.title ?? "раздел"}` : "Бесхозный файл",
+      };
+    });
+
+  const inboxDocs = project.inboxDocuments
+    .filter((document) => !seen.has(document.id))
+    .map((document) => ({ ...document, processId: "", processTitle: "Входящие без связи" }));
+
+  return [...processDocs, ...nodeDocs, ...inboxDocs];
+}
+
 export function getSearchMatches(query: string, project: DemoProject, level: MapLevel): SearchMatches {
   const normalized = normalizeText(query);
   if (!normalized) {
@@ -299,6 +351,37 @@ export function createDocumentFromName(name: string, source: ProcessDocument["so
   };
 }
 
+export function createDocumentNode(projectId: string, levelId: string, document: ProcessDocument, ownerNodeId?: string): ProjectNode {
+  return {
+    id: `node-${document.id}`,
+    projectId,
+    levelId,
+    type: "document",
+    title: document.title,
+    shortCode: getFileLabel(document.fileType),
+    description: ownerNodeId ? "Файл находится внутри ноды раздела." : "Бесхозный файл. Перетащите его в раздел, чтобы разобрать.",
+    status: document.status,
+    responsible: document.from,
+    updatedAt: document.updatedAt,
+    documentOwnerNodeId: ownerNodeId,
+    fileType: document.fileType,
+    document,
+  };
+}
+
+export function getDocumentFromNode(node: ProjectNode): ProcessDocument {
+  return node.document ?? {
+    id: node.id,
+    title: node.title,
+    fileType: node.fileType ?? "unknown",
+    version: "v1",
+    status: node.status ?? "draft",
+    from: node.responsible ?? "Документ",
+    updatedAt: node.updatedAt ?? "сегодня",
+    source: "manual",
+  };
+}
+
 export function inferFileType(name: string): FileType {
   const ext = name.split(".").pop()?.toLowerCase();
   if (ext === "pdf") return "pdf";
@@ -318,6 +401,7 @@ export function formatBytes(bytes: number) {
 }
 
 function getNodeSearchText(node: ProjectNode) {
+  const document = node.type === "document" ? getDocumentFromNode(node) : undefined;
   return [
     node.title,
     node.shortCode,
@@ -326,6 +410,10 @@ function getNodeSearchText(node: ProjectNode) {
     node.responsible,
     node.tags?.join(" "),
     node.deadlineAt,
+    document?.title,
+    document ? getFileLabel(document.fileType) : "",
+    document?.version,
+    document?.from,
   ]
     .filter(Boolean)
     .join(" ");

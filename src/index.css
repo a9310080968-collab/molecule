@@ -764,6 +764,21 @@ button {
   margin: -56px 0 0 -56px;
 }
 
+.map-node.node-document {
+  z-index: 7;
+  width: 78px;
+  height: 78px;
+  margin: -39px 0 0 -39px;
+}
+
+.node-document .node-orb {
+  inset: 5px;
+  border-style: dashed;
+  background:
+    radial-gradient(circle at 36% 26%, rgba(255, 255, 255, 0.34), transparent 18%),
+    radial-gradient(circle at 52% 62%, color-mix(in srgb, var(--node-fill) 62%, #111827), #121928 78%);
+}
+
 .map-node.dimmed {
   opacity: 0.18;
 }
@@ -827,6 +842,11 @@ button {
   width: 124px;
 }
 
+.node-document .node-label {
+  width: 58px;
+  gap: 2px;
+}
+
 .node-label strong,
 .node-label em {
   display: block;
@@ -845,6 +865,11 @@ button {
   font-size: var(--fs-34);
 }
 
+.node-document .node-label strong {
+  font-size: var(--fs-12);
+  line-height: 1.05;
+}
+
 .node-label em {
   color: rgba(239, 246, 255, 0.88);
   font-size: var(--fs-11);
@@ -857,6 +882,11 @@ button {
 
 .node-central .node-label em {
   font-size: var(--fs-14);
+}
+
+.node-document .node-label em {
+  font-size: var(--fs-9);
+  -webkit-line-clamp: 2;
 }
 
 .node-plus {
@@ -882,6 +912,206 @@ button {
 .map-node:hover .node-plus {
   opacity: 1;
   transform: scale(1);
+}
+
+.orphan-files-panel,
+.project-chat-panel {
+  position: absolute;
+  z-index: 22;
+  border-radius: 16px;
+  padding: 12px;
+  animation: panel-in 220ms ease both;
+}
+
+.orphan-files-panel {
+  bottom: 92px;
+  left: calc(var(--left-width) + 42px);
+  width: min(330px, calc(100vw - var(--left-width) - var(--right-width) - 90px));
+}
+
+.orphan-files-panel header,
+.project-chat-panel header,
+.project-chat-panel footer,
+.orphan-main-action {
+  display: flex;
+  align-items: center;
+}
+
+.orphan-files-panel header {
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.orphan-files-panel header span {
+  color: rgba(255, 226, 164, 0.76);
+  font-size: var(--fs-11);
+}
+
+.orphan-files-panel header strong {
+  display: block;
+  color: #fff;
+  font-size: var(--fs-15);
+}
+
+.orphan-files-panel header button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(53, 217, 255, 0.18);
+  border-radius: 10px;
+  background: rgba(53, 217, 255, 0.09);
+  color: #9ef4ff;
+  cursor: pointer;
+  font-size: var(--fs-12);
+}
+
+.orphan-files-list {
+  display: grid;
+  gap: 7px;
+}
+
+.orphan-files-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  gap: 6px;
+}
+
+.orphan-main-action,
+.orphan-open-action {
+  border: 1px solid rgba(171, 205, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(145, 166, 207, 0.08);
+  color: rgba(228, 238, 255, 0.82);
+  cursor: pointer;
+}
+
+.orphan-main-action {
+  min-width: 0;
+  gap: 8px;
+  min-height: 42px;
+  padding: 7px 9px;
+  text-align: left;
+}
+
+.orphan-main-action div {
+  min-width: 0;
+  flex: 1;
+}
+
+.orphan-main-action b,
+.project-chat-feed b {
+  display: block;
+  overflow: hidden;
+  color: #fff;
+  font-size: var(--fs-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orphan-main-action small,
+.project-chat-feed span,
+.orphan-files-panel p {
+  color: rgba(213, 227, 250, 0.64);
+  font-size: var(--fs-11);
+}
+
+.orphan-open-action {
+  display: grid;
+  place-items: center;
+  min-height: 42px;
+}
+
+.project-chat-panel {
+  right: calc(var(--right-width) + 42px);
+  bottom: 92px;
+  width: min(340px, calc(100vw - var(--left-width) - var(--right-width) - 90px));
+}
+
+.project-chat-panel header {
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+
+.project-chat-panel header button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  font-size: var(--fs-15);
+  font-weight: 700;
+}
+
+.project-chat-panel header span {
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(215, 187, 120, 0.16);
+  color: #ffe2a4;
+  font-size: var(--fs-12);
+}
+
+.project-chat-feed {
+  display: grid;
+  gap: 7px;
+  max-height: 180px;
+  overflow: hidden;
+}
+
+.project-chat-feed article {
+  padding: 8px 9px;
+  border: 1px solid rgba(171, 205, 255, 0.09);
+  border-radius: 10px;
+  background: rgba(145, 166, 207, 0.07);
+}
+
+.project-chat-feed p {
+  display: -webkit-box;
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: rgba(230, 240, 255, 0.78);
+  font-size: var(--fs-12);
+  line-height: 1.32;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.project-chat-panel footer {
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.project-chat-panel input {
+  min-width: 0;
+  flex: 1;
+  height: 36px;
+  border: 1px solid rgba(171, 205, 255, 0.11);
+  border-radius: 10px;
+  outline: 0;
+  background: rgba(8, 17, 34, 0.72);
+  color: #fff;
+  padding: 0 10px;
+  font-size: var(--fs-13);
+}
+
+.project-chat-panel footer button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(53, 217, 255, 0.22);
+  border-radius: 10px;
+  background: rgba(53, 217, 255, 0.1);
+  color: #9ef4ff;
+  cursor: pointer;
 }
 
 .workspace-panel {
@@ -1463,6 +1693,57 @@ button {
   color: rgba(229, 238, 255, 0.67);
   font-size: var(--fs-12);
   font-style: normal;
+}
+
+.document-targets {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.document-targets h3 {
+  margin: 0 0 4px;
+  color: #fff;
+  font-size: var(--fs-13);
+}
+
+.document-targets button {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  min-height: 40px;
+  border: 1px solid rgba(171, 205, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(145, 166, 207, 0.08);
+  color: rgba(228, 238, 255, 0.82);
+  cursor: pointer;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.document-targets button:hover {
+  border-color: rgba(53, 217, 255, 0.28);
+  background: rgba(53, 217, 255, 0.09);
+}
+
+.document-targets span {
+  display: grid;
+  place-items: center;
+  min-height: 28px;
+  border-radius: 8px;
+  background: rgba(215, 187, 120, 0.12);
+  color: #ffe2a4;
+  font-size: var(--fs-12);
+  font-weight: 700;
+}
+
+.document-targets b {
+  overflow: hidden;
+  color: #fff;
+  font-size: var(--fs-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .panel-note {

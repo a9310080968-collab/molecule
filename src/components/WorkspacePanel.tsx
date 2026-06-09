@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import {
   getAcceptedAssignments,
-  getAllDocuments,
+  getAllVisibleDocuments,
   getChecks,
   getFileLabel,
   getFileTypeColor,
@@ -137,7 +137,7 @@ function WorkspaceContent({
   onReceiveChat,
 }: Omit<WorkspacePanelProps, "onClose">) {
   if (activeMenu === "documents") {
-    const documents = getAllDocuments(project);
+    const documents = getAllVisibleDocuments(project);
     return (
       <div className="workspace-grid">
         {documents.map((document) => (

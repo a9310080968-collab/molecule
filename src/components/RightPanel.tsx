@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   Clock3,
   ExternalLink,
+  FilePlus2,
   FileText,
   GitBranch,
   Inbox,
@@ -19,6 +20,8 @@ import clsx from "clsx";
 import {
   getFileLabel,
   getFileTypeColor,
+  getDocumentFromNode,
+  getLevelNodes,
   getNodeDocuments,
   getNodeProcesses,
   getNodeVisualTone,
@@ -49,6 +52,8 @@ type RightPanelProps = {
   onStartLink: (nodeId: string) => void;
   onOpenNodeLevel: (node: ProjectNode) => void;
   onOpenDocument: (document: ProcessDocument) => void;
+  onMoveDocumentNode: (documentNodeId: string, targetNodeId: string | null) => void;
+  onAddRandomFile: (targetNodeId?: string) => void;
   onAttachInboxDocument: (processId: string, documentId: string) => void;
   onReceiveMail: (processId?: string) => void;
   onReceiveChat: (processId?: string) => void;
@@ -67,6 +72,8 @@ export function RightPanel({
   onStartLink,
   onOpenNodeLevel,
   onOpenDocument,
+  onMoveDocumentNode,
+  onAddRandomFile,
   onAttachInboxDocument,
   onReceiveMail,
   onReceiveChat,
@@ -93,6 +100,8 @@ export function RightPanel({
           onStartLink={onStartLink}
           onOpenNodeLevel={onOpenNodeLevel}
           onOpenDocument={onOpenDocument}
+          onMoveDocumentNode={onMoveDocumentNode}
+          onAddRandomFile={onAddRandomFile}
           onReceiveMail={onReceiveMail}
           onReceiveChat={onReceiveChat}
         />
@@ -109,6 +118,8 @@ function NodeInfo({
   onStartLink,
   onOpenNodeLevel,
   onOpenDocument,
+  onMoveDocumentNode,
+  onAddRandomFile,
   onReceiveMail,
   onReceiveChat,
 }: {
@@ -119,9 +130,23 @@ function NodeInfo({
   onStartLink: (nodeId: string) => void;
   onOpenNodeLevel: (node: ProjectNode) => void;
   onOpenDocument: (document: ProcessDocument) => void;
+  onMoveDocumentNode: (documentNodeId: string, targetNodeId: string | null) => void;
+  onAddRandomFile: (targetNodeId?: string) => void;
   onReceiveMail: (processId?: string) => void;
   onReceiveChat: (processId?: string) => void;
 }) {
+  if (node.type === "document") {
+    return (
+        <DocumentNodeInfo
+        project={project}
+        level={level}
+        node={node}
+        onOpenDocument={onOpenDocument}
+        onMoveDocumentNode={onMoveDocumentNode}
+      />
+    );
+  }
+
   const tone = getNodeVisualTone(node);
   const processes = getNodeProcesses(project, node.id);
   const documents = getNodeDocuments(project, node.id);
@@ -159,6 +184,12 @@ function NodeInfo({
             Провалиться внутрь
           </button>
         ) : null}
+        {node.childrenLevelId || isLevelCenter ? (
+          <button onClick={() => onAddRandomFile(node.id)}>
+            <FilePlus2 size={17} />
+            Добавить документ
+          </button>
+        ) : null}
         <button onClick={() => onReceiveMail()}>
           <Mail size={17} />
           Получить письмо
@@ -192,6 +223,68 @@ function NodeInfo({
       </section>
 
       <DocumentList title="Документы в процессах" documents={documents.slice(0, 6)} onOpenDocument={onOpenDocument} />
+    </>
+  );
+}
+
+function DocumentNodeInfo({
+  project,
+  level,
+  node,
+  onOpenDocument,
+  onMoveDocumentNode,
+}: {
+  project: DemoProject;
+  level: MapLevel;
+  node: ProjectNode;
+  onOpenDocument: (document: ProcessDocument) => void;
+  onMoveDocumentNode: (documentNodeId: string, targetNodeId: string | null) => void;
+}) {
+  const document = getDocumentFromNode(node);
+  const color = getFileTypeColor(document.fileType);
+  const attachTargets = getLevelNodes(project, level).filter((target) =>
+    target.id !== node.id && target.type !== "document" && target.type !== "central" && (target.childrenLevelId || target.id === level.centralNodeId),
+  );
+
+  return (
+    <>
+      <PanelHeader eyebrow={getFileLabel(document.fileType)} title={document.title} status={getStatusText(document.status)} statusColor={color} />
+
+      <div className="info-grid">
+        <Metric icon={<FileText size={16} />} label="Тип файла" value={getFileLabel(document.fileType)} />
+        <Metric icon={<Clock3 size={16} />} label="Версия" value={document.version} />
+        <Metric icon={<UserRound size={16} />} label="Источник" value={document.from} wide />
+        <Metric icon={<Clock3 size={16} />} label="Обновлен" value={document.updatedAt} />
+      </div>
+
+      <section className="quick-actions">
+        <button onClick={() => onOpenDocument(document)}>
+          <ExternalLink size={17} />
+          Открыть документ
+        </button>
+        {node.documentOwnerNodeId ? (
+          <button onClick={() => onMoveDocumentNode(node.id, null)}>
+            <XCircle size={17} />
+            Вынести из ноды
+          </button>
+        ) : null}
+      </section>
+
+      {!node.documentOwnerNodeId && attachTargets.length ? (
+        <section className="document-targets">
+          <h3>Вложить вручную</h3>
+          {attachTargets.slice(0, 6).map((target) => (
+            <button key={target.id} onClick={() => onMoveDocumentNode(node.id, target.id)}>
+              <span>{target.shortCode ?? target.title}</span>
+              <b>{target.title}</b>
+            </button>
+          ))}
+        </section>
+      ) : null}
+
+      <div className="panel-note">
+        Файловая нода не привязывается автоматически. Перетащите ее на раздел, чтобы положить внутрь, или вынесите обратно в бесхозные файлы.
+      </div>
     </>
   );
 }
