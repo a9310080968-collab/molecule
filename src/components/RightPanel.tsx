@@ -272,6 +272,12 @@ function DocumentNodeInfo({
         ) : null}
       </section>
 
+      {node.documentOwnerNodeId ? (
+        <div className="panel-note">
+          Чтобы вынести файл из ноды, перетащите его на карте в зону «Вынести наружу». Она появляется сразу после начала перетаскивания.
+        </div>
+      ) : null}
+
       {!node.documentOwnerNodeId && attachTargets.length ? (
         <section className="document-targets">
           <h3>Вложить вручную</h3>

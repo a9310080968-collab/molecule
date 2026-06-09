@@ -63,6 +63,13 @@ type DragState = {
   moved: boolean;
 };
 
+type DragUiState = {
+  nodeId: string;
+  ownerNodeId?: string;
+  targetNodeId?: string;
+  overExit: boolean;
+};
+
 const INITIAL_VIEW: ViewState = { zoom: 1, panX: 0, panY: 0 };
 const MIN_ZOOM = 0.34;
 const MAX_ZOOM = 4.8;
@@ -89,12 +96,14 @@ export function ProjectScene({
   sceneRef,
 }: ProjectSceneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const exitZoneRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const panRef = useRef<{ pointerId: number; x: number; y: number; panX: number; panY: number } | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [view, setView] = useState<ViewState>(INITIAL_VIEW);
   const [positions, setPositions] = useState<Record<string, Vec2>>(() => buildInitialPositions(nodes, level.id, level.centralNodeId));
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [dragUi, setDragUi] = useState<DragUiState | null>(null);
   const nodeMap = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
   const centerNodeId = level.centralNodeId;
   const projectProgress = getProjectProgress(project, level);
@@ -252,6 +261,11 @@ export function ProjectScene({
       currentPosition: position,
       moved: false,
     };
+    if (node.type === "document") {
+      setDragUi({ nodeId: node.id, ownerNodeId: node.documentOwnerNodeId, overExit: false });
+    } else {
+      setDragUi(null);
+    }
   };
 
   const handleNodePointerMove = (event: ReactPointerEvent<HTMLButtonElement>, node: ProjectNode) => {
@@ -277,14 +291,13 @@ export function ProjectScene({
 
     if (node.type === "document") {
       const dropPositions = { ...positions, [node.id]: next };
-      const target = findDocumentDropTarget(node, nodes, dropPositions, centerNodeId, 5.6);
-      if (target) {
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-          event.currentTarget.releasePointerCapture(event.pointerId);
-        }
-        dragRef.current = null;
-        onMoveDocumentNode(node.id, target.id);
-      }
+      const target = findDocumentDropTarget(node, nodes, dropPositions, centerNodeId, scale);
+      setDragUi({
+        nodeId: node.id,
+        ownerNodeId: node.documentOwnerNodeId,
+        targetNodeId: target?.id,
+        overExit: Boolean(node.documentOwnerNodeId && isPointerInsideElement(event.clientX, event.clientY, exitZoneRef.current)),
+      });
     }
   };
 
@@ -302,16 +315,18 @@ export function ProjectScene({
 
     if (drag.moved && node.type === "document") {
       const dropPositions = { ...positions, [node.id]: drag.currentPosition };
-      const target = findDocumentDropTarget(node, nodes, dropPositions, centerNodeId, 7.2);
-      const position = dropPositions[node.id];
-      if (target) {
-        onMoveDocumentNode(node.id, target.id);
-      } else if (node.documentOwnerNodeId && position && Math.hypot(position.x, position.y) > 17) {
+      const target = findDocumentDropTarget(node, nodes, dropPositions, centerNodeId, scale);
+      const overExit = Boolean(node.documentOwnerNodeId && isPointerInsideElement(event.clientX, event.clientY, exitZoneRef.current));
+      setDragUi(null);
+      if (overExit) {
         onMoveDocumentNode(node.id, null);
+      } else if (target) {
+        onMoveDocumentNode(node.id, target.id);
       }
       return;
     }
 
+    setDragUi(null);
     if (!drag.moved) {
       if (linkingFromId && linkingFromId !== node.id) {
         onCompleteLink(node.id);
@@ -360,6 +375,13 @@ export function ProjectScene({
         </div>
       ) : null}
 
+      {dragUi?.ownerNodeId ? (
+        <div ref={exitZoneRef} className={clsx("document-exit-zone glass-panel", dragUi.overExit && "active")}>
+          <strong>Вынести наружу</strong>
+          <span>Отпустите файл здесь, чтобы вернуть его на уровень выше</span>
+        </div>
+      ) : null}
+
       <svg className="process-layer" aria-hidden="true">
         <defs>
           <marker id="arrow-end" markerWidth="5" markerHeight="5" refX="4.4" refY="2.5" orient="auto" markerUnits="strokeWidth">
@@ -401,6 +423,7 @@ export function ProjectScene({
         const progress = isCenter ? projectProgress : undefined;
         const isLinkSource = linkingFromId === node.id;
         const canCompleteLink = linkingFromId && linkingFromId !== node.id;
+        const isDocumentDropTarget = dragUi?.targetNodeId === node.id;
 
         return (
           <button
@@ -414,6 +437,7 @@ export function ProjectScene({
               canDrill && "can-drill",
               isLinkSource && "link-source",
               canCompleteLink && "link-target",
+              isDocumentDropTarget && "document-drop-target",
             )}
             style={{
               left: position.x,
@@ -638,7 +662,7 @@ function addDelta(deltas: Record<string, Vec2>, id: string, x: number, y: number
   deltas[id].y += y;
 }
 
-function findDocumentDropTarget(documentNode: ProjectNode, nodes: ProjectNode[], positions: Record<string, Vec2>, centralNodeId: string, maxDistance = 7.2) {
+function findDocumentDropTarget(documentNode: ProjectNode, nodes: ProjectNode[], positions: Record<string, Vec2>, centralNodeId: string, scale: number) {
   const documentPosition = positions[documentNode.id];
   if (!documentPosition) {
     return undefined;
@@ -656,12 +680,22 @@ function findDocumentDropTarget(documentNode: ProjectNode, nodes: ProjectNode[],
     }
 
     const distance = Math.hypot(documentPosition.x - position.x, documentPosition.y - position.y);
-    if (distance < maxDistance && (!best || distance < best.distance)) {
+    const hitRadiusPx = Math.max(26, getNodeRadius(node, centralNodeId) - 14);
+    if (distance * scale <= hitRadiusPx && (!best || distance < best.distance)) {
       best = { node, distance };
     }
   });
 
   return best?.node;
+}
+
+function isPointerInsideElement(clientX: number, clientY: number, element: HTMLElement | null) {
+  if (!element) {
+    return false;
+  }
+
+  const rect = element.getBoundingClientRect();
+  return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
 }
 
 function getDocumentFlowDirection(process: BusinessProcess, document?: ProcessDocument) {
