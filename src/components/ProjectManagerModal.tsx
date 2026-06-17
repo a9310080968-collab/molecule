@@ -1,4 +1,4 @@
-import { CopyPlus, FolderPlus, Layers3, X } from "lucide-react";
+import { CopyPlus, FolderPlus, Layers3, Save, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import clsx from "clsx";
 import type { DemoProject, ProjectTemplate } from "../types";
@@ -22,6 +22,7 @@ export function ProjectManagerModal({
   onCreateProject,
   onCreateTemplate,
 }: ProjectManagerModalProps) {
+  const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0];
   const [projectTitle, setProjectTitle] = useState("Новый проект");
   const [projectAddress, setProjectAddress] = useState("Объект без адреса");
   const [selectedTemplateId, setSelectedTemplateId] = useState(templates[0]?.id ?? "");
@@ -56,7 +57,7 @@ export function ProjectManagerModal({
               Проекты и шаблоны
             </span>
             <h2>Рабочие структуры проекта</h2>
-            <p>Создавайте новые проекты, сохраняйте удачные структуры и запускайте проект из готового шаблона.</p>
+            <p>Создавайте новые проекты из шаблонов, переключайтесь между проектами и сохраняйте удачные структуры текущего проекта отдельно.</p>
           </div>
           <button className="icon-button" onClick={onClose} aria-label="Закрыть">
             <X size={20} />
@@ -64,64 +65,108 @@ export function ProjectManagerModal({
         </header>
 
         <div className="project-manager-grid">
-          <section className="project-manager-section">
-            <div className="section-title">
-              <FolderPlus size={18} />
-              <div>
-                <h3>Добавить проект</h3>
-                <p>Новый проект появится в верхнем переключателе и сразу откроется на карте.</p>
+          <div className="project-manager-stack">
+            <section className="project-manager-section project-create-section">
+              <div className="section-title">
+                <FolderPlus size={18} />
+                <div>
+                  <h3>Добавить проект</h3>
+                  <p>Новый проект появится в верхнем переключателе и сразу откроется на карте.</p>
+                </div>
               </div>
-            </div>
 
-            <div className="project-manager-form">
-              <label>
-                <span>Название проекта</span>
-                <input value={projectTitle} onChange={(event) => setProjectTitle(event.currentTarget.value)} />
-              </label>
-              <label>
-                <span>Объект / адрес</span>
-                <input value={projectAddress} onChange={(event) => setProjectAddress(event.currentTarget.value)} />
-              </label>
-              <label>
-                <span>Шаблон структуры</span>
-                <select value={selectedTemplate?.id ?? ""} onChange={(event) => setSelectedTemplateId(event.currentTarget.value)}>
-                  {templates.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button className="primary-action" onClick={createProject} disabled={!selectedTemplate}>
-                <FolderPlus size={17} />
-                Создать проект
-              </button>
-            </div>
-
-            <div className="project-list">
-              <h3>Текущие проекты</h3>
-              {projects.map((project) => (
-                <button
-                  key={project.id}
-                  className={clsx(project.id === activeProjectId && "active")}
-                  onClick={() => {
-                    onSelectProject(project.id);
-                    onClose();
-                  }}
-                >
-                  <span>{project.title}</span>
-                  <small>{project.address}</small>
+              <div className="project-manager-form">
+                <label>
+                  <span>Название проекта</span>
+                  <input value={projectTitle} onChange={(event) => setProjectTitle(event.currentTarget.value)} />
+                </label>
+                <label>
+                  <span>Объект / адрес</span>
+                  <input value={projectAddress} onChange={(event) => setProjectAddress(event.currentTarget.value)} />
+                </label>
+                <label>
+                  <span>Шаблон структуры</span>
+                  <select value={selectedTemplate?.id ?? ""} onChange={(event) => setSelectedTemplateId(event.currentTarget.value)}>
+                    {templates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button className="primary-action" onClick={createProject} disabled={!selectedTemplate}>
+                  <FolderPlus size={17} />
+                  Создать проект
                 </button>
-              ))}
-            </div>
-          </section>
+              </div>
 
-          <section className="project-manager-section">
+              <div className="project-list">
+                <h3>Текущие проекты</h3>
+                {projects.map((project) => (
+                  <button
+                    key={project.id}
+                    className={clsx(project.id === activeProjectId && "active")}
+                    onClick={() => {
+                      onSelectProject(project.id);
+                      onClose();
+                    }}
+                  >
+                    <span>{project.title}</span>
+                    <small>{project.address}</small>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="project-manager-section current-project-section">
+              <div className="section-title">
+                <Save size={18} />
+                <div>
+                  <h3>Текущий проект</h3>
+                  <p>Здесь сохраняется именно структура открытого проекта: уровни, ноды и бизнес-процессы без рабочих документов.</p>
+                </div>
+              </div>
+
+              <article className="current-project-card">
+                <span>Открыт сейчас</span>
+                <strong>{activeProject.title}</strong>
+                <small>{activeProject.address}</small>
+                <em>
+                  {activeProject.nodes.length} нод · {activeProject.levels.length} уровней · {activeProject.processes.length} процессов
+                </em>
+              </article>
+
+              <div className="project-manager-form save-template-form">
+                <label>
+                  <span>Название нового шаблона</span>
+                  <input
+                    value={templateTitle}
+                    onChange={(event) => setTemplateTitle(event.currentTarget.value)}
+                    placeholder="Например: ЖК с полным комплектом разделов"
+                  />
+                </label>
+                <label>
+                  <span>Описание</span>
+                  <textarea
+                    value={templateDescription}
+                    onChange={(event) => setTemplateDescription(event.currentTarget.value)}
+                    placeholder="Что входит в структуру и когда использовать этот шаблон"
+                  />
+                </label>
+                <button onClick={createTemplate}>
+                  <CopyPlus size={17} />
+                  Сохранить текущий проект как шаблон
+                </button>
+              </div>
+            </section>
+          </div>
+
+          <section className="project-manager-section project-templates-section">
             <div className="section-title">
               <CopyPlus size={18} />
               <div>
-                <h3>Шаблоны</h3>
-                <p>Шаблон сохраняет уровни, ноды и бизнес-процессы, но не переносит рабочие документы.</p>
+                <h3>Использовать шаблон</h3>
+                <p>Выберите структуру, из которой будет создан новый проект. Рабочие документы в шаблон не переносятся.</p>
               </div>
             </div>
 
@@ -139,29 +184,6 @@ export function ProjectManagerModal({
                   </em>
                 </button>
               ))}
-            </div>
-
-            <div className="project-manager-form save-template-form">
-              <label>
-                <span>Название нового шаблона</span>
-                <input
-                  value={templateTitle}
-                  onChange={(event) => setTemplateTitle(event.currentTarget.value)}
-                  placeholder="Например: ЖК с полным комплектом разделов"
-                />
-              </label>
-              <label>
-                <span>Описание</span>
-                <textarea
-                  value={templateDescription}
-                  onChange={(event) => setTemplateDescription(event.currentTarget.value)}
-                  placeholder="Что входит в структуру и когда использовать этот шаблон"
-                />
-              </label>
-              <button onClick={createTemplate}>
-                <CopyPlus size={17} />
-                Сохранить текущий проект как шаблон
-              </button>
             </div>
           </section>
         </div>
