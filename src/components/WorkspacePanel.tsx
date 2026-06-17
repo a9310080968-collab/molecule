@@ -19,10 +19,11 @@ import {
 import { useEffect, useState } from "react";
 import {
   getAcceptedAssignments,
-  getAllVisibleDocuments,
   getChecks,
+  getDocumentFromNode,
   getFileLabel,
   getFileTypeColor,
+  getNodeById,
   getProcessStatusColor,
   getProcessStatusText,
 } from "../lib/graph";
@@ -161,21 +162,7 @@ function WorkspaceContent({
   onDeleteParticipant,
 }: Omit<WorkspacePanelProps, "onClose">) {
   if (activeMenu === "documents") {
-    const documents = getAllVisibleDocuments(project);
-    return (
-      <div className="workspace-grid">
-        {documents.map((document) => (
-          <button key={`${document.processId}-${document.id}`} className="workspace-row document-workspace-row" onClick={() => onOpenDocument(document)}>
-            <b style={{ color: getFileTypeColor(document.fileType) }}>{getFileLabel(document.fileType)}</b>
-            <div>
-              <strong>{document.title}</strong>
-              <span>{document.processTitle}</span>
-            </div>
-            <em>{document.version}</em>
-          </button>
-        ))}
-      </div>
-    );
+    return <DocumentsRegistry project={project} onOpenDocument={onOpenDocument} />;
   }
 
   if (activeMenu === "tasks") {
@@ -276,6 +263,230 @@ function WorkspaceContent({
       </article>
     </div>
   );
+}
+
+type RegistryDocument = {
+  document: ProcessDocument;
+  groupKey: string;
+  groupCode: string;
+  groupTitle: string;
+  location: string;
+  ownerNodeId?: string;
+  processId?: string;
+  isOrphan: boolean;
+};
+
+type DocumentGroup = {
+  key: string;
+  code: string;
+  title: string;
+  documents: RegistryDocument[];
+  isOrphan: boolean;
+};
+
+function DocumentsRegistry({ project, onOpenDocument }: { project: DemoProject; onOpenDocument: (document: ProcessDocument) => void }) {
+  const groups = buildDocumentRegistry(project);
+  const total = groups.reduce((sum, group) => sum + group.documents.length, 0);
+  const orphanCount = groups.find((group) => group.isOrphan)?.documents.length ?? 0;
+
+  if (!total) {
+    return <p className="workspace-empty">В проекте пока нет документов.</p>;
+  }
+
+  return (
+    <div className="documents-registry">
+      <section className="documents-registry-summary">
+        <article>
+          <strong>{total}</strong>
+          <span>актуальных документов</span>
+        </article>
+        <article>
+          <strong>{groups.length}</strong>
+          <span>разделов и нод</span>
+        </article>
+        <article>
+          <strong>{orphanCount}</strong>
+          <span>бесхозных наверху</span>
+        </article>
+      </section>
+
+      <div className="documents-registry-groups">
+        {groups.map((group) => (
+          <section key={group.key} className={group.isOrphan ? "document-group orphan-document-group" : "document-group"}>
+            <header>
+              <b>{group.code}</b>
+              <div>
+                <strong>{group.title}</strong>
+                <span>{group.documents.length} последних версий</span>
+              </div>
+            </header>
+            <div className="document-group-list">
+              {group.documents.map((item) => (
+                <button key={`${item.groupKey}-${item.document.id}`} className="document-registry-row" onClick={() => onOpenDocument(item.document)}>
+                  <b style={{ color: getFileTypeColor(item.document.fileType) }}>{getFileLabel(item.document.fileType)}</b>
+                  <div>
+                    <strong>{item.document.title}</strong>
+                    <span>{item.location}</span>
+                  </div>
+                  <em>{item.document.version}</em>
+                </button>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function buildDocumentRegistry(project: DemoProject): DocumentGroup[] {
+  const entries: RegistryDocument[] = [];
+
+  project.inboxDocuments.forEach((document) => {
+    entries.push(createRegistryEntry(project, document, "Входящие без связи", undefined, undefined, true));
+  });
+
+  project.nodes
+    .filter((node) => node.type === "document" && node.document)
+    .forEach((node) => {
+      const document = getDocumentFromNode(node);
+      const owner = node.documentOwnerNodeId ? getNodeById(project, node.documentOwnerNodeId) : undefined;
+      entries.push(
+        createRegistryEntry(
+          project,
+          document,
+          owner ? `Внутри ноды: ${owner.shortCode ?? owner.title}` : "Бесхозный файл на карте",
+          owner?.id,
+          undefined,
+          !owner,
+        ),
+      );
+    });
+
+  project.processes.forEach((process) => {
+    process.documents.forEach((document) => {
+      const owner = findDocumentOwnerNode(project, document, process.from);
+      entries.push(createRegistryEntry(project, document, `Контейнер: ${process.title}`, owner?.id, process.id, false));
+    });
+  });
+
+  const latestEntries = getLatestRegistryEntries(entries);
+  const groupsByKey = new Map<string, DocumentGroup>();
+
+  latestEntries.forEach((entry) => {
+    const group = groupsByKey.get(entry.groupKey) ?? {
+      key: entry.groupKey,
+      code: entry.groupCode,
+      title: entry.groupTitle,
+      documents: [],
+      isOrphan: entry.isOrphan,
+    };
+    group.documents.push(entry);
+    groupsByKey.set(entry.groupKey, group);
+  });
+
+  return Array.from(groupsByKey.values())
+    .map((group) => ({
+      ...group,
+      documents: group.documents.sort((a, b) => b.document.updatedAt.localeCompare(a.document.updatedAt) || a.document.title.localeCompare(b.document.title, "ru")),
+    }))
+    .sort((a, b) => {
+      if (a.isOrphan !== b.isOrphan) {
+        return a.isOrphan ? -1 : 1;
+      }
+      return a.code.localeCompare(b.code, "ru");
+    });
+}
+
+function createRegistryEntry(
+  project: DemoProject,
+  document: ProcessDocument,
+  location: string,
+  ownerNodeId?: string,
+  processId?: string,
+  isOrphan = false,
+): RegistryDocument {
+  const owner = ownerNodeId ? getNodeById(project, ownerNodeId) : findDocumentOwnerNode(project, document);
+
+  if (isOrphan || !owner) {
+    return {
+      document,
+      groupKey: "00-orphans",
+      groupCode: "Бесхозные",
+      groupTitle: "Нераспределенные и входящие файлы",
+      location,
+      ownerNodeId,
+      processId,
+      isOrphan: true,
+    };
+  }
+
+  return {
+    document,
+    groupKey: `node-${owner.id}`,
+    groupCode: owner.shortCode ?? owner.title,
+    groupTitle: owner.title,
+    location,
+    ownerNodeId: owner.id,
+    processId,
+    isOrphan: false,
+  };
+}
+
+function getLatestRegistryEntries(entries: RegistryDocument[]) {
+  const byIdentity = new Map<string, RegistryDocument>();
+
+  entries.forEach((entry) => {
+    const identity = `${entry.groupKey}-${normalizeDocumentTitle(entry.document.title)}-${entry.document.fileType}`;
+    const current = byIdentity.get(identity);
+    if (!current || compareDocumentVersions(entry.document, current.document) > 0) {
+      byIdentity.set(identity, entry);
+    }
+  });
+
+  return Array.from(byIdentity.values());
+}
+
+function compareDocumentVersions(left: ProcessDocument, right: ProcessDocument) {
+  const leftVersion = parseVersionScore(left.version) || parseVersionScore(left.title);
+  const rightVersion = parseVersionScore(right.version) || parseVersionScore(right.title);
+  if (leftVersion !== rightVersion) {
+    return leftVersion - rightVersion;
+  }
+  return left.updatedAt.localeCompare(right.updatedAt);
+}
+
+function parseVersionScore(value: string) {
+  const match = value.match(/v(?:er)?\.?\s*(\d+(?:[.,]\d+)?)/i);
+  return match ? Number(match[1].replace(",", ".")) : 0;
+}
+
+function normalizeDocumentTitle(title: string) {
+  return title
+    .replace(/\.[^.]+$/, "")
+    .replace(/[_\s-]*v(?:er)?\.?\s*\d+(?:[.,]\d+)?/gi, "")
+    .toLocaleLowerCase("ru-RU")
+    .replace(/ё/g, "е")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function findDocumentOwnerNode(project: DemoProject, document: ProcessDocument, fallbackNodeId?: string) {
+  const marker = normalizeSectionMarker(document.detectedTag ?? document.from);
+  const markerMatch = marker
+    ? project.nodes.find((node) => {
+        if (node.type === "document" || node.type === "central") {
+          return false;
+        }
+        return [node.shortCode, node.title, ...(node.tags ?? [])].some((value) => normalizeSectionMarker(value ?? "") === marker);
+      })
+    : undefined;
+
+  return markerMatch ?? getNodeById(project, fallbackNodeId);
+}
+
+function normalizeSectionMarker(value: string) {
+  return value.toLocaleLowerCase("ru-RU").replace(/ё/g, "е").replace(/\s+/g, "");
 }
 
 const participantRoleLabels: Record<ProjectParticipantRole, string> = {

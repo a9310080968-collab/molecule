@@ -1591,6 +1591,165 @@ button {
   color: rgba(220, 232, 252, 0.72);
 }
 
+.documents-registry {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.documents-registry-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.documents-registry-summary article,
+.document-group {
+  border: 1px solid rgba(171, 205, 255, 0.11);
+  border-radius: 14px;
+  background: rgba(145, 166, 207, 0.07);
+}
+
+.documents-registry-summary article {
+  padding: 12px;
+}
+
+.documents-registry-summary strong {
+  display: block;
+  color: #fff;
+  font-size: var(--fs-22);
+}
+
+.documents-registry-summary span {
+  color: rgba(220, 232, 252, 0.64);
+  font-size: var(--fs-12);
+}
+
+.documents-registry-groups {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+  scrollbar-width: thin;
+}
+
+.document-group {
+  overflow: hidden;
+}
+
+.document-group.orphan-document-group {
+  border-color: rgba(255, 226, 164, 0.18);
+  background: rgba(255, 226, 164, 0.055);
+}
+
+.document-group > header {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border-bottom: 1px solid rgba(171, 205, 255, 0.09);
+}
+
+.document-group > header b {
+  display: grid;
+  place-items: center;
+  min-height: 40px;
+  border-radius: 11px;
+  background: rgba(53, 217, 255, 0.08);
+  color: #9ef4ff;
+  font-size: var(--fs-13);
+  text-align: center;
+}
+
+.orphan-document-group > header b {
+  background: rgba(255, 226, 164, 0.1);
+  color: #ffe2a4;
+}
+
+.document-group > header strong,
+.document-group > header span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-group > header strong {
+  color: #fff;
+  font-size: var(--fs-16);
+}
+
+.document-group > header span {
+  color: rgba(211, 224, 248, 0.62);
+  font-size: var(--fs-12);
+}
+
+.document-group-list {
+  display: grid;
+}
+
+.document-registry-row {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr) minmax(76px, auto);
+  gap: 12px;
+  align-items: center;
+  min-height: 58px;
+  border: 0;
+  border-bottom: 1px solid rgba(171, 205, 255, 0.07);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.document-registry-row:last-child {
+  border-bottom: 0;
+}
+
+.document-registry-row:hover {
+  background: rgba(145, 166, 207, 0.1);
+}
+
+.document-registry-row b {
+  display: grid;
+  place-items: center;
+  min-height: 34px;
+  border-radius: 10px;
+  background: rgba(8, 17, 34, 0.44);
+  font-size: var(--fs-12);
+}
+
+.document-registry-row strong,
+.document-registry-row span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-registry-row strong {
+  color: #fff;
+  font-size: var(--fs-14);
+}
+
+.document-registry-row span,
+.document-registry-row em {
+  color: rgba(211, 224, 248, 0.64);
+  font-size: var(--fs-12);
+}
+
+.document-registry-row em {
+  justify-self: end;
+  font-style: normal;
+  font-weight: 780;
+}
+
 .participants-manager {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -3559,6 +3718,10 @@ button {
     grid-template-columns: 1fr 1fr;
   }
 
+  .documents-registry-summary {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
   .sidebar {
     transform: translateX(-112%);
     transition: transform 220ms ease;
@@ -3741,6 +3904,16 @@ button {
   .integration-cards,
   .folder-integration-cards {
     grid-template-columns: 1fr;
+  }
+
+  .documents-registry-summary,
+  .document-group > header,
+  .document-registry-row {
+    grid-template-columns: 1fr;
+  }
+
+  .document-registry-row em {
+    justify-self: start;
   }
 
   .integration-modal-body {
