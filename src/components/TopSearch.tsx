@@ -1,4 +1,4 @@
-import { Bell, Menu, Plus, Search, SlidersHorizontal, X } from "lucide-react";
+import { Bell, Menu, Plus, Search, SlidersHorizontal, UserCog, X } from "lucide-react";
 import { useState } from "react";
 import clsx from "clsx";
 import type { DemoNotification, DemoProject } from "../types";
@@ -15,6 +15,7 @@ type TopSearchProps = {
   notifications: DemoNotification[];
   onNotificationClick: (notification: DemoNotification) => void;
   onOpenProjectManager: () => void;
+  onOpenPersonalSettings: () => void;
 };
 
 export function TopSearch({
@@ -29,6 +30,7 @@ export function TopSearch({
   notifications,
   onNotificationClick,
   onOpenProjectManager,
+  onOpenPersonalSettings,
 }: TopSearchProps) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0];
@@ -85,6 +87,9 @@ export function TopSearch({
           <b>Павел Андреев</b>
           <small>{activeProject.title}</small>
         </div>
+        <button className="icon-button" aria-label="Личные настройки интеграций" onClick={onOpenPersonalSettings}>
+          <UserCog size={18} />
+        </button>
         <button
           className="icon-button"
           aria-label="Уведомления"

@@ -12,6 +12,20 @@ export type ProjectParticipantRole = "admin" | "gip" | "coordinator" | "architec
 
 export type ProjectParticipantStatus = "active" | "invited" | "blocked";
 
+export type IntegrationProvider = "outlook" | "yandex" | "gmail" | "telegram" | "folder";
+
+export type IntegrationStatus = "connected" | "not_connected" | "needs_permission";
+
+export type UserIntegration = {
+  id: string;
+  provider: IntegrationProvider;
+  label: string;
+  status: IntegrationStatus;
+  account?: string;
+  folderPath?: string;
+  lastSyncAt?: string;
+};
+
 export type ProjectParticipant = {
   id: string;
   projectId: string;
@@ -23,6 +37,7 @@ export type ProjectParticipant = {
   messenger?: string;
   otherContacts?: string;
   status: ProjectParticipantStatus;
+  integrations?: UserIntegration[];
 };
 
 export type ProcessFieldKey = "documents" | "sender" | "approver" | "deadline" | "comment" | "result";
@@ -66,10 +81,17 @@ export type ProcessDocument = {
   from: string;
   updatedAt: string;
   size?: string;
-  source?: "demo" | "mail" | "chat" | "drop" | "manual";
+  source?: "demo" | "mail" | "chat" | "drop" | "manual" | IntegrationProvider;
   fileUrl?: string;
   fileText?: string;
   mimeType?: string;
+  detectedTag?: string;
+  receivedByParticipantId?: string;
+  receivedByEmail?: string;
+  integrationProvider?: IntegrationProvider;
+  autoRouted?: boolean;
+  isNew?: boolean;
+  originPath?: string;
 };
 
 export type BusinessProcess = {

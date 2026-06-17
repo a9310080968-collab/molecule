@@ -10,6 +10,7 @@ import { OrphanFilesPanel } from "./components/OrphanFilesPanel";
 import { ProjectChatPanel } from "./components/ProjectChatPanel";
 import { ProjectManagerModal } from "./components/ProjectManagerModal";
 import { ProcessBuilderModal } from "./components/ProcessBuilderModal";
+import { PersonalIntegrationsModal } from "./components/PersonalIntegrationsModal";
 import { demoProjects, initialNotifications } from "./data/mockProject";
 import {
   createDocumentNode,
@@ -38,12 +39,14 @@ import type {
   ChatMessage,
   DemoNotification,
   DemoProject,
+  IntegrationProvider,
   NodeEdit,
   ParticipantEdit,
   ProcessDocument,
   ProcessEdit,
   ProjectNode,
   ProjectTemplate,
+  UserIntegration,
 } from "./types";
 
 type HistorySnapshot = {
@@ -76,6 +79,7 @@ export default function App() {
   const [notifications, setNotifications] = useState<DemoNotification[]>(initialNotifications);
   const [modalDocument, setModalDocument] = useState<ProcessDocument | null>(null);
   const [projectManagerOpen, setProjectManagerOpen] = useState(false);
+  const [personalSettingsOpen, setPersonalSettingsOpen] = useState(false);
   const [processBuilderId, setProcessBuilderId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [fontScale, setFontScale] = useState(1);
@@ -92,6 +96,7 @@ export default function App() {
   const selectedNode = getNodeById(activeProject, selectedNodeId) ?? getNodeById(activeProject, activeLevel.centralNodeId) ?? levelNodes[0];
   const selectedProcess = getProcessById(activeProject, selectedProcessId) ?? null;
   const builderProcess = getProcessById(activeProject, processBuilderId) ?? null;
+  const currentUser = activeProject.participants.find((participant) => participant.name === "Павел Андреев") ?? activeProject.participants.find((participant) => participant.role === "admin") ?? activeProject.participants[0];
   const matches = useMemo(() => getSearchMatches(query, activeProject, activeLevel), [activeLevel, activeProject, query]);
   const isSearching = query.trim().length > 0;
   const hasNoResults = isSearching && matches.nodeIds.size + matches.processIds.size === 0;
@@ -197,6 +202,7 @@ export default function App() {
     setSelectedProcessId(null);
     setLinkingFromId(null);
     setProcessBuilderId(null);
+    setPersonalSettingsOpen(false);
     setQuery("");
     setLevelTransition(null);
     setActiveMenu("map");
@@ -360,6 +366,119 @@ export default function App() {
       updatedAt: "только что",
     }));
     showToast(`Пользователь «${participant.name}» удален из проекта.`);
+  }
+
+  function saveParticipantIntegrations(participantId: string, integrations: UserIntegration[]) {
+    updateActiveProject(
+      (project) => ({
+        ...project,
+        participants: project.participants.map((participant) =>
+          participant.id === participantId
+            ? {
+                ...participant,
+                integrations,
+              }
+            : participant,
+        ),
+        updatedAt: "только что",
+      }),
+      false,
+    );
+  }
+
+  function markIntegrationSynced(participantId: string, provider: IntegrationProvider) {
+    updateActiveProject(
+      (project) => ({
+        ...project,
+        participants: project.participants.map((participant) =>
+          participant.id === participantId
+            ? {
+                ...participant,
+                integrations: upsertIntegration(participant.integrations ?? [], provider, {
+                  status: "connected",
+                  lastSyncAt: "только что",
+                }),
+              }
+            : participant,
+        ),
+        updatedAt: "только что",
+      }),
+      false,
+    );
+  }
+
+  function importDemoIntegration(provider: IntegrationProvider, participantId: string) {
+    const documents = getDemoIntegrationFiles(provider).map((name) => createDocumentFromName(name, provider));
+    markIntegrationSynced(participantId, provider);
+    ingestIncomingDocuments(documents, provider, participantId);
+  }
+
+  async function importIntegrationFiles(provider: IntegrationProvider, participantId: string, files: File[]) {
+    const documents = await Promise.all(
+      files.map(async (file) =>
+        createDocumentFromName(
+          file.name,
+          provider,
+          URL.createObjectURL(file),
+          file.name.toLowerCase().endsWith(".txt") ? await file.text() : undefined,
+          file.type,
+          formatBytes(file.size),
+        ),
+      ),
+    );
+
+    markIntegrationSynced(participantId, provider);
+    ingestIncomingDocuments(documents, provider, participantId);
+  }
+
+  function ingestIncomingDocuments(documents: ProcessDocument[], provider: IntegrationProvider, participantId: string) {
+    const recipient = activeProject.participants.find((participant) => participant.id === participantId);
+    let nextProject = activeProject;
+    const importedNodes: ProjectNode[] = [];
+    let routedCount = 0;
+    let unassignedCount = 0;
+
+    documents.forEach((document) => {
+      const detectedTag = extractDocumentTag(document.title);
+      const targetNode = detectedTag ? findNodeByTag(nextProject, detectedTag) : undefined;
+      const incomingDocument: ProcessDocument = {
+        ...document,
+        status: targetNode ? "review" : "draft",
+        from: getIntegrationProviderLabel(provider),
+        updatedAt: "только что",
+        detectedTag,
+        receivedByParticipantId: recipient?.id,
+        receivedByEmail: recipient?.email,
+        integrationProvider: provider,
+        autoRouted: Boolean(targetNode),
+        isNew: true,
+      };
+      const result = addDocumentNodeToProject(nextProject, activeLevel.id, incomingDocument, targetNode?.id);
+      nextProject = result.project;
+      importedNodes.push(result.documentNode);
+      if (targetNode) {
+        routedCount += 1;
+      } else {
+        unassignedCount += 1;
+      }
+    });
+
+    updateActiveProject(() => nextProject);
+
+    const firstNode = importedNodes[0];
+    if (firstNode) {
+      setActiveLevelId(firstNode.levelId);
+      setSelectedNodeId(firstNode.id);
+      setSelectedProcessId(null);
+      window.setTimeout(() => sceneRef.current?.focusNode(firstNode.id), 80);
+    }
+
+    pushNotification({
+      title: `Новые файлы из ${getIntegrationProviderLabel(provider)}`,
+      description: `${recipient?.name ?? "Пользователь"} получил(а) ${documents.length} файл(а): ${routedCount} распределено по тегам, ${unassignedCount} во входящих.`,
+      targetNodeId: firstNode?.id,
+    });
+    showToast(`${documents.length} файл(а) импортировано: ${routedCount} распределено, ${unassignedCount} во входящих.`);
   }
 
   function startLink(nodeId: string) {
@@ -789,6 +908,7 @@ export default function App() {
         notifications={notifications}
         onNotificationClick={handleNotificationClick}
         onOpenProjectManager={() => setProjectManagerOpen(true)}
+        onOpenPersonalSettings={() => setPersonalSettingsOpen(true)}
       />
       <ProjectScene
         project={activeProject}
@@ -884,6 +1004,18 @@ export default function App() {
           onCreateTemplate={createTemplate}
         />
       ) : null}
+      {personalSettingsOpen && currentUser ? (
+        <PersonalIntegrationsModal
+          project={activeProject}
+          user={currentUser}
+          onClose={() => setPersonalSettingsOpen(false)}
+          onSaveIntegrations={saveParticipantIntegrations}
+          onImportDemo={importDemoIntegration}
+          onImportFiles={(provider, participantId, files) => {
+            void importIntegrationFiles(provider, participantId, files);
+          }}
+        />
+      ) : null}
       {builderProcess ? (
         <ProcessBuilderModal
           project={activeProject}
@@ -918,6 +1050,78 @@ function findBestProcessForIncoming(project: DemoProject, levelId: string, marke
       .toLocaleLowerCase("ru-RU");
     return normalized.includes("ар") ? text.includes("ар") : text.includes(normalized);
   }) ?? project.processes.find((process) => process.levelId === levelId);
+}
+
+function upsertIntegration(integrations: UserIntegration[], provider: IntegrationProvider, patch: Partial<UserIntegration>): UserIntegration[] {
+  const existing = integrations.find((integration) => integration.provider === provider);
+  if (!existing) {
+    return [
+      ...integrations,
+      {
+        id: `integration-${provider}`,
+        provider,
+        label: getIntegrationProviderLabel(provider),
+        status: "connected",
+        ...patch,
+      },
+    ];
+  }
+
+  return integrations.map((integration) =>
+    integration.provider === provider
+      ? {
+          ...integration,
+          ...patch,
+        }
+      : integration,
+  );
+}
+
+function getDemoIntegrationFiles(provider: IntegrationProvider) {
+  const files: Record<IntegrationProvider, string[]> = {
+    outlook: ["Расчетная_схема_КР.pdf", "Письмо_АР.docx", "Уточнение_ХЗ.xlsx"],
+    yandex: ["Технические_условия_ВК.pdf", "Сметная_таблица_СМ.xlsx", "Вложение_БезТега.docx"],
+    gmail: ["Пояснения_ПЗ.docx", "Сводка_ЭОМ.xlsx", "Презентация_ABC.pptx"],
+    telegram: ["Скрин_ОВ.png", "Планировка_АР.pdf", "Комментарий_QA.txt"],
+    folder: ["Ведомость_ВК.xlsx", "Стройгенплан_ПОС.pdf", "Материалы_UnknownTag.docx"],
+  };
+  return files[provider];
+}
+
+function getIntegrationProviderLabel(provider: IntegrationProvider) {
+  const labels: Record<IntegrationProvider, string> = {
+    outlook: "Outlook",
+    yandex: "Яндекс Почта",
+    gmail: "Gmail",
+    telegram: "Telegram Desktop",
+    folder: "Рабочая папка",
+  };
+  return labels[provider];
+}
+
+function extractDocumentTag(title: string) {
+  const base = title.replace(/\.[^.]+$/, "");
+  const parts = base.split(/[_-]+/).map((part) => part.trim()).filter(Boolean);
+  if (parts.length < 2) {
+    return undefined;
+  }
+  return parts[parts.length - 1].toLocaleUpperCase("ru-RU");
+}
+
+function findNodeByTag(project: DemoProject, tag: string) {
+  const normalizedTag = normalizeTag(tag);
+  return project.nodes.find((node) => {
+    if (node.type === "document" || node.type === "central") {
+      return false;
+    }
+
+    const tokens = [node.shortCode, node.title, ...(node.tags ?? [])].map((value) => normalizeTag(value ?? ""));
+    return tokens.some((token) => token === normalizedTag);
+  });
+}
+
+function normalizeTag(value: string) {
+  return value.toLocaleLowerCase("ru-RU").replace(/ё/g, "е").replace(/\s+/g, "");
 }
 
 function getRandomFileName() {

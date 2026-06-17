@@ -13,6 +13,7 @@ import {
 import { ChevronUp, Plus } from "lucide-react";
 import {
   getFileLabel,
+  getDocumentFromNode,
   getNodeVisualTone,
   getProcessStatusColor,
   getProcessStatusText,
@@ -487,6 +488,7 @@ export function ProjectScene({
         const isLinkSource = linkingFromId === node.id;
         const canCompleteLink = linkingFromId && linkingFromId !== node.id;
         const isDocumentDropTarget = dragUi?.targetNodeId === node.id;
+        const isIncomingNew = node.type === "document" && getDocumentFromNode(node).isNew;
 
         return (
           <button
@@ -503,6 +505,7 @@ export function ProjectScene({
               isLinkSource && "link-source",
               canCompleteLink && "link-target",
               isDocumentDropTarget && "document-drop-target",
+              isIncomingNew && "incoming-new",
             )}
             style={{
               left: position.x,

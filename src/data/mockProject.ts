@@ -260,7 +260,10 @@ function createSiriusProject(): DemoProject {
     nodes,
     processes,
     participants: [
-      participant(projectId, "participant-sirius-admin", "Павел Андреев", "ГИП / администратор проекта", "admin", "p.andreev@alfaproject.ru", "+7 916 110-12-40", "@pavel_gip", "Teams: p.andreev"),
+      participant(projectId, "participant-sirius-admin", "Павел Андреев", "ГИП / администратор проекта", "admin", "p.andreev@alfaproject.ru", "+7 916 110-12-40", "@pavel_gip", "Teams: p.andreev", "active", [
+        integration("outlook", "Outlook", "connected", "p.andreev@alfaproject.ru", undefined, "сегодня, 14:41"),
+        integration("telegram", "Telegram Desktop", "needs_permission", undefined, "Telegram Desktop/tdata/рабочие файлы"),
+      ]),
       participant(projectId, "participant-sirius-ird", "Мария Соколова", "Координатор ИРД", "coordinator", "m.sokolova@alfaproject.ru", "+7 916 220-31-18", "@sokolova_ird"),
       participant(projectId, "participant-sirius-ar", "Анна Лебедева", "Ведущий архитектор", "architect", "a.lebedeva@alfaproject.ru", "+7 916 330-44-25", "@anna_ar"),
       participant(projectId, "participant-sirius-kr", "Игорь Мельников", "Главный конструктор", "constructor", "i.melnikov@alfaproject.ru", "+7 916 440-18-72", "@melnikov_kr"),
@@ -321,7 +324,9 @@ function createVegaProject(): DemoProject {
     nodes,
     processes,
     participants: [
-      participant(projectId, "participant-vega-admin", "Павел Андреев", "ГИП / администратор проекта", "admin", "p.andreev@alfaproject.ru", "+7 916 110-12-40", "@pavel_gip"),
+      participant(projectId, "participant-vega-admin", "Павел Андреев", "ГИП / администратор проекта", "admin", "p.andreev@alfaproject.ru", "+7 916 110-12-40", "@pavel_gip", undefined, "active", [
+        integration("gmail", "Gmail", "not_connected"),
+      ]),
       participant(projectId, "participant-vega-ird", "Мария Соколова", "Координатор ИРД", "coordinator", "m.sokolova@alfaproject.ru", "+7 916 220-31-18"),
       participant(projectId, "participant-vega-ar", "Анна Лебедева", "Ведущий архитектор", "architect", "a.lebedeva@alfaproject.ru", "+7 916 330-44-25", "@anna_ar"),
       participant(projectId, "participant-vega-kr", "Игорь Мельников", "Конструктор", "constructor", "i.melnikov@alfaproject.ru", "+7 916 440-18-72"),
@@ -455,6 +460,7 @@ function participant(
   messenger?: string,
   otherContacts?: string,
   status: ProjectParticipant["status"] = "active",
+  integrations: ProjectParticipant["integrations"] = [],
 ): ProjectParticipant {
   return {
     id,
@@ -467,6 +473,26 @@ function participant(
     messenger,
     otherContacts,
     status,
+    integrations,
+  };
+}
+
+function integration(
+  provider: NonNullable<ProjectParticipant["integrations"]>[number]["provider"],
+  label: string,
+  status: NonNullable<ProjectParticipant["integrations"]>[number]["status"],
+  account?: string,
+  folderPath?: string,
+  lastSyncAt?: string,
+): NonNullable<ProjectParticipant["integrations"]>[number] {
+  return {
+    id: `integration-${provider}`,
+    provider,
+    label,
+    status,
+    account,
+    folderPath,
+    lastSyncAt,
   };
 }
 

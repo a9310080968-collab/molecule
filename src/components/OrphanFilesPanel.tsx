@@ -1,3 +1,4 @@
+import clsx from "clsx";
 import { FilePlus2, FileText, LocateFixed, Maximize2 } from "lucide-react";
 import { getDocumentFromNode, getFileLabel, getFileTypeColor, getOrphanDocumentNodes } from "../lib/graph";
 import type { DemoProject, ProcessDocument } from "../types";
@@ -36,14 +37,14 @@ export function OrphanFilesPanel({
             const document = getDocumentFromNode(node);
             const color = getFileTypeColor(document.fileType);
             return (
-              <article key={node.id}>
+              <article key={node.id} className={clsx(document.isNew && "incoming-new")}>
                 <button className="orphan-main-action" onClick={() => onFocusDocumentNode(node.id)}>
                   <span style={{ color }}>
                     <FileText size={16} />
                   </span>
                   <div>
                     <b>{document.title}</b>
-                    <small>{getFileLabel(document.fileType)} · {document.updatedAt}</small>
+                    <small>{getFileLabel(document.fileType)} · {document.updatedAt}{document.isNew ? " · новое" : ""}</small>
                   </div>
                   <LocateFixed size={15} />
                 </button>

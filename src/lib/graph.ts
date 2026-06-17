@@ -414,6 +414,9 @@ function getNodeSearchText(node: ProjectNode) {
     document ? getFileLabel(document.fileType) : "",
     document?.version,
     document?.from,
+    document?.detectedTag,
+    document?.receivedByEmail,
+    document?.integrationProvider,
   ]
     .filter(Boolean)
     .join(" ");
@@ -441,6 +444,9 @@ function getProcessSearchText(process: BusinessProcess, project: DemoProject) {
       getFileLabel(document.fileType),
       document.version,
       document.from,
+      document.detectedTag,
+      document.receivedByEmail,
+      document.integrationProvider,
       nodeStatusLabels[document.status],
     ]),
   ]

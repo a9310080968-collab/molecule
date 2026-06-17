@@ -225,6 +225,20 @@ function createDefaultParticipants(projectId: string): ProjectParticipant[] {
       phone: "+7 916 110-12-40",
       messenger: "@pavel_gip",
       status: "active",
+      integrations: [
+        {
+          id: `integration-${projectId}-outlook`,
+          provider: "outlook",
+          label: "Outlook",
+          status: "not_connected",
+        },
+        {
+          id: `integration-${projectId}-telegram`,
+          provider: "telegram",
+          label: "Telegram Desktop",
+          status: "needs_permission",
+        },
+      ],
     },
   ];
 }
