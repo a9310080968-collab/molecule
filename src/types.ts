@@ -98,6 +98,17 @@ export type DemoProject = {
   chatMessages: ChatMessage[];
 };
 
+export type ProjectTemplate = {
+  id: string;
+  title: string;
+  description: string;
+  createdAt: string;
+  sourceProjectTitle: string;
+  levels: MapLevel[];
+  nodes: ProjectNode[];
+  processes: BusinessProcess[];
+};
+
 export type DemoNotification = {
   id: string;
   projectId: string;

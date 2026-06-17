@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   FileStack,
+  FolderPlus,
   MessageCircle,
   Settings,
   Users,
@@ -29,6 +30,7 @@ type WorkspacePanelProps = {
   onOpenDocument: (document: ProcessDocument) => void;
   onReceiveMail: () => void;
   onReceiveChat: () => void;
+  onOpenProjectManager: () => void;
 };
 
 const menuMeta = {
@@ -92,6 +94,7 @@ export function WorkspacePanel({
   onOpenDocument,
   onReceiveMail,
   onReceiveChat,
+  onOpenProjectManager,
 }: WorkspacePanelProps) {
   if (activeMenu === "map") {
     return null;
@@ -123,6 +126,7 @@ export function WorkspacePanel({
         onOpenDocument={onOpenDocument}
         onReceiveMail={onReceiveMail}
         onReceiveChat={onReceiveChat}
+        onOpenProjectManager={onOpenProjectManager}
       />
     </section>
   );
@@ -135,6 +139,7 @@ function WorkspaceContent({
   onOpenDocument,
   onReceiveMail,
   onReceiveChat,
+  onOpenProjectManager,
 }: Omit<WorkspacePanelProps, "onClose">) {
   if (activeMenu === "documents") {
     const documents = getAllVisibleDocuments(project);
@@ -243,6 +248,18 @@ function WorkspaceContent({
           <span>Если тегов нет, задание прикручивается вручную из входящих.</span>
         </div>
         <em>демо</em>
+      </article>
+      <article className="workspace-row project-template-settings-row">
+        <b>
+          <FolderPlus size={16} />
+        </b>
+        <div>
+          <strong>Проекты и шаблоны</strong>
+          <span>Создайте новый проект, сохраните текущую структуру как шаблон или запустите проект из готовой схемы.</span>
+        </div>
+        <button className="settings-open-button" onClick={onOpenProjectManager}>
+          Открыть
+        </button>
       </article>
     </div>
   );

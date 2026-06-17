@@ -1,4 +1,4 @@
-import { Bell, Menu, Search, SlidersHorizontal, X } from "lucide-react";
+import { Bell, Menu, Plus, Search, SlidersHorizontal, X } from "lucide-react";
 import { useState } from "react";
 import clsx from "clsx";
 import type { DemoNotification, DemoProject } from "../types";
@@ -14,6 +14,7 @@ type TopSearchProps = {
   onProjectChange: (projectId: string) => void;
   notifications: DemoNotification[];
   onNotificationClick: (notification: DemoNotification) => void;
+  onOpenProjectManager: () => void;
 };
 
 export function TopSearch({
@@ -27,6 +28,7 @@ export function TopSearch({
   onProjectChange,
   notifications,
   onNotificationClick,
+  onOpenProjectManager,
 }: TopSearchProps) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0];
@@ -50,6 +52,10 @@ export function TopSearch({
             <small>{project.address}</small>
           </button>
         ))}
+        <button className="project-add-tab" onClick={onOpenProjectManager} title="Проекты и шаблоны">
+          <Plus size={18} />
+          <span>Новый</span>
+        </button>
       </div>
 
       <div className="search-wrap">

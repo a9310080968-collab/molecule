@@ -8,6 +8,7 @@ import { WorkspacePanel } from "./components/WorkspacePanel";
 import { DocumentModal } from "./components/DocumentModal";
 import { OrphanFilesPanel } from "./components/OrphanFilesPanel";
 import { ProjectChatPanel } from "./components/ProjectChatPanel";
+import { ProjectManagerModal } from "./components/ProjectManagerModal";
 import { demoProjects, initialNotifications } from "./data/mockProject";
 import {
   createDocumentNode,
@@ -30,6 +31,7 @@ import {
   putDocumentIntoNode,
   removeDocumentFromNode,
 } from "./lib/projectMutations";
+import { createDefaultProjectTemplate, createProjectFromTemplate, createTemplateFromProject } from "./lib/projectTemplates";
 import type {
   BusinessProcess,
   ChatMessage,
@@ -39,6 +41,7 @@ import type {
   ProcessDocument,
   ProcessEdit,
   ProjectNode,
+  ProjectTemplate,
 } from "./types";
 
 type HistorySnapshot = {
@@ -55,6 +58,11 @@ type LevelTransition = "down" | "up";
 
 export default function App() {
   const [projects, setProjects] = useState<DemoProject[]>(demoProjects);
+  const [projectTemplates, setProjectTemplates] = useState<ProjectTemplate[]>(() => [
+    createDefaultProjectTemplate(),
+    createTemplateFromProject(demoProjects[0], "Жилой комплекс / полный комплект", "Структура разделов, внутренних уровней и контейнеров связи без рабочих документов."),
+    createTemplateFromProject(demoProjects[1], "Компактный офисный проект", "Легкая структура для небольшого объекта с ИРД, АР, КР, ЭОМ и сметой."),
+  ]);
   const [activeProjectId, setActiveProjectId] = useState(demoProjects[0].id);
   const [activeLevelId, setActiveLevelId] = useState(demoProjects[0].levels[0].id);
   const [selectedNodeId, setSelectedNodeId] = useState(demoProjects[0].levels[0].centralNodeId);
@@ -65,6 +73,7 @@ export default function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifications, setNotifications] = useState<DemoNotification[]>(initialNotifications);
   const [modalDocument, setModalDocument] = useState<ProcessDocument | null>(null);
+  const [projectManagerOpen, setProjectManagerOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [fontScale, setFontScale] = useState(1);
   const [isDropActive, setIsDropActive] = useState(false);
@@ -185,6 +194,38 @@ export default function App() {
     setQuery("");
     setLevelTransition(null);
     setActiveMenu("map");
+  }
+
+  function createProject(title: string, address: string, templateId: string) {
+    const template = projectTemplates.find((item) => item.id === templateId) ?? projectTemplates[0];
+    if (!template) {
+      return;
+    }
+
+    recordHistory();
+    const project = createProjectFromTemplate(template, title || `Проект ${projects.length + 1}`, address || "Адрес не указан");
+    const defaultLevel = getDefaultLevel(project);
+    setProjects((current) => [...current, project]);
+    setActiveProjectId(project.id);
+    setActiveLevelId(defaultLevel.id);
+    setSelectedNodeId(defaultLevel.centralNodeId);
+    setSelectedProcessId(null);
+    setLinkingFromId(null);
+    setQuery("");
+    setActiveMenu("map");
+    setProjectManagerOpen(false);
+    showToast(`Проект «${project.title}» создан из шаблона «${template.title}».`);
+  }
+
+  function createTemplate(title: string, description: string) {
+    const template = createTemplateFromProject(
+      activeProject,
+      title || `${activeProject.title}: шаблон`,
+      description || "Структура проекта без рабочих документов.",
+    );
+    setProjectTemplates((current) => [template, ...current]);
+    showToast(`Шаблон «${template.title}» сохранен.`);
+    return template;
   }
 
   function selectNode(nodeId: string) {
@@ -664,6 +705,7 @@ export default function App() {
         onProjectChange={selectProject}
         notifications={notifications}
         onNotificationClick={handleNotificationClick}
+        onOpenProjectManager={() => setProjectManagerOpen(true)}
       />
       <ProjectScene
         project={activeProject}
@@ -706,6 +748,7 @@ export default function App() {
         onOpenDocument={setModalDocument}
         onReceiveMail={() => receiveMail()}
         onReceiveChat={() => receiveChat()}
+        onOpenProjectManager={() => setProjectManagerOpen(true)}
       />
       {selectedNode ? (
         <RightPanel
@@ -743,6 +786,17 @@ export default function App() {
         onShowInFolder={(document) => showToast(`Демо: файл «${document.title}» лежит в контейнере проекта.`)}
         onClose={() => setModalDocument(null)}
       />
+      {projectManagerOpen ? (
+        <ProjectManagerModal
+          projects={projects}
+          activeProjectId={activeProjectId}
+          templates={projectTemplates}
+          onClose={() => setProjectManagerOpen(false)}
+          onSelectProject={selectProject}
+          onCreateProject={createProject}
+          onCreateTemplate={createTemplate}
+        />
+      ) : null}
       {isDropActive ? (
         <div className="drop-overlay">
           <strong>Отпустите файлы</strong>
