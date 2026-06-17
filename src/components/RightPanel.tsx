@@ -202,7 +202,7 @@ function NodeInfo({
         </button>
         <button onClick={() => onReceiveChat()}>
           <MessageCircle size={17} />
-          Сообщение в чат
+          Сообщение в мессенджер
         </button>
       </section>
 
@@ -395,7 +395,7 @@ function ProcessInfo({
         </button>
         <button onClick={() => onReceiveChat(process.id)}>
           <MessageCircle size={17} />
-          Получить из чата
+          Получить из мессенджера
         </button>
         <button className="danger" onClick={() => onDeleteProcess(process.id)}>
           <Trash2 size={17} />

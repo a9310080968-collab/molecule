@@ -341,7 +341,7 @@ export function createDocumentFromName(name: string, source: ProcessDocument["so
     fileType: inferFileType(name),
     version: "v1",
     status: "draft",
-    from: source === "mail" ? "Почта" : source === "chat" ? "Чат" : "Импорт",
+    from: source === "mail" ? "Почта" : source === "chat" ? "Мессенджер" : "Импорт",
     updatedAt: "только что",
     source,
     fileUrl,

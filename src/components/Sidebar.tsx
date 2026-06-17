@@ -41,7 +41,7 @@ const navItems = [
   { id: "tasks", label: "Задания", icon: ClipboardCheck },
   { id: "checks", label: "Проверки ГИП", icon: CheckCircle2 },
   { id: "versions", label: "Версии", icon: Archive },
-  { id: "chat", label: "Чат проекта", icon: MessageCircle },
+  { id: "chat", label: "Мессенджер", icon: MessageCircle },
   { id: "participants", label: "Участники", icon: Users },
   { id: "settings", label: "Настройки", icon: Settings },
 ] satisfies Array<{ id: SidebarMenuId; label: string; icon: LucideIcon }>;

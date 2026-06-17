@@ -25,7 +25,7 @@ export function ProjectChatPanel({ messages, onSend, onOpenChat }: ProjectChatPa
       <header>
         <button onClick={onOpenChat}>
           <MessageCircle size={17} />
-          Чат проекта
+          Мессенджер
         </button>
         <span>{messages.length}</span>
       </header>
@@ -50,9 +50,9 @@ export function ProjectChatPanel({ messages, onSend, onOpenChat }: ProjectChatPa
               send();
             }
           }}
-          placeholder="Написать в проект..."
+          placeholder="Сообщение в проект..."
         />
-        <button onClick={send} aria-label="Отправить сообщение">
+        <button onClick={send} aria-label="Отправить сообщение в мессенджер">
           <Send size={16} />
         </button>
       </footer>

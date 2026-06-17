@@ -3,11 +3,13 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Mail,
+  Paperclip,
   PencilLine,
   FileStack,
   FolderPlus,
   MessageCircle,
   Phone,
+  Send,
   ShieldCheck,
   Settings,
   Trash2,
@@ -16,6 +18,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import clsx from "clsx";
 import { useEffect, useState } from "react";
 import {
   getAcceptedAssignments,
@@ -38,6 +41,7 @@ type WorkspacePanelProps = {
   onOpenDocument: (document: ProcessDocument) => void;
   onReceiveMail: () => void;
   onReceiveChat: () => void;
+  onSendMessage: (text: string) => void;
   onOpenProjectManager: () => void;
   onAddParticipant: (edit: ParticipantEdit) => void;
   onUpdateParticipant: (participantId: string, edit: ParticipantEdit) => void;
@@ -71,9 +75,9 @@ const menuMeta = {
   },
   chat: {
     icon: MessageCircle,
-    title: "Чат проекта",
-    subtitle: "Сообщения могут создавать задания или менять статус контейнера связи.",
-    badge: "Демо-чат",
+    title: "Мессенджер",
+    subtitle: "Живая переписка проекта: сообщения, события из почты и быстрые переходы к бизнес-процессам.",
+    badge: "Команда",
   },
   participants: {
     icon: Users,
@@ -105,6 +109,7 @@ export function WorkspacePanel({
   onOpenDocument,
   onReceiveMail,
   onReceiveChat,
+  onSendMessage,
   onOpenProjectManager,
   onAddParticipant,
   onUpdateParticipant,
@@ -140,6 +145,7 @@ export function WorkspacePanel({
         onOpenDocument={onOpenDocument}
         onReceiveMail={onReceiveMail}
         onReceiveChat={onReceiveChat}
+        onSendMessage={onSendMessage}
         onOpenProjectManager={onOpenProjectManager}
         onAddParticipant={onAddParticipant}
         onUpdateParticipant={onUpdateParticipant}
@@ -156,6 +162,7 @@ function WorkspaceContent({
   onOpenDocument,
   onReceiveMail,
   onReceiveChat,
+  onSendMessage,
   onOpenProjectManager,
   onAddParticipant,
   onUpdateParticipant,
@@ -193,21 +200,13 @@ function WorkspaceContent({
 
   if (activeMenu === "chat") {
     return (
-      <>
-        <div className="workspace-grid chat-grid">
-          {project.chatMessages.map((message) => (
-            <button key={message.id} className="chat-row" onClick={() => message.processId && onSelectProcess(message.processId)}>
-              <b>{message.author}</b>
-              <span>{message.role} · {message.time}</span>
-              <p>{message.text}</p>
-            </button>
-          ))}
-        </div>
-        <footer className="workspace-actions">
-          <button onClick={onReceiveChat}>Сымитировать сообщение с заданием</button>
-          <button onClick={onReceiveMail}>Сымитировать письмо с вложением</button>
-        </footer>
-      </>
+      <MessengerWorkspace
+        project={project}
+        onSelectProcess={onSelectProcess}
+        onReceiveChat={onReceiveChat}
+        onReceiveMail={onReceiveMail}
+        onSendMessage={onSendMessage}
+      />
     );
   }
 
@@ -244,7 +243,7 @@ function WorkspaceContent({
       <article className="workspace-row">
         <b>Теги</b>
         <div>
-          <strong>Почта и чат могут предложить связь</strong>
+          <strong>Почта и мессенджер могут предложить связь</strong>
           <span>Если тегов нет, задание прикручивается вручную из входящих.</span>
         </div>
         <em>демо</em>
@@ -261,6 +260,129 @@ function WorkspaceContent({
           Открыть
         </button>
       </article>
+    </div>
+  );
+}
+
+function MessengerWorkspace({
+  project,
+  onSelectProcess,
+  onReceiveChat,
+  onReceiveMail,
+  onSendMessage,
+}: {
+  project: DemoProject;
+  onSelectProcess: (processId: string) => void;
+  onReceiveChat: () => void;
+  onReceiveMail: () => void;
+  onSendMessage: (text: string) => void;
+}) {
+  const [messageText, setMessageText] = useState("");
+  const currentUser = project.participants.find((participant) => participant.name === "Павел Андреев")
+    ?? project.participants.find((participant) => participant.role === "admin")
+    ?? project.participants[0];
+  const messages = [...project.chatMessages].reverse();
+  const activeProcesses = project.processes
+    .filter((process) => process.status !== "accepted")
+    .slice(0, 4);
+
+  function submitMessage() {
+    const text = messageText.trim();
+    if (!text) {
+      return;
+    }
+    onSendMessage(text);
+    setMessageText("");
+  }
+
+  return (
+    <div className="messenger-workspace">
+      <section className="messenger-main">
+        <header className="messenger-thread-header">
+          <div>
+            <span>
+              <MessageCircle size={16} />
+              Мессенджер проекта
+            </span>
+            <strong>{project.title}</strong>
+            <p>{project.participants.length} участников, события из почты и рабочих интеграций попадают сюда же.</p>
+          </div>
+          <em>{messages.length} сообщений</em>
+        </header>
+
+        <div className="messenger-feed" aria-label="Сообщения проекта">
+          {messages.length ? messages.map((message) => {
+            const isOwn = currentUser ? message.author === currentUser.name : false;
+
+            return (
+              <article key={message.id} className={clsx("messenger-message", isOwn && "own")}>
+                <header>
+                  <b>{message.author}</b>
+                  <span>{message.role} · {message.time}</span>
+                </header>
+                <p>{message.text}</p>
+                {message.processId ? (
+                  <button className="messenger-process-link" onClick={() => onSelectProcess(message.processId!)}>
+                    Открыть бизнес-процесс
+                  </button>
+                ) : null}
+              </article>
+            );
+          }) : (
+            <p className="workspace-empty">В мессенджере пока нет сообщений.</p>
+          )}
+        </div>
+
+        <footer className="messenger-composer">
+          <textarea
+            value={messageText}
+            onChange={(event) => setMessageText(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                submitMessage();
+              }
+            }}
+            placeholder="Напишите сообщение команде проекта..."
+          />
+          <button className="messenger-send-button" disabled={!messageText.trim()} onClick={submitMessage}>
+            <Send size={16} />
+            Отправить
+          </button>
+        </footer>
+      </section>
+
+      <aside className="messenger-side" aria-label="События мессенджера">
+        <article className="messenger-action-card">
+          <span>
+            <Paperclip size={15} />
+            Демо-события
+          </span>
+          <strong>Проверка входящих</strong>
+          <p>Эти кнопки имитируют, как сообщение или письмо приносит файл и привязывает его к процессу.</p>
+          <button onClick={onReceiveChat}>
+            <MessageCircle size={15} />
+            Событие из мессенджера
+          </button>
+          <button onClick={onReceiveMail}>
+            <Mail size={15} />
+            Письмо с вложением
+          </button>
+        </article>
+
+        <article className="messenger-action-card">
+          <span>Активные контейнеры</span>
+          {activeProcesses.length ? activeProcesses.map((process) => (
+            <button key={process.id} onClick={() => onSelectProcess(process.id)}>
+              <i style={{ background: getProcessStatusColor(process.status) }} />
+              <div>
+                <b>{process.title}</b>
+                <small>{getProcessStatusText(process.status)}</small>
+              </div>
+            </button>
+          )) : <p>Нет активных контейнеров.</p>}
+        </article>
+      </aside>
     </div>
   );
 }

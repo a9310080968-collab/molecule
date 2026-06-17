@@ -708,7 +708,7 @@ export default function App() {
       time: "только что",
       processId: targetProcess?.id,
     };
-    const document = createDocumentFromName("сообщение_из_чата.txt", "chat", undefined, message.text);
+    const document = createDocumentFromName("сообщение_из_мессенджера.txt", "chat", undefined, message.text);
 
     updateActiveProject((project) => ({
       ...project,
@@ -731,11 +731,11 @@ export default function App() {
     }));
 
     pushNotification({
-      title: targetProcess ? "Чат изменил статус связи" : "Сообщение без тега",
-      description: targetProcess ? "Контейнер принят в работу через событие чата." : "Сообщение добавлено во входящие для ручной привязки.",
+      title: targetProcess ? "Мессенджер изменил статус связи" : "Сообщение без тега",
+      description: targetProcess ? "Контейнер принят в работу через событие мессенджера." : "Сообщение добавлено во входящие для ручной привязки.",
       targetProcessId: targetProcess?.id,
     });
-    showToast(targetProcess ? "Статус связи изменен событием из чата." : "Сообщение добавлено во входящие.");
+    showToast(targetProcess ? "Статус связи изменен событием из мессенджера." : "Сообщение добавлено во входящие.");
   }
 
   function addRandomFile(targetNodeId?: string) {
@@ -791,8 +791,8 @@ export default function App() {
     const message: ChatMessage = {
       id: `chat-${Date.now()}`,
       projectId: activeProject.id,
-      author: "Анна Лебедева",
-      role: "АР",
+      author: currentUser?.name ?? "Павел Андреев",
+      role: currentUser?.position ?? "Участник проекта",
       text,
       time: "только что",
     };
@@ -802,7 +802,7 @@ export default function App() {
       chatMessages: [message, ...project.chatMessages],
       updatedAt: "только что",
     }));
-    showToast("Сообщение добавлено в чат проекта.");
+    showToast("Сообщение отправлено в мессенджер проекта.");
   }
 
   async function handleDrop(event: DragEvent<HTMLDivElement>) {
@@ -951,6 +951,7 @@ export default function App() {
         onOpenDocument={setModalDocument}
         onReceiveMail={() => receiveMail()}
         onReceiveChat={() => receiveChat()}
+        onSendMessage={sendProjectChatMessage}
         onOpenProjectManager={() => setProjectManagerOpen(true)}
         onAddParticipant={addParticipant}
         onUpdateParticipant={updateParticipant}

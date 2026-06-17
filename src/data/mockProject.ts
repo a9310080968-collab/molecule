@@ -179,7 +179,7 @@ function createSiriusProject(): DemoProject {
 
   nodes.push(
     documentNode(projectId, top, "node-doc-sirius-inbox-tu-vk", doc("inbox-sirius-1", "ТУ_ВК_без_тега.pdf", "pdf", "v1", "draft", "Почта", "mail")),
-    documentNode(projectId, top, "node-doc-sirius-inbox-client-task", doc("inbox-sirius-2", "Задание от заказчика.docx", "docx", "v1", "draft", "Чат", "chat")),
+    documentNode(projectId, top, "node-doc-sirius-inbox-client-task", doc("inbox-sirius-2", "Задание от заказчика.docx", "docx", "v1", "draft", "Мессенджер", "chat")),
     documentNode(projectId, ar, "node-doc-sirius-ar-plan-1", doc("visual-sirius-plan-1", "План 1 этажа v4.pdf", "pdf", "v4", "review", "АР"), "node-sirius-ar"),
     documentNode(projectId, ar, "node-doc-sirius-ar-spec", doc("visual-sirius-spec-ar", "Ведомость элементов.xlsx", "xlsx", "v1", "review", "АР"), "node-sirius-ar"),
     documentNode(projectId, arFacade, "node-doc-sirius-facade-east", doc("visual-sirius-east-facade", "Восточный фасад_материалы.pptx", "pptx", "v1", "comments", "АР"), "node-sirius-ar-facades"),
@@ -275,7 +275,7 @@ function createSiriusProject(): DemoProject {
     ],
     inboxDocuments: [
       doc("inbox-sirius-1", "ТУ_ВК_без_тега.pdf", "pdf", "v1", "draft", "Почта", "mail"),
-      doc("inbox-sirius-2", "Задание от заказчика.docx", "docx", "v1", "draft", "Чат", "chat"),
+      doc("inbox-sirius-2", "Задание от заказчика.docx", "docx", "v1", "draft", "Мессенджер", "chat"),
     ],
     chatMessages,
   };

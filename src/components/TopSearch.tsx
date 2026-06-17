@@ -65,7 +65,7 @@ export function TopSearch({
         <input
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          placeholder="Поиск по нодам, бизнес-процессам, документам и чату..."
+          placeholder="Поиск по нодам, бизнес-процессам, документам и мессенджеру..."
         />
         {value ? (
           <button className="clear-search" onClick={() => onChange("")} aria-label="Очистить поиск">
