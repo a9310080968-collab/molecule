@@ -51,6 +51,7 @@ type HistorySnapshot = {
 };
 
 const HISTORY_LIMIT = 60;
+type LevelTransition = "down" | "up";
 
 export default function App() {
   const [projects, setProjects] = useState<DemoProject[]>(demoProjects);
@@ -67,6 +68,7 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [fontScale, setFontScale] = useState(1);
   const [isDropActive, setIsDropActive] = useState(false);
+  const [levelTransition, setLevelTransition] = useState<LevelTransition | null>(null);
   const [undoStack, setUndoStack] = useState<HistorySnapshot[]>([]);
   const [redoStack, setRedoStack] = useState<HistorySnapshot[]>([]);
   const sceneRef = useRef<SceneHandle | null>(null);
@@ -130,6 +132,7 @@ export default function App() {
     setSelectedProcessId(snapshot.selectedProcessId);
     setNotifications(snapshot.notifications);
     setLinkingFromId(null);
+    setLevelTransition(null);
   }
 
   function recordHistory() {
@@ -180,6 +183,7 @@ export default function App() {
     setSelectedProcessId(null);
     setLinkingFromId(null);
     setQuery("");
+    setLevelTransition(null);
     setActiveMenu("map");
   }
 
@@ -196,6 +200,7 @@ export default function App() {
     if (process.projectId !== activeProjectId) {
       selectProject(process.projectId);
     }
+    setLevelTransition(null);
     setActiveLevelId(process.levelId);
     setSelectedProcessId(processId);
     setSelectedNodeId(process.from);
@@ -210,6 +215,7 @@ export default function App() {
 
     const prepared = ensureNodeLevel(activeProject, node.id);
     updateActiveProject(() => prepared.project);
+    setLevelTransition("down");
     setActiveLevelId(prepared.levelId);
     setSelectedNodeId(node.id);
     setSelectedProcessId(null);
@@ -222,6 +228,7 @@ export default function App() {
       return;
     }
     const parent = getLevelById(activeProject, activeLevel.parentLevelId);
+    setLevelTransition("up");
     setActiveLevelId(parent.id);
     setSelectedNodeId(activeLevel.parentNodeId ?? parent.centralNodeId);
     setSelectedProcessId(null);
@@ -530,6 +537,7 @@ export default function App() {
     }
 
     setActiveLevelId(node.levelId);
+    setLevelTransition(null);
     setSelectedNodeId(node.id);
     setSelectedProcessId(null);
     setActiveMenu("map");
@@ -668,6 +676,7 @@ export default function App() {
         matchedNodeIds={matches.nodeIds}
         matchedProcessIds={matches.processIds}
         isSearching={isSearching}
+        levelTransition={levelTransition}
         onSelectNode={selectNode}
         onOpenNodeLevel={openNodeLevel}
         onBackLevel={backLevel}

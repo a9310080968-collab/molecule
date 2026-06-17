@@ -38,6 +38,7 @@ type ProjectSceneProps = {
   matchedNodeIds: Set<string>;
   matchedProcessIds: Set<string>;
   isSearching: boolean;
+  levelTransition: "down" | "up" | null;
   onSelectNode: (nodeId: string) => void;
   onOpenNodeLevel: (node: ProjectNode) => void;
   onBackLevel: () => void;
@@ -86,6 +87,7 @@ export function ProjectScene({
   matchedNodeIds,
   matchedProcessIds,
   isSearching,
+  levelTransition,
   onSelectNode,
   onOpenNodeLevel,
   onBackLevel,
@@ -107,6 +109,7 @@ export function ProjectScene({
   const [positions, setPositions] = useState<Record<string, Vec2>>(() => buildInitialPositions(nodes, level.id, level.centralNodeId));
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [dragUi, setDragUi] = useState<DragUiState | null>(null);
+  const [levelMotion, setLevelMotion] = useState<"down" | "up" | null>(null);
   const nodeMap = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
   const centerNodeId = level.centralNodeId;
   const projectProgress = getProjectProgress(project, level);
@@ -157,6 +160,21 @@ export function ProjectScene({
   useEffect(() => {
     setView(INITIAL_VIEW);
   }, [level.id]);
+
+  useEffect(() => {
+    if (!levelTransition) {
+      setLevelMotion(null);
+      return undefined;
+    }
+
+    setLevelMotion(null);
+    const start = window.setTimeout(() => setLevelMotion(levelTransition), 0);
+    const timeout = window.setTimeout(() => setLevelMotion(null), 720);
+    return () => {
+      window.clearTimeout(start);
+      window.clearTimeout(timeout);
+    };
+  }, [level.id, levelTransition]);
 
   const screenPositions = useMemo(() => {
     return Object.fromEntries(
@@ -388,7 +406,7 @@ export function ProjectScene({
   return (
     <main
       ref={containerRef}
-      className={clsx("scene-panel", linkingFromId && "is-linking")}
+      className={clsx("scene-panel", linkingFromId && "is-linking", levelMotion && `level-transition-${levelMotion}`)}
       onWheel={handleWheel}
       onPointerDown={handleScenePointerDown}
       onPointerMove={handleScenePointerMove}
@@ -453,7 +471,7 @@ export function ProjectScene({
         ))}
       </svg>
 
-      {nodes.map((node) => {
+      {nodes.map((node, index) => {
         const position = screenPositions[node.id];
         if (!position) {
           return null;
@@ -491,6 +509,8 @@ export function ProjectScene({
               top: position.y,
               "--node-fill": tone.fill,
               "--node-glow": tone.glow,
+              "--node-index": index,
+              "--node-delay": `${Math.min(index * 16, 140)}ms`,
             } as React.CSSProperties}
             onPointerDown={(event) => handleNodePointerDown(event, node)}
             onPointerMove={(event) => handleNodePointerMove(event, node)}
