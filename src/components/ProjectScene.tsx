@@ -604,9 +604,25 @@ function ProcessPath({
               markerEnd={direction === "forward" || direction === "both" ? "url(#arrow-end)" : undefined}
               markerStart={direction === "backward" || direction === "both" ? "url(#arrow-start)" : undefined}
             />
-            <path className="process-hit" d={geometry.path} onClick={onSelect} />
+            <path
+              className="process-hit"
+              d={geometry.path}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+                onSelect();
+              }}
+              onClick={onSelect}
+            />
             <foreignObject x={geometry.label.x - 72} y={geometry.label.y - 13} width="144" height="28">
-              <button className="process-label process-document-label" onClick={onSelect} title={document ? document.title : process.description}>
+              <button
+                className="process-label process-document-label"
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  onSelect();
+                }}
+                onClick={onSelect}
+                title={document ? document.title : process.description}
+              >
                 <span style={{ background: color }} />
                 {label}
               </button>

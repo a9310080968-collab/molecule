@@ -211,6 +211,7 @@ function createSiriusProject(): DemoProject {
     process(projectId, top, "bp-sirius-pos-est", "node-sirius-pos", "node-sirius-est", "ПОС для сметы", "Календарный план и стройгенплан передаются сметчикам для расчета временных работ.", "sent", "forward", "Сергей Наумов", "Ольга Данилова", 0, [
       doc("doc-sirius-pos-smeta", "Стройгенплан_для_сметы.pdf", "pdf", "v1", "review", "ПОС"),
     ]),
+    process(projectId, top, "bp-sirius-kr-pz-draft", "node-sirius-kr", "node-sirius-pz", "Черновик согласования КР", "Нужно собрать контейнер передачи расчетных схем и спецификаций КР в пояснительную записку.", "draft", "forward", "Игорь Мельников", "Мария Соколова", 0, []),
 
     process(projectId, ar, "bp-sirius-ar-plans-facades", "node-sirius-ar-plans", "node-sirius-ar-facades", "Планы для фасадов", "Фасадная команда получает актуальные планировочные решения и отметки.", "sent", "forward", "Анна Лебедева", "Дмитрий Корнев", 0, [
       doc("doc-sirius-plan-1", "План 1 этажа v4.pdf", "pdf", "v4", "review", "АР"),

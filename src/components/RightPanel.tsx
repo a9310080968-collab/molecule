@@ -58,6 +58,7 @@ type RightPanelProps = {
   onAttachInboxDocument: (processId: string, documentId: string) => void;
   onReceiveMail: (processId?: string) => void;
   onReceiveChat: (processId?: string) => void;
+  onOpenProcessBuilder: (processId: string) => void;
 };
 
 const processStatuses: ProcessStatus[] = ["draft", "sent", "in_work", "rejected", "accepted"];
@@ -79,6 +80,7 @@ export function RightPanel({
   onAttachInboxDocument,
   onReceiveMail,
   onReceiveChat,
+  onOpenProcessBuilder,
 }: RightPanelProps) {
   return (
     <aside className="right-panel glass-panel">
@@ -93,6 +95,7 @@ export function RightPanel({
           onAttachInboxDocument={onAttachInboxDocument}
           onReceiveMail={onReceiveMail}
           onReceiveChat={onReceiveChat}
+          onOpenProcessBuilder={onOpenProcessBuilder}
         />
       ) : (
         <NodeInfo
@@ -308,6 +311,7 @@ function ProcessInfo({
   onAttachInboxDocument,
   onReceiveMail,
   onReceiveChat,
+  onOpenProcessBuilder,
 }: {
   project: DemoProject;
   process: BusinessProcess;
@@ -318,6 +322,7 @@ function ProcessInfo({
   onAttachInboxDocument: (processId: string, documentId: string) => void;
   onReceiveMail: (processId?: string) => void;
   onReceiveChat: (processId?: string) => void;
+  onOpenProcessBuilder: (processId: string) => void;
 }) {
   const from = project.nodes.find((node) => node.id === process.from);
   const to = project.nodes.find((node) => node.id === process.to);
@@ -374,6 +379,12 @@ function ProcessInfo({
       </section>
 
       <section className="quick-actions">
+        {process.status === "draft" ? (
+          <button onClick={() => onOpenProcessBuilder(process.id)}>
+            <GitBranch size={17} />
+            Конструктор процесса
+          </button>
+        ) : null}
         <button onClick={() => onProcessUpdate(process.id, { status: "sent" })}>
           <Send size={17} />
           Отправить

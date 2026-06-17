@@ -8,6 +8,19 @@ export type ProcessStatus = "draft" | "sent" | "in_work" | "rejected" | "accepte
 
 export type ProcessDirection = "forward" | "backward" | "both";
 
+export type ProcessFieldKey = "documents" | "sender" | "approver" | "deadline" | "comment" | "result";
+
+export type ProcessFieldRequirement = {
+  key: ProcessFieldKey;
+  label: string;
+  required: boolean;
+};
+
+export type ProcessDocumentRequirement = {
+  documentId: string;
+  required: boolean;
+};
+
 export type ProjectNode = {
   id: string;
   projectId: string;
@@ -56,10 +69,14 @@ export type BusinessProcess = {
   receiver: string;
   createdAt: string;
   validationAt?: string;
+  dueAt?: string;
+  approver?: string;
   parallelIndex?: number;
   source: "demo" | "manual" | "mail" | "chat";
   tag?: string;
   documents: ProcessDocument[];
+  requiredFields?: ProcessFieldRequirement[];
+  documentRequirements?: ProcessDocumentRequirement[];
 };
 
 export type MapLevel = {
@@ -122,7 +139,23 @@ export type DemoNotification = {
 
 export type NodeEdit = Partial<Pick<ProjectNode, "title" | "shortCode" | "description" | "status" | "responsible" | "tags" | "deadlineAt">>;
 
-export type ProcessEdit = Partial<Pick<BusinessProcess, "title" | "description" | "status" | "direction" | "sender" | "receiver" | "validationAt">>;
+export type ProcessEdit = Partial<
+  Pick<
+    BusinessProcess,
+    | "title"
+    | "description"
+    | "status"
+    | "direction"
+    | "sender"
+    | "receiver"
+    | "validationAt"
+    | "dueAt"
+    | "approver"
+    | "documents"
+    | "requiredFields"
+    | "documentRequirements"
+  >
+>;
 
 export type SearchMatches = {
   nodeIds: Set<string>;

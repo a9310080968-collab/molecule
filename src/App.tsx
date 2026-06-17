@@ -9,6 +9,7 @@ import { DocumentModal } from "./components/DocumentModal";
 import { OrphanFilesPanel } from "./components/OrphanFilesPanel";
 import { ProjectChatPanel } from "./components/ProjectChatPanel";
 import { ProjectManagerModal } from "./components/ProjectManagerModal";
+import { ProcessBuilderModal } from "./components/ProcessBuilderModal";
 import { demoProjects, initialNotifications } from "./data/mockProject";
 import {
   createDocumentNode,
@@ -74,6 +75,7 @@ export default function App() {
   const [notifications, setNotifications] = useState<DemoNotification[]>(initialNotifications);
   const [modalDocument, setModalDocument] = useState<ProcessDocument | null>(null);
   const [projectManagerOpen, setProjectManagerOpen] = useState(false);
+  const [processBuilderId, setProcessBuilderId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [fontScale, setFontScale] = useState(1);
   const [isDropActive, setIsDropActive] = useState(false);
@@ -88,6 +90,7 @@ export default function App() {
   const levelProcesses = useMemo(() => getLevelProcesses(activeProject, activeLevel), [activeLevel, activeProject]);
   const selectedNode = getNodeById(activeProject, selectedNodeId) ?? getNodeById(activeProject, activeLevel.centralNodeId) ?? levelNodes[0];
   const selectedProcess = getProcessById(activeProject, selectedProcessId) ?? null;
+  const builderProcess = getProcessById(activeProject, processBuilderId) ?? null;
   const matches = useMemo(() => getSearchMatches(query, activeProject, activeLevel), [activeLevel, activeProject, query]);
   const isSearching = query.trim().length > 0;
   const hasNoResults = isSearching && matches.nodeIds.size + matches.processIds.size === 0;
@@ -141,6 +144,7 @@ export default function App() {
     setSelectedProcessId(snapshot.selectedProcessId);
     setNotifications(snapshot.notifications);
     setLinkingFromId(null);
+    setProcessBuilderId(null);
     setLevelTransition(null);
   }
 
@@ -191,6 +195,7 @@ export default function App() {
     setSelectedNodeId(getDefaultLevel(project).centralNodeId);
     setSelectedProcessId(null);
     setLinkingFromId(null);
+    setProcessBuilderId(null);
     setQuery("");
     setLevelTransition(null);
     setActiveMenu("map");
@@ -211,6 +216,7 @@ export default function App() {
     setSelectedNodeId(defaultLevel.centralNodeId);
     setSelectedProcessId(null);
     setLinkingFromId(null);
+    setProcessBuilderId(null);
     setQuery("");
     setActiveMenu("map");
     setProjectManagerOpen(false);
@@ -231,6 +237,7 @@ export default function App() {
   function selectNode(nodeId: string) {
     setSelectedNodeId(nodeId);
     setSelectedProcessId(null);
+    setProcessBuilderId(null);
   }
 
   function selectProcess(processId: string) {
@@ -246,6 +253,7 @@ export default function App() {
     setSelectedProcessId(processId);
     setSelectedNodeId(process.from);
     setActiveMenu("map");
+    setProcessBuilderId(process.status === "draft" ? process.id : null);
     sceneRef.current?.focusNode(process.from);
   }
 
@@ -261,6 +269,7 @@ export default function App() {
     setSelectedNodeId(node.id);
     setSelectedProcessId(null);
     setLinkingFromId(null);
+    setProcessBuilderId(null);
     setActiveMenu("map");
   }
 
@@ -274,6 +283,7 @@ export default function App() {
     setSelectedNodeId(activeLevel.parentNodeId ?? parent.centralNodeId);
     setSelectedProcessId(null);
     setLinkingFromId(null);
+    setProcessBuilderId(null);
   }
 
   function updateNode(nodeId: string, edit: NodeEdit) {
@@ -304,6 +314,7 @@ export default function App() {
     setLinkingFromId(nodeId);
     setSelectedNodeId(nodeId);
     setSelectedProcessId(null);
+    setProcessBuilderId(null);
     showToast("Выберите вторую ноду для бизнес-процесса.");
   }
 
@@ -351,7 +362,8 @@ export default function App() {
     }));
     setLinkingFromId(null);
     setSelectedProcessId(process.id);
-    showToast("Создан ручной контейнер связи. Его можно наполнить документами и описанием.");
+    setProcessBuilderId(process.id);
+    showToast("Создан черновик процесса. Открыл конструктор маршрута.");
   }
 
   function deleteProcess(processId: string) {
@@ -361,7 +373,26 @@ export default function App() {
       updatedAt: "только что",
     }));
     setSelectedProcessId(null);
+    setProcessBuilderId((current) => (current === processId ? null : current));
     showToast("Контейнер связи удален.");
+  }
+
+  function saveProcessBuilder(processId: string, edit: ProcessEdit, mode: "draft" | "launch") {
+    const currentProcess = getProcessById(activeProject, processId);
+    updateProcess(processId, edit);
+
+    if (mode === "launch") {
+      setProcessBuilderId(null);
+      pushNotification({
+        title: "Процесс отправлен на согласование",
+        description: `Маршрут «${edit.title ?? currentProcess?.title ?? "бизнес-процесс"}» собран в конструкторе и отправлен на проверку.`,
+        targetProcessId: processId,
+      });
+      showToast("Процесс собран и отправлен на согласование.");
+      return;
+    }
+
+    showToast("Черновик процесса сохранен.");
   }
 
   function attachInboxDocument(processId: string, documentId: string) {
@@ -768,6 +799,7 @@ export default function App() {
           onAttachInboxDocument={attachInboxDocument}
           onReceiveMail={receiveMail}
           onReceiveChat={receiveChat}
+          onOpenProcessBuilder={(processId) => setProcessBuilderId(processId)}
         />
       ) : null}
       <BottomControls
@@ -795,6 +827,15 @@ export default function App() {
           onSelectProject={selectProject}
           onCreateProject={createProject}
           onCreateTemplate={createTemplate}
+        />
+      ) : null}
+      {builderProcess ? (
+        <ProcessBuilderModal
+          project={activeProject}
+          process={builderProcess}
+          onClose={() => setProcessBuilderId(null)}
+          onSave={saveProcessBuilder}
+          onOpenDocument={setModalDocument}
         />
       ) : null}
       {isDropActive ? (
