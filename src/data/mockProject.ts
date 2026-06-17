@@ -8,6 +8,7 @@ import type {
   NodeStatus,
   ProcessDocument,
   ProcessStatus,
+  ProjectParticipant,
   ProjectNode,
 } from "../types";
 
@@ -258,6 +259,17 @@ function createSiriusProject(): DemoProject {
     levels,
     nodes,
     processes,
+    participants: [
+      participant(projectId, "participant-sirius-admin", "Павел Андреев", "ГИП / администратор проекта", "admin", "p.andreev@alfaproject.ru", "+7 916 110-12-40", "@pavel_gip", "Teams: p.andreev"),
+      participant(projectId, "participant-sirius-ird", "Мария Соколова", "Координатор ИРД", "coordinator", "m.sokolova@alfaproject.ru", "+7 916 220-31-18", "@sokolova_ird"),
+      participant(projectId, "participant-sirius-ar", "Анна Лебедева", "Ведущий архитектор", "architect", "a.lebedeva@alfaproject.ru", "+7 916 330-44-25", "@anna_ar"),
+      participant(projectId, "participant-sirius-kr", "Игорь Мельников", "Главный конструктор", "constructor", "i.melnikov@alfaproject.ru", "+7 916 440-18-72", "@melnikov_kr"),
+      participant(projectId, "participant-sirius-ov", "Роман Фадеев", "Инженер ОВ", "engineer", "r.fadeev@alfaproject.ru", "+7 916 550-29-63"),
+      participant(projectId, "participant-sirius-vk", "Елена Морозова", "Инженер ВК", "engineer", "e.morozova@alfaproject.ru", "+7 916 660-37-14", "@morozova_vk"),
+      participant(projectId, "participant-sirius-est", "Ольга Данилова", "Сметчик", "estimator", "o.danilova@alfaproject.ru", "+7 916 770-42-19"),
+      participant(projectId, "participant-sirius-pos", "Сергей Наумов", "Инженер ПОС", "engineer", "s.naumov@alfaproject.ru", "+7 916 880-55-83", "@naumov_pos"),
+      participant(projectId, "participant-sirius-materials", "Виктория Романова", "Специалист по материалам", "contractor", "v.romanova@partner.ru", "+7 916 990-64-05", undefined, "Контур.Диадок"),
+    ],
     inboxDocuments: [
       doc("inbox-sirius-1", "ТУ_ВК_без_тега.pdf", "pdf", "v1", "draft", "Почта", "mail"),
       doc("inbox-sirius-2", "Задание от заказчика.docx", "docx", "v1", "draft", "Чат", "chat"),
@@ -308,6 +320,13 @@ function createVegaProject(): DemoProject {
     levels,
     nodes,
     processes,
+    participants: [
+      participant(projectId, "participant-vega-admin", "Павел Андреев", "ГИП / администратор проекта", "admin", "p.andreev@alfaproject.ru", "+7 916 110-12-40", "@pavel_gip"),
+      participant(projectId, "participant-vega-ird", "Мария Соколова", "Координатор ИРД", "coordinator", "m.sokolova@alfaproject.ru", "+7 916 220-31-18"),
+      participant(projectId, "participant-vega-ar", "Анна Лебедева", "Ведущий архитектор", "architect", "a.lebedeva@alfaproject.ru", "+7 916 330-44-25", "@anna_ar"),
+      participant(projectId, "participant-vega-kr", "Игорь Мельников", "Конструктор", "constructor", "i.melnikov@alfaproject.ru", "+7 916 440-18-72"),
+      participant(projectId, "participant-vega-est", "Ольга Данилова", "Сметчик", "estimator", "o.danilova@alfaproject.ru", "+7 916 770-42-19"),
+    ],
     inboxDocuments: [],
     chatMessages: [
       {
@@ -422,6 +441,32 @@ function process(
     parallelIndex,
     source: "demo",
     documents,
+  };
+}
+
+function participant(
+  projectId: string,
+  id: string,
+  name: string,
+  position: string,
+  role: ProjectParticipant["role"],
+  email: string,
+  phone: string,
+  messenger?: string,
+  otherContacts?: string,
+  status: ProjectParticipant["status"] = "active",
+): ProjectParticipant {
+  return {
+    id,
+    projectId,
+    name,
+    position,
+    role,
+    email,
+    phone,
+    messenger,
+    otherContacts,
+    status,
   };
 }
 

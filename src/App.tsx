@@ -39,6 +39,7 @@ import type {
   DemoNotification,
   DemoProject,
   NodeEdit,
+  ParticipantEdit,
   ProcessDocument,
   ProcessEdit,
   ProjectNode,
@@ -308,6 +309,57 @@ export default function App() {
       ),
       updatedAt: "только что",
     }));
+  }
+
+  function addParticipant(edit: ParticipantEdit) {
+    const participant = {
+      ...edit,
+      id: `participant-${Date.now()}`,
+      projectId: activeProject.id,
+    };
+
+    updateActiveProject((project) => ({
+      ...project,
+      participants: [participant, ...project.participants],
+      updatedAt: "только что",
+    }));
+    showToast(`Пользователь «${participant.name}» добавлен в проект.`);
+  }
+
+  function updateParticipant(participantId: string, edit: ParticipantEdit) {
+    updateActiveProject((project) => ({
+      ...project,
+      participants: project.participants.map((participant) =>
+        participant.id === participantId
+          ? {
+              ...participant,
+              ...edit,
+            }
+          : participant,
+      ),
+      updatedAt: "только что",
+    }));
+    showToast(`Карточка пользователя «${edit.name}» обновлена.`);
+  }
+
+  function deleteParticipant(participantId: string) {
+    const participant = activeProject.participants.find((item) => item.id === participantId);
+    if (!participant) {
+      return;
+    }
+
+    const adminCount = activeProject.participants.filter((item) => item.role === "admin").length;
+    if (participant.role === "admin" && adminCount <= 1) {
+      showToast("В проекте должен остаться хотя бы один администратор.");
+      return;
+    }
+
+    updateActiveProject((project) => ({
+      ...project,
+      participants: project.participants.filter((item) => item.id !== participantId),
+      updatedAt: "только что",
+    }));
+    showToast(`Пользователь «${participant.name}» удален из проекта.`);
   }
 
   function startLink(nodeId: string) {
@@ -780,6 +832,9 @@ export default function App() {
         onReceiveMail={() => receiveMail()}
         onReceiveChat={() => receiveChat()}
         onOpenProjectManager={() => setProjectManagerOpen(true)}
+        onAddParticipant={addParticipant}
+        onUpdateParticipant={updateParticipant}
+        onDeleteParticipant={deleteParticipant}
       />
       {selectedNode ? (
         <RightPanel

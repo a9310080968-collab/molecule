@@ -1,4 +1,4 @@
-import type { BusinessProcess, DemoProject, MapLevel, ProjectNode, ProjectTemplate } from "../types";
+import type { BusinessProcess, DemoProject, MapLevel, ProjectNode, ProjectParticipant, ProjectTemplate } from "../types";
 
 const NOW = "только что";
 
@@ -199,6 +199,7 @@ export function createProjectFromTemplate(template: ProjectTemplate, title: stri
     nodes,
     processes,
     inboxDocuments: [],
+    participants: createDefaultParticipants(projectId),
     chatMessages: [
       {
         id: `chat-${projectId}-created`,
@@ -210,6 +211,22 @@ export function createProjectFromTemplate(template: ProjectTemplate, title: stri
       },
     ],
   };
+}
+
+function createDefaultParticipants(projectId: string): ProjectParticipant[] {
+  return [
+    {
+      id: `participant-${projectId}-admin`,
+      projectId,
+      name: "Павел Андреев",
+      position: "ГИП / администратор проекта",
+      role: "admin",
+      email: "p.andreev@alfaproject.ru",
+      phone: "+7 916 110-12-40",
+      messenger: "@pavel_gip",
+      status: "active",
+    },
+  ];
 }
 
 function templateNode(

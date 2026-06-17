@@ -8,6 +8,23 @@ export type ProcessStatus = "draft" | "sent" | "in_work" | "rejected" | "accepte
 
 export type ProcessDirection = "forward" | "backward" | "both";
 
+export type ProjectParticipantRole = "admin" | "gip" | "coordinator" | "architect" | "constructor" | "engineer" | "estimator" | "observer" | "contractor";
+
+export type ProjectParticipantStatus = "active" | "invited" | "blocked";
+
+export type ProjectParticipant = {
+  id: string;
+  projectId: string;
+  name: string;
+  position: string;
+  role: ProjectParticipantRole;
+  email: string;
+  phone: string;
+  messenger?: string;
+  otherContacts?: string;
+  status: ProjectParticipantStatus;
+};
+
 export type ProcessFieldKey = "documents" | "sender" | "approver" | "deadline" | "comment" | "result";
 
 export type ProcessFieldRequirement = {
@@ -113,6 +130,7 @@ export type DemoProject = {
   processes: BusinessProcess[];
   inboxDocuments: ProcessDocument[];
   chatMessages: ChatMessage[];
+  participants: ProjectParticipant[];
 };
 
 export type ProjectTemplate = {
@@ -156,6 +174,8 @@ export type ProcessEdit = Partial<
     | "documentRequirements"
   >
 >;
+
+export type ParticipantEdit = Omit<ProjectParticipant, "id" | "projectId">;
 
 export type SearchMatches = {
   nodeIds: Set<string>;

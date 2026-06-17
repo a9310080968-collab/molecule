@@ -396,6 +396,7 @@ function getParticipants(project: DemoProject, process: BusinessProcess) {
         process.sender,
         process.receiver,
         process.approver,
+        ...project.participants.map((participant) => participant.name),
         ...project.nodes.map((node) => node.responsible),
         ...project.processes.flatMap((item) => [item.sender, item.receiver, item.approver]),
       ].filter(Boolean) as string[],
