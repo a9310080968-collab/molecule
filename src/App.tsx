@@ -15,7 +15,6 @@ import {
   createProcessId,
   formatBytes,
   getDefaultLevel,
-  getDocumentFromNode,
   getLevelById,
   getLevelNodes,
   getLevelProcesses,
@@ -23,6 +22,14 @@ import {
   getProcessById,
   getSearchMatches,
 } from "./lib/graph";
+import {
+  addDocumentNodeToProject,
+  appendUnique,
+  canOpenNodeLevel,
+  ensureNodeLevel,
+  putDocumentIntoNode,
+  removeDocumentFromNode,
+} from "./lib/projectMutations";
 import type {
   BusinessProcess,
   ChatMessage,
@@ -197,12 +204,14 @@ export default function App() {
   }
 
   function openNodeLevel(node: ProjectNode) {
-    if (!node.childrenLevelId) {
+    if (!canOpenNodeLevel(node, activeLevel.id)) {
       return;
     }
-    const nextLevel = getLevelById(activeProject, node.childrenLevelId);
-    setActiveLevelId(nextLevel.id);
-    setSelectedNodeId(nextLevel.centralNodeId);
+
+    const prepared = ensureNodeLevel(activeProject, node.id);
+    updateActiveProject(() => prepared.project);
+    setActiveLevelId(prepared.levelId);
+    setSelectedNodeId(node.id);
     setSelectedProcessId(null);
     setLinkingFromId(null);
     setActiveMenu("map");
@@ -480,87 +489,35 @@ export default function App() {
   }
 
   function addRandomFile(targetNodeId?: string) {
-    const targetNode = targetNodeId ? getNodeById(activeProject, targetNodeId) : undefined;
-    const destinationLevelId = targetNode?.childrenLevelId && targetNode.childrenLevelId !== activeLevel.id ? targetNode.childrenLevelId : activeLevel.id;
     const document = createDocumentFromName(getRandomFileName(), "manual", undefined, undefined, undefined, getRandomFileSize());
-    const documentNode = createDocumentNode(activeProject.id, destinationLevelId, document, targetNode?.id);
+    const result = addDocumentNodeToProject(activeProject, activeLevel.id, document, targetNodeId);
+    const targetLabel = result.targetNode?.shortCode ?? result.targetNode?.title ?? "";
+    updateActiveProject(() => result.project);
 
-    updateActiveProject((project) => ({
-      ...project,
-      nodes: [documentNode, ...project.nodes],
-      levels: project.levels.map((level) =>
-        level.id === destinationLevelId ? { ...level, nodeIds: appendUnique(level.nodeIds, documentNode.id) } : level,
-      ),
-      inboxDocuments: targetNode ? project.inboxDocuments : [document, ...project.inboxDocuments],
-      updatedAt: "только что",
-    }));
-
-    setSelectedNodeId(documentNode.id);
+    if (targetNodeId) {
+      setSelectedNodeId(targetNodeId);
+    } else {
+      setActiveLevelId(result.levelId);
+      setSelectedNodeId(result.documentNode.id);
+    }
     setSelectedProcessId(null);
-    showToast(targetNode ? "Документ добавлен внутрь выбранной ноды." : "Бесхозный файл добавлен на карту как малая нода.");
+    showToast(targetNodeId ? `Документ добавлен внутрь ноды «${targetLabel}».` : "Бесхозный файл добавлен на карту как малая нода.");
   }
 
   function moveDocumentNode(documentNodeId: string, targetNodeId: string | null) {
-    const currentDocumentNode = getNodeById(activeProject, documentNodeId);
-    if (!currentDocumentNode || currentDocumentNode.type !== "document") {
-      return;
-    }
-
-    const document = getDocumentFromNode(currentDocumentNode);
-    const currentLevelId = currentDocumentNode.levelId;
-
     if (targetNodeId) {
-      const targetNode = getNodeById(activeProject, targetNodeId);
-      if (!targetNode) {
-        return;
-      }
-
-      const destinationLevelId = targetNode.childrenLevelId && targetNode.childrenLevelId !== currentLevelId ? targetNode.childrenLevelId : currentLevelId;
-      updateActiveProject((project) => ({
-        ...project,
-        nodes: project.nodes.map((node) =>
-          node.id === documentNodeId
-            ? {
-                ...node,
-                levelId: destinationLevelId,
-                documentOwnerNodeId: targetNode.id,
-                description: "Файл находится внутри ноды раздела.",
-                status: "review",
-                document: { ...document, status: "review", updatedAt: "только что" },
-              }
-            : node,
-        ),
-        levels: moveNodeBetweenLevels(project.levels, documentNodeId, currentLevelId, destinationLevelId),
-        inboxDocuments: project.inboxDocuments.filter((item) => item.id !== document.id),
-        updatedAt: "только что",
-      }));
-      setSelectedNodeId(documentNodeId);
+      const result = putDocumentIntoNode(activeProject, documentNodeId, targetNodeId);
+      const targetLabel = result.targetNode?.shortCode ?? result.targetNode?.title ?? "";
+      updateActiveProject(() => result.project);
+      setSelectedNodeId(targetNodeId);
       setSelectedProcessId(null);
-      showToast(`Файл вложен в ноду «${targetNode.shortCode ?? targetNode.title}».`);
+      showToast(`Файл вложен в ноду «${targetLabel}».`);
       return;
     }
 
-    const currentLevel = getLevelById(activeProject, currentLevelId);
-    const destinationLevelId = currentLevel.parentLevelId ?? getDefaultLevel(activeProject).id;
-    updateActiveProject((project) => ({
-      ...project,
-      nodes: project.nodes.map((node) =>
-        node.id === documentNodeId
-          ? {
-              ...node,
-              levelId: destinationLevelId,
-              documentOwnerNodeId: undefined,
-              description: "Бесхозный файл. Перетащите его в раздел, чтобы разобрать.",
-              status: "draft",
-              document: { ...document, status: "draft", updatedAt: "только что" },
-            }
-          : node,
-      ),
-      levels: moveNodeBetweenLevels(project.levels, documentNodeId, currentLevelId, destinationLevelId),
-      inboxDocuments: project.inboxDocuments.some((item) => item.id === document.id) ? project.inboxDocuments : [document, ...project.inboxDocuments],
-      updatedAt: "только что",
-    }));
-    setActiveLevelId(destinationLevelId);
+    const result = removeDocumentFromNode(activeProject, documentNodeId);
+    updateActiveProject(() => result.project);
+    setActiveLevelId(result.levelId);
     setSelectedNodeId(documentNodeId);
     setSelectedProcessId(null);
     showToast("Файл вынесен из ноды и снова стал бесхозным.");
@@ -618,37 +575,19 @@ export default function App() {
       ),
     );
 
-    const documentNodes = documents.map((document) => createDocumentNode(activeProject.id, activeLevel.id, document));
-    updateActiveProject((project) => ({
-      ...project,
-      nodes: [...documentNodes, ...project.nodes],
-      levels: project.levels.map((level) =>
-        level.id === activeLevel.id ? { ...level, nodeIds: [...documentNodes.map((node) => node.id), ...level.nodeIds] } : level,
-      ),
-      inboxDocuments: [...documents, ...project.inboxDocuments],
-      updatedAt: "только что",
-    }));
+    let nextProject = activeProject;
+    const documentNodes = documents.map((document) => {
+      const result = addDocumentNodeToProject(nextProject, activeLevel.id, document);
+      nextProject = result.project;
+      return result.documentNode;
+    });
+
+    updateActiveProject(() => nextProject);
     if (documentNodes[0]) {
       setSelectedNodeId(documentNodes[0].id);
       setSelectedProcessId(null);
     }
     showToast("Файлы добавлены как бесхозные малые ноды. Перетащите их в нужный раздел вручную.");
-    return;
-
-    const targetProcess = selectedProcess ?? findBestProcessForIncoming(activeProject, activeLevel.id, files[0].name);
-    updateActiveProject((project) => ({
-      ...project,
-      inboxDocuments: targetProcess ? project.inboxDocuments : [...documents, ...project.inboxDocuments],
-      processes: targetProcess
-        ? project.processes.map((process) =>
-            process.id === targetProcess.id
-              ? { ...process, status: process.status === "draft" ? "sent" : process.status, documents: [...documents, ...process.documents] }
-              : process,
-          )
-        : project.processes,
-      updatedAt: "только что",
-    }));
-    showToast(targetProcess ? "Файлы добавлены в выбранный контейнер связи." : "Файлы добавлены во входящие без связи.");
   }
 
   function handleNotificationClick(notification: DemoNotification) {
@@ -820,23 +759,6 @@ function findBestProcessForIncoming(project: DemoProject, levelId: string, marke
       .toLocaleLowerCase("ru-RU");
     return normalized.includes("ар") ? text.includes("ар") : text.includes(normalized);
   }) ?? project.processes.find((process) => process.levelId === levelId);
-}
-
-function appendUnique(ids: string[], id: string) {
-  return ids.includes(id) ? ids : [...ids, id];
-}
-
-function moveNodeBetweenLevels(levels: DemoProject["levels"], nodeId: string, fromLevelId: string, toLevelId: string) {
-  return levels.map((level) => {
-    const withoutNode = level.nodeIds.filter((id) => id !== nodeId);
-    if (level.id === toLevelId) {
-      return { ...level, nodeIds: appendUnique(withoutNode, nodeId) };
-    }
-    if (level.id === fromLevelId) {
-      return { ...level, nodeIds: withoutNode };
-    }
-    return level;
-  });
 }
 
 function getRandomFileName() {

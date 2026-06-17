@@ -29,6 +29,7 @@ import {
   getProjectProgress,
   getStatusText,
 } from "../lib/graph";
+import { canOpenNodeLevel, isContainerNode } from "../lib/projectMutations";
 import type {
   BusinessProcess,
   DemoProject,
@@ -154,7 +155,7 @@ function NodeInfo({
   const documents = getNodeDocuments(project, node.id);
   const progress = getProjectProgress(project, level);
   const isLevelCenter = node.id === level.centralNodeId;
-  const canDrill = Boolean(node.childrenLevelId && node.childrenLevelId !== level.id);
+  const canDrill = canOpenNodeLevel(node, level.id);
 
   return (
     <>
@@ -186,7 +187,7 @@ function NodeInfo({
             Провалиться внутрь
           </button>
         ) : null}
-        {node.childrenLevelId || isLevelCenter ? (
+        {isContainerNode(node) || isLevelCenter ? (
           <button onClick={() => onAddRandomFile(node.id)}>
             <FilePlus2 size={17} />
             Добавить документ

@@ -31,7 +31,7 @@ export function ProjectChatPanel({ messages, onSend, onOpenChat }: ProjectChatPa
       </header>
 
       <div className="project-chat-feed">
-        {messages.slice(0, 3).map((message) => (
+        {messages.slice(0, 2).map((message) => (
           <article key={message.id}>
             <b>{message.author}</b>
             <span>{message.role} · {message.time}</span>

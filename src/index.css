@@ -1106,13 +1106,15 @@ button {
 .project-chat-panel {
   right: calc(var(--right-width) + 42px);
   bottom: 92px;
-  width: min(340px, calc(100vw - var(--left-width) - var(--right-width) - 90px));
+  width: min(300px, calc(100vw - var(--left-width) - var(--right-width) - 90px));
+  pointer-events: none;
 }
 
 .project-chat-panel header {
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 9px;
+  pointer-events: auto;
 }
 
 .project-chat-panel header button {
@@ -1141,8 +1143,9 @@ button {
 .project-chat-feed {
   display: grid;
   gap: 7px;
-  max-height: 180px;
+  max-height: 112px;
   overflow: hidden;
+  pointer-events: none;
 }
 
 .project-chat-feed article {
@@ -1166,6 +1169,7 @@ button {
 .project-chat-panel footer {
   gap: 7px;
   margin-top: 10px;
+  pointer-events: auto;
 }
 
 .project-chat-panel input {

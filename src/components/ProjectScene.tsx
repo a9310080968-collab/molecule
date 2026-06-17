@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import {
   type MutableRefObject,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type WheelEvent,
   useCallback,
@@ -70,7 +71,7 @@ type DragUiState = {
   overExit: boolean;
 };
 
-const INITIAL_VIEW: ViewState = { zoom: 1, panX: 0, panY: 0 };
+const INITIAL_VIEW: ViewState = { zoom: 1, panX: 0, panY: 42 };
 const MIN_ZOOM = 0.34;
 const MAX_ZOOM = 4.8;
 
@@ -98,6 +99,8 @@ export function ProjectScene({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const exitZoneRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
+  const clickRef = useRef<{ nodeId: string; time: number } | null>(null);
+  const suppressClickRef = useRef(false);
   const panRef = useRef<{ pointerId: number; x: number; y: number; panX: number; panY: number } | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [view, setView] = useState<ViewState>(INITIAL_VIEW);
@@ -292,11 +295,12 @@ export function ProjectScene({
     if (node.type === "document") {
       const dropPositions = { ...positions, [node.id]: next };
       const target = findDocumentDropTarget(node, nodes, dropPositions, centerNodeId, scale);
+      const overExit = Boolean(node.documentOwnerNodeId && isPointerInsideElement(event.clientX, event.clientY, exitZoneRef.current));
       setDragUi({
         nodeId: node.id,
         ownerNodeId: node.documentOwnerNodeId,
         targetNodeId: target?.id,
-        overExit: Boolean(node.documentOwnerNodeId && isPointerInsideElement(event.clientX, event.clientY, exitZoneRef.current)),
+        overExit,
       });
     }
   };
@@ -318,26 +322,67 @@ export function ProjectScene({
       const target = findDocumentDropTarget(node, nodes, dropPositions, centerNodeId, scale);
       const overExit = Boolean(node.documentOwnerNodeId && isPointerInsideElement(event.clientX, event.clientY, exitZoneRef.current));
       setDragUi(null);
+      suppressClickRef.current = true;
       if (overExit) {
         onMoveDocumentNode(node.id, null);
-      } else if (target) {
+      } else if (target && target.id !== node.documentOwnerNodeId) {
         onMoveDocumentNode(node.id, target.id);
       }
       return;
     }
 
     setDragUi(null);
-    if (!drag.moved) {
-      if (linkingFromId && linkingFromId !== node.id) {
-        onCompleteLink(node.id);
-      } else {
-        onSelectNode(node.id);
-      }
+    if (drag.moved) {
+      suppressClickRef.current = true;
     }
   };
 
   const handleNodePointerUp = (event: ReactPointerEvent<HTMLButtonElement>, node: ProjectNode) => {
     finishNodeDrag(event, node);
+  };
+
+  const handleNodeClick = (event: ReactMouseEvent<HTMLButtonElement>, node: ProjectNode) => {
+    event.stopPropagation();
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+
+    const now = Date.now();
+    const isDoubleClick = event.detail >= 2 || (clickRef.current?.nodeId === node.id && now - clickRef.current.time < 1200);
+    clickRef.current = { nodeId: node.id, time: now };
+
+    if (isDoubleClick) {
+      clickRef.current = null;
+      if (node.type === "document" && node.document) {
+        onOpenDocument(node.document);
+        return;
+      }
+      if (canDrillIntoNode(node, level.id)) {
+        onOpenNodeLevel(node);
+        return;
+      }
+    }
+
+    if (linkingFromId && linkingFromId !== node.id) {
+      onCompleteLink(node.id);
+    } else {
+      onSelectNode(node.id);
+    }
+  };
+
+  const handleNodeDoubleClick = (event: ReactMouseEvent<HTMLButtonElement>, node: ProjectNode) => {
+    event.stopPropagation();
+    clickRef.current = null;
+
+    if (node.type === "document" && node.document) {
+      onOpenDocument(node.document);
+      return;
+    }
+
+    if (canDrillIntoNode(node, level.id)) {
+      onOpenNodeLevel(node);
+    }
   };
 
   return (
@@ -419,7 +464,7 @@ export function ProjectScene({
         const selected = selectedNodeId === node.id;
         const matched = matchedNodeIds.has(node.id);
         const dimmed = isSearching && !matched;
-        const canDrill = Boolean(node.childrenLevelId && node.childrenLevelId !== level.id);
+        const canDrill = canDrillIntoNode(node, level.id);
         const progress = isCenter ? projectProgress : undefined;
         const isLinkSource = linkingFromId === node.id;
         const canCompleteLink = linkingFromId && linkingFromId !== node.id;
@@ -428,6 +473,8 @@ export function ProjectScene({
         return (
           <button
             key={node.id}
+            data-node-id={node.id}
+            data-node-type={isCenter ? "central" : node.type}
             className={clsx(
               "map-node",
               `node-${isCenter ? "central" : node.type}`,
@@ -448,18 +495,10 @@ export function ProjectScene({
             onPointerDown={(event) => handleNodePointerDown(event, node)}
             onPointerMove={(event) => handleNodePointerMove(event, node)}
             onPointerUp={(event) => handleNodePointerUp(event, node)}
+            onClick={(event) => handleNodeClick(event, node)}
+            onDoubleClick={(event) => handleNodeDoubleClick(event, node)}
             onMouseEnter={() => setHoveredNodeId(node.id)}
             onMouseLeave={() => setHoveredNodeId((current) => (current === node.id ? null : current))}
-            onDoubleClick={(event) => {
-              event.stopPropagation();
-              if (node.type === "document" && node.document) {
-                onOpenDocument(node.document);
-                return;
-              }
-              if (canDrill) {
-                onOpenNodeLevel(node);
-              }
-            }}
             title={canDrill ? "Двойной клик: провалиться внутрь" : tone.label}
           >
             <span className="node-orb">
@@ -586,9 +625,11 @@ function buildInitialPositions(nodes: ProjectNode[], levelId: string, centralNod
   documentNodes.forEach((node, index) => {
     const angle = index * ((Math.PI * 2) / Math.max(documentNodes.length, 1)) + Math.PI / 6;
     const jitter = seededJitter(node.id);
+    const x = Math.cos(angle) * (radiusX + (wide ? 7.2 : 5.2)) + jitter.x * 1.6;
+    const y = Math.sin(angle) * (radiusY + (wide ? 4.2 : 3.4)) + jitter.y * 1.4;
     positions[node.id] = {
-      x: Math.cos(angle) * (radiusX + (wide ? 7.2 : 5.2)) + jitter.x * 1.6,
-      y: Math.sin(angle) * (radiusY + (wide ? 4.2 : 3.4)) + jitter.y * 1.4,
+      x: clamp(x, wide ? -24 : -18, wide ? 24 : 18),
+      y: clamp(y, wide ? -7.2 : -6.8, wide ? 14.2 : 11.4),
     };
   });
 
@@ -679,14 +720,26 @@ function findDocumentDropTarget(documentNode: ProjectNode, nodes: ProjectNode[],
       return;
     }
 
-    const distance = Math.hypot(documentPosition.x - position.x, documentPosition.y - position.y);
-    const hitRadiusPx = Math.max(26, getNodeRadius(node, centralNodeId) - 14);
-    if (distance * scale <= hitRadiusPx && (!best || distance < best.distance)) {
-      best = { node, distance };
+    const distancePx = Math.hypot(documentPosition.x - position.x, documentPosition.y - position.y) * scale;
+    const hitRadiusPx = getNodeAbsorbRadius(node, centralNodeId);
+    if (distancePx <= hitRadiusPx && (!best || distancePx < best.distance)) {
+      best = { node, distance: distancePx };
     }
   });
 
   return best?.node;
+}
+
+function canDrillIntoNode(node: ProjectNode, currentLevelId: string) {
+  return node.type !== "document" && node.type !== "central" && node.childrenLevelId !== currentLevelId;
+}
+
+function getNodeAbsorbRadius(node: ProjectNode, centralNodeId: string) {
+  if (node.type === "central") return 0;
+  if (node.id === centralNodeId) return 62;
+  if (node.type === "section" || node.type === "ird") return 50;
+  if (node.type === "subsection" || node.type === "package") return 44;
+  return Math.max(34, getNodeRadius(node, centralNodeId) - 12);
 }
 
 function isPointerInsideElement(clientX: number, clientY: number, element: HTMLElement | null) {
