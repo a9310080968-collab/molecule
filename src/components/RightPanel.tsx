@@ -58,6 +58,7 @@ type RightPanelProps = {
 };
 
 const processStatuses: ProcessStatus[] = ["draft", "sent", "in_work", "rejected", "accepted"];
+const documentStatuses: NodeStatus[] = ["draft", "review", "approved", "comments", "unchecked"];
 
 export function RightPanel({
   project,
@@ -85,6 +86,7 @@ export function RightPanel({
           onProcessUpdate={onProcessUpdate}
           onDeleteProcess={onDeleteProcess}
           onOpenDocument={onOpenDocument}
+          onUpdateDocumentStatus={onUpdateDocumentStatus}
           onRejectProcessDocument={onRejectProcessDocument}
           onAttachInboxDocument={onAttachInboxDocument}
           onOpenProcessBuilder={onOpenProcessBuilder}
@@ -135,6 +137,7 @@ function NodeInfo({
         node={node}
         onOpenDocument={onOpenDocument}
         onMoveDocumentNode={onMoveDocumentNode}
+        onUpdateDocumentStatus={onUpdateDocumentStatus}
       />
     );
   }
@@ -217,12 +220,14 @@ function DocumentNodeInfo({
   node,
   onOpenDocument,
   onMoveDocumentNode,
+  onUpdateDocumentStatus,
 }: {
   project: DemoProject;
   level: MapLevel;
   node: ProjectNode;
   onOpenDocument: (document: ProcessDocument) => void;
   onMoveDocumentNode: (documentNodeId: string, targetNodeId: string | null) => void;
+  onUpdateDocumentStatus: (documentId: string, status: NodeStatus) => void;
 }) {
   const document = getDocumentFromNode(node);
   const color = getFileTypeColor(document.fileType);
@@ -233,6 +238,8 @@ function DocumentNodeInfo({
   return (
     <>
       <PanelHeader eyebrow={getFileLabel(document.fileType)} title={document.title} status={getStatusText(document.status)} statusColor={color} />
+
+      <DocumentStatusControl document={document} onChange={(status) => onUpdateDocumentStatus(document.id, status)} />
 
       <div className="info-grid">
         <Metric icon={<FileText size={16} />} label="Тип файла" value={getFileLabel(document.fileType)} />
@@ -285,6 +292,7 @@ function ProcessInfo({
   onProcessUpdate,
   onDeleteProcess,
   onOpenDocument,
+  onUpdateDocumentStatus,
   onRejectProcessDocument,
   onAttachInboxDocument,
   onOpenProcessBuilder,
@@ -294,6 +302,7 @@ function ProcessInfo({
   onProcessUpdate: (processId: string, edit: ProcessEdit) => void;
   onDeleteProcess: (processId: string) => void;
   onOpenDocument: (document: ProcessDocument) => void;
+  onUpdateDocumentStatus: (documentId: string, status: NodeStatus) => void;
   onRejectProcessDocument: (processId: string, documentId: string) => void;
   onAttachInboxDocument: (processId: string, documentId: string) => void;
   onOpenProcessBuilder: (processId: string) => void;
@@ -380,6 +389,7 @@ function ProcessInfo({
         documents={process.documents}
         onOpenDocument={onOpenDocument}
         onRejectDocument={(documentId) => onRejectProcessDocument(process.id, documentId)}
+        onUpdateDocumentStatus={onUpdateDocumentStatus}
       />
 
       <div className="panel-note">
@@ -484,7 +494,21 @@ function DocumentList({
       <h3>{title}</h3>
       {documents.map((document) => (
         <article key={document.id} className={clsx("document-row", (onRejectDocument || onUpdateDocumentStatus) && "with-action")}>
-          <button onClick={() => onOpenDocument(document)}>
+          <DocumentStatusControl
+            document={document}
+            onChange={
+              onUpdateDocumentStatus
+                ? (status) => {
+                    if (status === "comments" && onRejectDocument) {
+                      onRejectDocument(document.id);
+                      return;
+                    }
+                    onUpdateDocumentStatus(document.id, status);
+                  }
+                : undefined
+            }
+          />
+          <button className="document-file-button" onClick={() => onOpenDocument(document)}>
             <span style={{ color: getFileTypeColor(document.fileType) }}>
               <FileText size={17} />
             </span>
@@ -494,25 +518,43 @@ function DocumentList({
             </div>
             <em>{document.version}</em>
           </button>
-          {onUpdateDocumentStatus ? (
-            <div className="document-status-actions">
-              <button onClick={() => onUpdateDocumentStatus(document.id, "review")}>В работу</button>
-              <button onClick={() => onUpdateDocumentStatus(document.id, "approved")}>Согласовать</button>
-              <button
-                className="danger"
-                onClick={() => (onRejectDocument ? onRejectDocument(document.id) : onUpdateDocumentStatus(document.id, "comments"))}
-              >
-                Не принято
-              </button>
-            </div>
-          ) : onRejectDocument ? (
-            <button className="document-reject-button" onClick={() => onRejectDocument(document.id)}>
-              Не принято
-            </button>
-          ) : null}
         </article>
       ))}
     </section>
+  );
+}
+
+function DocumentStatusControl({
+  document,
+  onChange,
+}: {
+  document: ProcessDocument;
+  onChange?: (status: NodeStatus) => void;
+}) {
+  const color = getDocumentStatusColor(document.status);
+
+  return (
+    <label
+      className={clsx("document-status-control", !onChange && "readonly")}
+      style={{ "--document-status-color": color } as React.CSSProperties}
+    >
+      <span>
+        <i />
+        Статус ГИП/админ
+      </span>
+      <select
+        value={document.status}
+        disabled={!onChange}
+        onClick={(event) => event.stopPropagation()}
+        onChange={(event) => onChange?.(event.currentTarget.value as NodeStatus)}
+      >
+        {documentStatuses.map((status) => (
+          <option key={status} value={status}>
+            {getDocumentStatusLabel(status)}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -539,6 +581,22 @@ function PanelHeader({
       <h2>{title}</h2>
     </header>
   );
+}
+
+function getDocumentStatusLabel(status: NodeStatus) {
+  if (status === "approved") return "Согласовано";
+  if (status === "review") return "На проверке";
+  if (status === "comments") return "Не принято";
+  if (status === "unchecked") return "Не проверено";
+  return "Черновик";
+}
+
+function getDocumentStatusColor(status: NodeStatus) {
+  if (status === "approved") return "#2ed8a3";
+  if (status === "review") return "#ffe26d";
+  if (status === "comments") return "#ff7a8a";
+  if (status === "unchecked") return "#9aa5bd";
+  return "#35d9ff";
 }
 
 function Metric({ icon, label, value, wide }: { icon: React.ReactNode; label: string; value: string; wide?: boolean }) {

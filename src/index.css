@@ -397,6 +397,63 @@ button {
   font-weight: 820;
 }
 
+.constructor-hint {
+  position: absolute;
+  z-index: 23;
+  top: 166px;
+  left: calc(var(--left-width) + 42px);
+  display: grid;
+  gap: 11px;
+  width: min(390px, calc(100vw - var(--left-width) - var(--right-width) - 92px));
+  padding: 14px;
+  border-radius: 16px;
+  animation: panel-in 220ms ease both;
+}
+
+.constructor-hint header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.constructor-hint span {
+  display: block;
+  color: #ffe2a4;
+  font-size: var(--fs-11);
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.constructor-hint strong {
+  display: block;
+  margin-top: 5px;
+  color: #fff;
+  font-size: var(--fs-16);
+}
+
+.constructor-hint header button {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(171, 205, 255, 0.12);
+  border-radius: 9px;
+  background: rgba(145, 166, 207, 0.08);
+  color: rgba(231, 240, 255, 0.76);
+  cursor: pointer;
+  font-size: var(--fs-18);
+  line-height: 1;
+}
+
+.constructor-hint ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+  color: rgba(223, 235, 255, 0.76);
+  font-size: var(--fs-12);
+  line-height: 1.42;
+}
+
 .topbar {
   position: absolute;
   z-index: 26;
@@ -752,6 +809,55 @@ button {
   left: calc(var(--left-width) + 42px);
   display: grid;
   place-items: center;
+}
+
+.node-context-menu {
+  position: fixed;
+  z-index: 80;
+  display: grid;
+  gap: 5px;
+  width: 216px;
+  max-width: calc(100vw - 24px);
+  padding: 8px;
+  border-radius: 14px;
+  transform: translate(8px, 8px);
+  pointer-events: auto;
+}
+
+.node-context-menu strong {
+  overflow: hidden;
+  color: #fff;
+  font-size: var(--fs-12);
+  font-weight: 820;
+  padding: 5px 7px 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-context-menu button {
+  min-height: 34px;
+  border: 1px solid rgba(171, 205, 255, 0.1);
+  border-radius: 9px;
+  background: rgba(145, 166, 207, 0.08);
+  color: rgba(231, 240, 255, 0.86);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--fs-12);
+  font-weight: 760;
+  text-align: left;
+  padding: 0 10px;
+}
+
+.node-context-menu button:hover {
+  border-color: rgba(115, 226, 255, 0.22);
+  background: rgba(53, 217, 255, 0.11);
+  color: #fff;
+}
+
+.node-context-menu button.danger {
+  border-color: rgba(255, 101, 122, 0.28);
+  background: rgba(255, 101, 122, 0.1);
+  color: #ffcbd3;
 }
 
 .document-exit-zone {
@@ -2998,7 +3104,7 @@ button {
   align-items: stretch;
 }
 
-.document-row > button:first-child {
+.document-file-button {
   display: grid;
   grid-template-columns: 28px 1fr auto;
   gap: 9px;
@@ -3012,8 +3118,58 @@ button {
   text-align: left;
 }
 
-.document-row > button:first-child:hover {
+.document-file-button:hover {
   background: rgba(152, 174, 215, 0.13);
+}
+
+.document-status-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(132px, auto);
+  gap: 8px;
+  align-items: center;
+  min-height: 36px;
+  border: 1px solid color-mix(in srgb, var(--document-status-color) 36%, transparent);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--document-status-color) 10%, rgba(7, 14, 28, 0.72));
+  padding: 6px 8px;
+}
+
+.document-status-control > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: rgba(231, 240, 255, 0.78);
+  font-size: var(--fs-11);
+  font-weight: 780;
+  text-transform: uppercase;
+}
+
+.document-status-control i {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--document-status-color);
+  box-shadow: 0 0 12px var(--document-status-color);
+}
+
+.document-status-control select {
+  min-height: 26px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(4, 10, 22, 0.68);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--fs-12);
+  font-weight: 760;
+  outline: 0;
+  padding: 0 8px;
+}
+
+.document-status-control.readonly select {
+  cursor: default;
+  opacity: 0.72;
 }
 
 .document-reject-button {
@@ -3061,7 +3217,7 @@ button {
   color: #ffcbd3;
 }
 
-.document-row span {
+.document-file-button > span {
   display: grid;
   place-items: center;
   width: 28px;
@@ -3070,7 +3226,7 @@ button {
   background: currentColor;
 }
 
-.document-row span svg {
+.document-file-button > span svg {
   color: #061224;
 }
 
@@ -4857,6 +5013,12 @@ button {
   justify-content: flex-start;
 }
 
+.integration-demo-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
 .integration-card button {
   display: inline-flex;
   align-items: center;
@@ -5261,7 +5423,8 @@ button {
     left: 18px;
   }
 
-  .mvp-guide {
+  .mvp-guide,
+  .constructor-hint {
     top: 146px;
     right: 18px;
     left: 18px;

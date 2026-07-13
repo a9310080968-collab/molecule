@@ -8,6 +8,7 @@ type PersonalIntegrationsModalProps = {
   onClose: () => void;
   onSaveIntegrations: (participantId: string, integrations: UserIntegration[]) => void;
   onImportDemo: (provider: IntegrationProvider, participantId: string) => void;
+  onImportTestFile: (provider: IntegrationProvider, participantId: string, mode: "tagged" | "untagged") => void;
   onImportFiles: (provider: IntegrationProvider, participantId: string, files: File[]) => void;
 };
 
@@ -44,6 +45,7 @@ export function PersonalIntegrationsModal({
   onClose,
   onSaveIntegrations,
   onImportDemo,
+  onImportTestFile,
   onImportFiles,
 }: PersonalIntegrationsModalProps) {
   const telegramInputRef = useRef<HTMLInputElement | null>(null);
@@ -182,6 +184,10 @@ export function PersonalIntegrationsModal({
                         Сканировать демо
                       </button>
                     </footer>
+                    <div className="integration-demo-actions">
+                      <button onClick={() => onImportTestFile(provider, user.id, "tagged")}>Прислать с тегом</button>
+                      <button className="ghost-action" onClick={() => onImportTestFile(provider, user.id, "untagged")}>Прислать без тега</button>
+                    </div>
                     {integration.lastSyncAt ? <small>Последняя проверка: {integration.lastSyncAt}</small> : null}
                   </article>
                 );
@@ -220,6 +226,10 @@ export function PersonalIntegrationsModal({
                         Сканировать демо
                       </button>
                     </footer>
+                    <div className="integration-demo-actions">
+                      <button onClick={() => onImportTestFile(provider, user.id, "tagged")}>Прислать с тегом</button>
+                      <button className="ghost-action" onClick={() => onImportTestFile(provider, user.id, "untagged")}>Прислать без тега</button>
+                    </div>
                     <input
                       ref={inputRef}
                       className="hidden-file-input"

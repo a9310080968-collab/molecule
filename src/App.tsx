@@ -142,6 +142,7 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [fontScale, setFontScale] = useState(persistedState?.fontScale ?? 1);
   const [guideDismissed, setGuideDismissed] = useState(Boolean(persistedState?.guideDismissed));
+  const [constructorHintDismissed, setConstructorHintDismissed] = useState(false);
   const [isDropActive, setIsDropActive] = useState(false);
   const [levelTransition, setLevelTransition] = useState<LevelTransition | null>(null);
   const [undoStack, setUndoStack] = useState<HistorySnapshot[]>([]);
@@ -161,6 +162,12 @@ export default function App() {
   const isSearching = query.trim().length > 0;
   const hasNoResults = isSearching && matches.nodeIds.size + matches.processIds.size === 0;
   const fontVars = useMemo(() => buildFontVars(fontScale), [fontScale]);
+  const showConstructorHint =
+    activeMenu === "map" &&
+    guideDismissed &&
+    !constructorHintDismissed &&
+    activeProject.processes.length === 0 &&
+    levelNodes.filter((node) => node.type !== "central" && node.type !== "document").length <= 4;
 
   useEffect(() => {
     const state: PersistedAppState = {
@@ -311,6 +318,7 @@ export default function App() {
     setProcessDetailId(null);
     setQuery("");
     setActiveMenu("map");
+    setConstructorHintDismissed(false);
     setProjectManagerOpen(false);
     showToast(`Проект «${project.title}» создан из шаблона «${template.title}».`);
   }
@@ -614,6 +622,20 @@ export default function App() {
     const documents = getDemoIntegrationFiles(provider).map((name) => createDocumentFromName(name, provider));
     markIntegrationSynced(participantId, provider);
     ingestIncomingDocuments(documents, provider, participantId);
+  }
+
+  function importIntegrationTestFile(provider: IntegrationProvider, participantId: string, mode: "tagged" | "untagged") {
+    const tag = mode === "tagged" ? getRandomProjectTag(activeProject) : undefined;
+    const fileName = tag ? `Входящий_${tag}.pdf` : "Входящий файл без тега.pdf";
+    const document = {
+      ...createDocumentFromName(fileName, provider, undefined, undefined, "application/pdf", getRandomFileSize()),
+      previewText: tag
+        ? `Демо-файл из ${getIntegrationProviderLabel(provider)}. Тег ${tag} найден, документ должен попасть в соответствующую ноду.`
+        : `Демо-файл из ${getIntegrationProviderLabel(provider)} без тега. Документ должен попасть во входящие бесхозные файлы.`,
+    };
+
+    markIntegrationSynced(participantId, provider);
+    ingestIncomingDocuments([document], provider, participantId);
   }
 
   async function importIntegrationFiles(provider: IntegrationProvider, participantId: string, files: File[]) {
@@ -1117,6 +1139,7 @@ export default function App() {
           onClose={() => setGuideDismissed(true)}
         />
       ) : null}
+      {showConstructorHint ? <ConstructorHint onClose={() => setConstructorHintDismissed(true)} /> : null}
       <Sidebar
         isOpen={mobileMenuOpen}
         activeMenu={activeMenu}
@@ -1159,6 +1182,8 @@ export default function App() {
         onCompleteLink={completeLink}
         onOpenDocument={setModalDocument}
         onMoveDocumentNode={moveDocumentNode}
+        onAddRandomFile={addRandomFile}
+        onUpdateDocumentStatus={updateDocumentStatus}
         sceneRef={sceneRef}
       />
       <OrphanFilesPanel
@@ -1240,6 +1265,7 @@ export default function App() {
           onClose={() => setPersonalSettingsOpen(false)}
           onSaveIntegrations={saveParticipantIntegrations}
           onImportDemo={importDemoIntegration}
+          onImportTestFile={importIntegrationTestFile}
           onImportFiles={(provider, participantId, files) => {
             void importIntegrationFiles(provider, participantId, files);
           }}
@@ -1388,6 +1414,25 @@ function getIntegrationProviderLabel(provider: IntegrationProvider) {
   return labels[provider];
 }
 
+function ConstructorHint({ onClose }: { onClose: () => void }) {
+  return (
+    <aside className="constructor-hint glass-panel">
+      <header>
+        <div>
+          <span>Пустой проект</span>
+          <strong>Как начать сборку</strong>
+        </div>
+        <button onClick={onClose} aria-label="Скрыть подсказку">×</button>
+      </header>
+      <ol>
+        <li>Выберите ноду и переименуйте ее в правой панели.</li>
+        <li>Наведите на ноду и нажмите плюс, чтобы создать бизнес-процесс.</li>
+        <li>Двойной клик по ноде открывает ее внутренний уровень.</li>
+      </ol>
+    </aside>
+  );
+}
+
 function extractDocumentTag(title: string) {
   const base = title.replace(/\.[^.]+$/, "");
   const parts = base.split(/[_-]+/).map((part) => part.trim()).filter(Boolean);
@@ -1407,6 +1452,20 @@ function findNodeByTag(project: DemoProject, tag: string) {
     const tokens = [node.shortCode, node.title, ...(node.tags ?? [])].map((value) => normalizeTag(value ?? ""));
     return tokens.some((token) => token === normalizedTag);
   });
+}
+
+function getRandomProjectTag(project: DemoProject) {
+  const tags = Array.from(
+    new Set(
+      project.nodes
+        .filter((node) => node.type !== "document" && node.type !== "central")
+        .flatMap((node) => [node.shortCode, ...(node.tags ?? [])])
+        .map((tag) => tag?.trim())
+        .filter(Boolean) as string[],
+    ),
+  );
+
+  return tags[Math.floor(Math.random() * tags.length)];
 }
 
 function normalizeTag(value: string) {

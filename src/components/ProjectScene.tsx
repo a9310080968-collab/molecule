@@ -19,7 +19,7 @@ import {
   getProcessStatusText,
   getProjectProgress,
 } from "../lib/graph";
-import type { BusinessProcess, DemoProject, MapLevel, ProcessDocument, ProjectNode, Vec2 } from "../types";
+import type { BusinessProcess, DemoProject, MapLevel, NodeStatus, ProcessDocument, ProjectNode, Vec2 } from "../types";
 
 export type SceneHandle = {
   reset: () => void;
@@ -49,6 +49,8 @@ type ProjectSceneProps = {
   onCompleteLink: (nodeId: string) => void;
   onOpenDocument: (document: ProcessDocument) => void;
   onMoveDocumentNode: (documentNodeId: string, targetNodeId: string | null) => void;
+  onAddRandomFile: (targetNodeId?: string) => void;
+  onUpdateDocumentStatus: (documentId: string, status: NodeStatus) => void;
   sceneRef: MutableRefObject<SceneHandle | null>;
 };
 
@@ -72,6 +74,12 @@ type DragUiState = {
   ownerNodeId?: string;
   targetNodeId?: string;
   overExit: boolean;
+};
+
+type NodeContextMenuState = {
+  nodeId: string;
+  x: number;
+  y: number;
 };
 
 const INITIAL_VIEW: ViewState = { zoom: 1, panX: 0, panY: 42 };
@@ -99,6 +107,8 @@ export function ProjectScene({
   onCompleteLink,
   onOpenDocument,
   onMoveDocumentNode,
+  onAddRandomFile,
+  onUpdateDocumentStatus,
   sceneRef,
 }: ProjectSceneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -112,8 +122,10 @@ export function ProjectScene({
   const [positions, setPositions] = useState<Record<string, Vec2>>(() => buildInitialPositions(nodes, level.id, level.centralNodeId));
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [dragUi, setDragUi] = useState<DragUiState | null>(null);
+  const [contextMenu, setContextMenu] = useState<NodeContextMenuState | null>(null);
   const [levelMotion, setLevelMotion] = useState<"down" | "up" | null>(null);
   const nodeMap = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
+  const contextNode = contextMenu ? nodeMap.get(contextMenu.nodeId) : undefined;
   const centerNodeId = level.centralNodeId;
   const projectProgress = getProjectProgress(project, level);
   const scale = getBaseScale(size) * view.zoom;
@@ -231,7 +243,12 @@ export function ProjectScene({
   };
 
   const handleScenePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0 || (event.target as HTMLElement).closest(".map-node, .process-hit, .node-plus, .level-chip, .linking-hint")) {
+    const target = event.target as HTMLElement;
+    if (target.closest(".node-context-menu")) {
+      return;
+    }
+    setContextMenu(null);
+    if (event.button !== 0 || target.closest(".map-node, .process-hit, .node-plus, .level-chip, .linking-hint")) {
       return;
     }
 
@@ -266,6 +283,9 @@ export function ProjectScene({
 
   const handleNodePointerDown = (event: ReactPointerEvent<HTMLButtonElement>, node: ProjectNode) => {
     event.stopPropagation();
+    if (event.button !== 0) {
+      return;
+    }
     if (node.id === centerNodeId || node.type === "central") {
       return;
     }
@@ -406,6 +426,13 @@ export function ProjectScene({
     }
   };
 
+  const handleNodeContextMenu = (event: ReactMouseEvent<HTMLButtonElement>, node: ProjectNode) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onSelectNode(node.id);
+    setContextMenu({ nodeId: node.id, x: event.clientX, y: event.clientY });
+  };
+
   return (
     <main
       ref={containerRef}
@@ -414,6 +441,12 @@ export function ProjectScene({
       onPointerDown={handleScenePointerDown}
       onPointerMove={handleScenePointerMove}
       onPointerUp={handleScenePointerUp}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        if (!(event.target as HTMLElement).closest(".map-node, .node-context-menu")) {
+          setContextMenu(null);
+        }
+      }}
     >
       <div className="level-chip glass-panel">
         <div>
@@ -523,6 +556,7 @@ export function ProjectScene({
             onPointerUp={(event) => handleNodePointerUp(event, node)}
             onClick={(event) => handleNodeClick(event, node)}
             onDoubleClick={(event) => handleNodeDoubleClick(event, node)}
+            onContextMenu={(event) => handleNodeContextMenu(event, node)}
             onMouseEnter={() => setHoveredNodeId(node.id)}
             onMouseLeave={() => setHoveredNodeId((current) => (current === node.id ? null : current))}
             title={canDrill ? "Двойной клик: провалиться внутрь" : tone.label}
@@ -554,6 +588,102 @@ export function ProjectScene({
           </button>
         );
       })}
+      {contextMenu && contextNode ? (
+        <div
+          className="node-context-menu glass-panel"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <strong>{contextNode.shortCode ?? contextNode.title}</strong>
+          <button
+            onClick={() => {
+              onSelectNode(contextNode.id);
+              setContextMenu(null);
+            }}
+          >
+            Выбрать
+          </button>
+          {contextNode.type === "document" && contextNode.document ? (
+            <>
+              <button
+                onClick={() => {
+                  onOpenDocument(contextNode.document!);
+                  setContextMenu(null);
+                }}
+              >
+                Открыть документ
+              </button>
+              <button
+                onClick={() => {
+                  onUpdateDocumentStatus(contextNode.document!.id, "review");
+                  setContextMenu(null);
+                }}
+              >
+                На проверке
+              </button>
+              <button
+                onClick={() => {
+                  onUpdateDocumentStatus(contextNode.document!.id, "approved");
+                  setContextMenu(null);
+                }}
+              >
+                Согласовано
+              </button>
+              <button
+                className="danger"
+                onClick={() => {
+                  onUpdateDocumentStatus(contextNode.document!.id, "comments");
+                  setContextMenu(null);
+                }}
+              >
+                Не принято
+              </button>
+              {contextNode.documentOwnerNodeId ? (
+                <button
+                  onClick={() => {
+                    onMoveDocumentNode(contextNode.id, null);
+                    setContextMenu(null);
+                  }}
+                >
+                  Вынести из ноды
+                </button>
+              ) : null}
+            </>
+          ) : null}
+          {contextNode.type !== "central" && contextNode.type !== "document" ? (
+            <>
+              {canDrillIntoNode(contextNode, level) ? (
+                <button
+                  onClick={() => {
+                    onOpenNodeLevel(contextNode);
+                    setContextMenu(null);
+                  }}
+                >
+                  Открыть уровень ноды
+                </button>
+              ) : null}
+              <button
+                onClick={() => {
+                  onStartLink(contextNode.id);
+                  setContextMenu(null);
+                }}
+              >
+                Создать бизнес-процесс
+              </button>
+              <button
+                onClick={() => {
+                  onAddRandomFile(contextNode.id);
+                  setContextMenu(null);
+                }}
+              >
+                Положить тестовый файл
+              </button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
     </main>
   );
 }
