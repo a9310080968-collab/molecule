@@ -1,11 +1,12 @@
 import clsx from "clsx";
 import { FilePlus2, FileText, LocateFixed, Maximize2 } from "lucide-react";
+import { useState } from "react";
 import { getDocumentFromNode, getFileLabel, getFileTypeColor, getOrphanDocumentNodes } from "../lib/graph";
 import type { DemoProject, ProcessDocument } from "../types";
 
 type OrphanFilesPanelProps = {
   project: DemoProject;
-  onAddRandomFile: () => void;
+  onAddRandomFile: (tag?: string) => void;
   onFocusDocumentNode: (nodeId: string) => void;
   onOpenDocument: (document: ProcessDocument) => void;
 };
@@ -16,7 +17,12 @@ export function OrphanFilesPanel({
   onFocusDocumentNode,
   onOpenDocument,
 }: OrphanFilesPanelProps) {
+  const [tag, setTag] = useState("");
   const files = getOrphanDocumentNodes(project);
+
+  function addFile() {
+    onAddRandomFile(tag.trim() || undefined);
+  }
 
   return (
     <aside className="orphan-files-panel glass-panel">
@@ -25,10 +31,18 @@ export function OrphanFilesPanel({
           <span>Неразобранные</span>
           <strong>Бесхозные файлы</strong>
         </div>
-        <button onClick={onAddRandomFile}>
-          <FilePlus2 size={16} />
-          Добавить случайный файл
-        </button>
+        <div className="orphan-add-control">
+          <input
+            value={tag}
+            onChange={(event) => setTag(event.currentTarget.value)}
+            placeholder="Тег, например АР"
+            aria-label="Тег для случайного файла"
+          />
+          <button onClick={addFile}>
+            <FilePlus2 size={16} />
+            Добавить файл
+          </button>
+        </div>
       </header>
 
       {files.length ? (

@@ -8,7 +8,7 @@ type PersonalIntegrationsModalProps = {
   onClose: () => void;
   onSaveIntegrations: (participantId: string, integrations: UserIntegration[]) => void;
   onImportDemo: (provider: IntegrationProvider, participantId: string) => void;
-  onImportTestFile: (provider: IntegrationProvider, participantId: string, mode: "tagged" | "untagged") => void;
+  onImportTestFile: (provider: IntegrationProvider, participantId: string, mode: "tagged" | "untagged", tag?: string) => void;
   onImportFiles: (provider: IntegrationProvider, participantId: string, files: File[]) => void;
 };
 
@@ -54,6 +54,7 @@ export function PersonalIntegrationsModal({
   const [accounts, setAccounts] = useState<Record<string, string>>(() =>
     Object.fromEntries(normalizeIntegrations(user.integrations).map((integration) => [integration.provider, integration.account ?? user.email])),
   );
+  const [testTags, setTestTags] = useState<Record<string, string>>({});
   const isPrivileged = user.role === "admin" || user.role === "gip";
 
   const connectedCount = useMemo(() => integrations.filter((integration) => integration.status === "connected").length, [integrations]);
@@ -184,10 +185,12 @@ export function PersonalIntegrationsModal({
                         Сканировать демо
                       </button>
                     </footer>
-                    <div className="integration-demo-actions">
-                      <button onClick={() => onImportTestFile(provider, user.id, "tagged")}>Прислать с тегом</button>
-                      <button className="ghost-action" onClick={() => onImportTestFile(provider, user.id, "untagged")}>Прислать без тега</button>
-                    </div>
+                    <IntegrationTestActions
+                      provider={provider}
+                      tag={testTags[provider] ?? ""}
+                      onTagChange={(value) => setTestTags((current) => ({ ...current, [provider]: value }))}
+                      onImportTestFile={(mode) => onImportTestFile(provider, user.id, mode, testTags[provider])}
+                    />
                     {integration.lastSyncAt ? <small>Последняя проверка: {integration.lastSyncAt}</small> : null}
                   </article>
                 );
@@ -226,10 +229,12 @@ export function PersonalIntegrationsModal({
                         Сканировать демо
                       </button>
                     </footer>
-                    <div className="integration-demo-actions">
-                      <button onClick={() => onImportTestFile(provider, user.id, "tagged")}>Прислать с тегом</button>
-                      <button className="ghost-action" onClick={() => onImportTestFile(provider, user.id, "untagged")}>Прислать без тега</button>
-                    </div>
+                    <IntegrationTestActions
+                      provider={provider}
+                      tag={testTags[provider] ?? ""}
+                      onTagChange={(value) => setTestTags((current) => ({ ...current, [provider]: value }))}
+                      onImportTestFile={(mode) => onImportTestFile(provider, user.id, mode, testTags[provider])}
+                    />
                     <input
                       ref={inputRef}
                       className="hidden-file-input"
@@ -262,6 +267,34 @@ function createDefaultIntegration(provider: IntegrationProvider): UserIntegratio
     label: providerLabels[provider],
     status: provider === "telegram" || provider === "folder" ? "needs_permission" : "not_connected",
   };
+}
+
+function IntegrationTestActions({
+  provider,
+  tag,
+  onTagChange,
+  onImportTestFile,
+}: {
+  provider: IntegrationProvider;
+  tag: string;
+  onTagChange: (value: string) => void;
+  onImportTestFile: (mode: "tagged" | "untagged") => void;
+}) {
+  return (
+    <div className="integration-demo-actions">
+      <label className="integration-tag-control">
+        <span>Тег в имени файла</span>
+        <input
+          value={tag}
+          onChange={(event) => onTagChange(event.currentTarget.value)}
+          placeholder="АР / КР / ПЗ"
+          aria-label={`Тег тестового файла ${providerLabels[provider]}`}
+        />
+      </label>
+      <button onClick={() => onImportTestFile("tagged")}>Прислать с тегом</button>
+      <button className="ghost-action" onClick={() => onImportTestFile("untagged")}>Прислать без тега</button>
+    </div>
+  );
 }
 
 function getStatusLabel(status: UserIntegration["status"]) {

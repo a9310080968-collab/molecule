@@ -1440,6 +1440,26 @@ button {
   font-size: var(--fs-12);
 }
 
+.orphan-add-control {
+  display: grid;
+  grid-template-columns: minmax(96px, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+  min-width: 0;
+}
+
+.orphan-add-control input {
+  min-width: 0;
+  height: 32px;
+  border: 1px solid rgba(171, 205, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(4, 10, 22, 0.68);
+  color: #fff;
+  font-size: var(--fs-12);
+  outline: 0;
+  padding: 0 9px;
+}
+
 .orphan-files-list {
   display: grid;
   gap: 7px;
@@ -5308,8 +5328,34 @@ button {
 
 .integration-demo-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(130px, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: 7px;
+  align-items: end;
+}
+
+.integration-tag-control {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.integration-tag-control span {
+  color: rgba(220, 232, 252, 0.62);
+  font-size: var(--fs-11);
+  font-weight: 760;
+}
+
+.integration-tag-control input {
+  min-width: 0;
+  height: 36px;
+  border: 1px solid rgba(171, 205, 255, 0.14);
+  border-radius: 11px;
+  background: rgba(4, 10, 22, 0.68);
+  color: #fff;
+  font: inherit;
+  font-size: var(--fs-12);
+  outline: 0;
+  padding: 0 10px;
 }
 
 .integration-card button {

@@ -539,10 +539,11 @@ export default function App() {
 
   function createTaggedDocument(title: string, tag: string) {
     const normalizedTitle = title.trim() || "Новый_документ.pdf";
-    const normalizedTag = tag.trim();
+    const normalizedTag = normalizeFileTag(tag);
+    const taggedTitle = appendTagToFileName(normalizedTitle, normalizedTag);
     const targetNode = normalizedTag ? findNodeByTag(activeProject, normalizedTag) : undefined;
     const document: ProcessDocument = {
-      ...createDocumentFromName(normalizedTitle, "manual"),
+      ...createDocumentFromName(taggedTitle, "manual"),
       from: "Тестовый импорт",
       detectedTag: normalizedTag || undefined,
       autoRouted: Boolean(targetNode),
@@ -732,9 +733,9 @@ export default function App() {
     ingestIncomingDocuments(documents, provider, participantId);
   }
 
-  function importIntegrationTestFile(provider: IntegrationProvider, participantId: string, mode: "tagged" | "untagged") {
-    const tag = mode === "tagged" ? getRandomProjectTag(activeProject) : undefined;
-    const fileName = tag ? `Входящий_${tag}.pdf` : "Входящий файл без тега.pdf";
+  function importIntegrationTestFile(provider: IntegrationProvider, participantId: string, mode: "tagged" | "untagged", customTag?: string) {
+    const tag = mode === "tagged" ? normalizeFileTag(customTag) || getRandomProjectTag(activeProject) : undefined;
+    const fileName = tag ? appendTagToFileName("Входящий файл.pdf", tag) : "Входящий файл без тега.pdf";
     const document = {
       ...createDocumentFromName(fileName, provider, undefined, undefined, "application/pdf", getRandomFileSize()),
       previewText: tag
@@ -772,7 +773,7 @@ export default function App() {
     let unassignedCount = 0;
 
     documents.forEach((document) => {
-      const detectedTag = extractDocumentTag(document.title);
+      const detectedTag = detectDocumentTag(nextProject, document.title);
       const targetNode = detectedTag ? findNodeByTag(nextProject, detectedTag) : undefined;
       const incomingDocument: ProcessDocument = {
         ...document,
@@ -1084,8 +1085,8 @@ export default function App() {
     showToast(targetProcess ? "Статус связи изменен событием из мессенджера." : "Сообщение добавлено во входящие.");
   }
 
-  function addRandomFile(targetNodeId?: string) {
-    const document = createDocumentFromName(getRandomFileName(), "manual", undefined, undefined, undefined, getRandomFileSize());
+  function addRandomFile(targetNodeId?: string, customTag?: string) {
+    const document = createDocumentFromName(appendTagToFileName(getRandomFileName(), customTag), "manual", undefined, undefined, undefined, getRandomFileSize());
     const result = addDocumentNodeToProject(activeProject, activeLevel.id, document, targetNodeId);
     const targetLabel = result.targetNode?.shortCode ?? result.targetNode?.title ?? "";
     updateActiveProject(() => result.project);
@@ -1330,7 +1331,7 @@ export default function App() {
       />
       <OrphanFilesPanel
         project={activeProject}
-        onAddRandomFile={() => addRandomFile()}
+        onAddRandomFile={(tag) => addRandomFile(undefined, tag)}
         onFocusDocumentNode={focusDocumentNode}
         onOpenDocument={(document) => setModalDocument(document)}
       />
@@ -1576,7 +1577,7 @@ function ConstructorHint({ onClose }: { onClose: () => void }) {
 
 function extractDocumentTag(title: string) {
   const base = title.replace(/\.[^.]+$/, "");
-  const parts = base.split(/[_-]+/).map((part) => part.trim()).filter(Boolean);
+  const parts = extractTagTokens(base);
   if (parts.length < 2) {
     return undefined;
   }
@@ -1593,6 +1594,23 @@ function findNodeByTag(project: DemoProject, tag: string) {
     const tokens = [node.shortCode, node.title, ...(node.tags ?? [])].map((value) => normalizeTag(value ?? ""));
     return tokens.some((token) => token === normalizedTag);
   });
+}
+
+function detectDocumentTag(project: DemoProject, title: string) {
+  const tokens = extractTagTokens(title);
+  if (tokens.length < 2) {
+    return undefined;
+  }
+
+  const knownTags = new Set(
+    project.nodes
+      .filter((node) => node.type !== "document" && node.type !== "central")
+      .flatMap((node) => [node.shortCode, ...(node.tags ?? [])])
+      .map((tag) => normalizeTag(tag ?? ""))
+      .filter(Boolean),
+  );
+  const knownToken = tokens.find((token) => knownTags.has(normalizeTag(token)));
+  return (knownToken ?? tokens[tokens.length - 1]).toLocaleUpperCase("ru-RU");
 }
 
 function getRandomProjectTag(project: DemoProject) {
@@ -1632,6 +1650,38 @@ function formatNodeLevelTitle(node: ProjectNode) {
 
 function normalizeTag(value: string) {
   return value.toLocaleLowerCase("ru-RU").replace(/ё/g, "е").replace(/\s+/g, "");
+}
+
+function appendTagToFileName(fileName: string, tag?: string) {
+  const normalizedTag = normalizeFileTag(tag);
+  if (!normalizedTag) {
+    return fileName;
+  }
+
+  const tokens = extractTagTokens(fileName);
+  if (tokens.some((token) => normalizeTag(token) === normalizeTag(normalizedTag))) {
+    return fileName;
+  }
+
+  const dotIndex = fileName.lastIndexOf(".");
+  if (dotIndex <= 0) {
+    return `${fileName}_${normalizedTag}`;
+  }
+
+  return `${fileName.slice(0, dotIndex)}_${normalizedTag}${fileName.slice(dotIndex)}`;
+}
+
+function normalizeFileTag(tag?: string) {
+  const firstToken = tag?.trim().split(/[\s_]+/).find(Boolean) ?? "";
+  return firstToken.replace(/[^0-9A-Za-zА-Яа-яЁё]+/g, "").toLocaleUpperCase("ru-RU");
+}
+
+function extractTagTokens(value: string) {
+  return value
+    .replace(/\.[^.]+$/, "")
+    .split(/[\s_]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
 }
 
 function getRandomFileName() {
