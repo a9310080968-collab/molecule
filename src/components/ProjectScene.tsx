@@ -44,6 +44,7 @@ type ProjectSceneProps = {
   onOpenNodeLevel: (node: ProjectNode) => void;
   onBackLevel: () => void;
   onSelectProcess: (processId: string) => void;
+  onOpenProcessDetails: (processId: string) => void;
   onStartLink: (nodeId: string) => void;
   onCompleteLink: (nodeId: string) => void;
   onOpenDocument: (document: ProcessDocument) => void;
@@ -93,6 +94,7 @@ export function ProjectScene({
   onOpenNodeLevel,
   onBackLevel,
   onSelectProcess,
+  onOpenProcessDetails,
   onStartLink,
   onCompleteLink,
   onOpenDocument,
@@ -468,6 +470,7 @@ export function ProjectScene({
             matched={matchedProcessIds.has(process.id)}
             dimmed={isSearching && !matchedProcessIds.has(process.id) && !matchedNodeIds.has(process.from) && !matchedNodeIds.has(process.to)}
             onSelect={() => onSelectProcess(process.id)}
+            onOpenDetails={() => onOpenProcessDetails(process.id)}
           />
         ))}
       </svg>
@@ -566,6 +569,7 @@ function ProcessPath({
   matched,
   dimmed,
   onSelect,
+  onOpenDetails,
 }: {
   process: BusinessProcess;
   from?: Vec2;
@@ -577,6 +581,7 @@ function ProcessPath({
   matched: boolean;
   dimmed: boolean;
   onSelect: () => void;
+  onOpenDetails: () => void;
 }) {
   if (!from || !to || !fromNode || !toNode) {
     return null;
@@ -584,55 +589,59 @@ function ProcessPath({
 
   const radiusFrom = getNodeRadius(fromNode, centralNodeId);
   const radiusTo = getNodeRadius(toNode, centralNodeId);
-  const documents = process.documents;
-  const flows = documents.length ? documents : [undefined];
   const inactive = process.status === "accepted" || process.status === "in_work";
+  const geometry = buildProcessGeometry(from, to, radiusFrom, radiusTo, (process.parallelIndex ?? 0) * 2.2);
+  const color = getProcessStatusColor(process.status);
+  const documentLabel = process.documents.length ? `${process.documents.length} док.` : getProcessStatusText(process.status);
 
   return (
     <g className={clsx("process-group", selected && "selected", matched && "matched", dimmed && "dimmed", inactive && "inactive")}>
-      {flows.map((document, index) => {
-        const flowOffset = (process.parallelIndex ?? 0) * 2.2 + (index - (flows.length - 1) / 2) * 1.08;
-        const geometry = buildProcessGeometry(from, to, radiusFrom, radiusTo, flowOffset);
-        const direction = getDocumentFlowDirection(process, document);
-        const color = getDocumentFlowColor(process, document);
-        const label = document ? getShortDocumentLabel(document) : getProcessStatusText(process.status);
-
-        return (
-          <g key={document?.id ?? `${process.id}-empty`} className={clsx("process-document-flow", document?.status === "comments" && "rejected-doc")}>
-            <path className="process-glow" d={geometry.path} style={{ stroke: color }} />
-            <path
-              className="process-line"
-              d={geometry.path}
-              style={{ stroke: color }}
-              markerEnd={direction === "forward" || direction === "both" ? "url(#arrow-end)" : undefined}
-              markerStart={direction === "backward" || direction === "both" ? "url(#arrow-start)" : undefined}
-            />
-            <path
-              className="process-hit"
-              d={geometry.path}
-              onPointerDown={(event) => {
-                event.stopPropagation();
-                onSelect();
-              }}
-              onClick={onSelect}
-            />
-            <foreignObject x={geometry.label.x - 72} y={geometry.label.y - 13} width="144" height="28">
-              <button
-                className="process-label process-document-label"
-                onPointerDown={(event) => {
-                  event.stopPropagation();
-                  onSelect();
-                }}
-                onClick={onSelect}
-                title={document ? document.title : process.description}
-              >
-                <span style={{ background: color }} />
-                {label}
-              </button>
-            </foreignObject>
-          </g>
-        );
-      })}
+      <path className="process-glow" d={geometry.path} style={{ stroke: color }} />
+      <path
+        className="process-line"
+        d={geometry.path}
+        style={{ stroke: color }}
+        markerEnd={process.direction === "forward" || process.direction === "both" ? "url(#arrow-end)" : undefined}
+        markerStart={process.direction === "backward" || process.direction === "both" ? "url(#arrow-start)" : undefined}
+      />
+      <path
+        className="process-hit"
+        d={geometry.path}
+        onPointerDown={(event) => {
+          event.stopPropagation();
+          onSelect();
+        }}
+        onClick={(event) => {
+          event.stopPropagation();
+          onSelect();
+        }}
+        onDoubleClick={(event) => {
+          event.stopPropagation();
+          onOpenDetails();
+        }}
+      />
+      <foreignObject x={geometry.label.x - 92} y={geometry.label.y - 16} width="184" height="34">
+        <button
+          className="process-label"
+          onPointerDown={(event) => {
+            event.stopPropagation();
+            onSelect();
+          }}
+          onClick={(event) => {
+            event.stopPropagation();
+            onSelect();
+          }}
+          onDoubleClick={(event) => {
+            event.stopPropagation();
+            onOpenDetails();
+          }}
+          title="Двойной клик: открыть бизнес-процесс"
+        >
+          <span style={{ background: color }} />
+          <b>{process.title}</b>
+          <em>{documentLabel}</em>
+        </button>
+      </foreignObject>
     </g>
   );
 }

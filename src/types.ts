@@ -44,6 +44,8 @@ export type ProjectParticipant = {
   visibleNodeIds?: string[];
 };
 
+export type ProjectParticipantSeed = Omit<ProjectParticipant, "id" | "projectId" | "status" | "integrations">;
+
 export type ProcessFieldKey = "documents" | "sender" | "approver" | "deadline" | "comment" | "result";
 
 export type ProcessFieldRequirement = {

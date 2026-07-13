@@ -3,12 +3,9 @@ import {
   CheckCircle2,
   Clock3,
   ExternalLink,
-  FilePlus2,
   FileText,
   GitBranch,
   Inbox,
-  Mail,
-  MessageCircle,
   Plus,
   Send,
   Trash2,
@@ -29,7 +26,6 @@ import {
   getProjectProgress,
   getStatusText,
 } from "../lib/graph";
-import { canOpenNodeLevel, isContainerNode } from "../lib/projectMutations";
 import type {
   BusinessProcess,
   DemoProject,
@@ -49,15 +45,11 @@ type RightPanelProps = {
   onNodeUpdate: (nodeId: string, edit: NodeEdit) => void;
   onProcessUpdate: (processId: string, edit: ProcessEdit) => void;
   onDeleteProcess: (processId: string) => void;
-  onStartLink: (nodeId: string) => void;
-  onOpenNodeLevel: (node: ProjectNode) => void;
+  onSelectProcess: (processId: string) => void;
   onOpenDocument: (document: ProcessDocument) => void;
   onMoveDocumentNode: (documentNodeId: string, targetNodeId: string | null) => void;
-  onAddRandomFile: (targetNodeId?: string) => void;
   onRejectProcessDocument: (processId: string, documentId: string) => void;
   onAttachInboxDocument: (processId: string, documentId: string) => void;
-  onReceiveMail: (processId?: string) => void;
-  onReceiveChat: (processId?: string) => void;
   onOpenProcessBuilder: (processId: string) => void;
 };
 
@@ -71,15 +63,11 @@ export function RightPanel({
   onNodeUpdate,
   onProcessUpdate,
   onDeleteProcess,
-  onStartLink,
-  onOpenNodeLevel,
+  onSelectProcess,
   onOpenDocument,
   onMoveDocumentNode,
-  onAddRandomFile,
   onRejectProcessDocument,
   onAttachInboxDocument,
-  onReceiveMail,
-  onReceiveChat,
   onOpenProcessBuilder,
 }: RightPanelProps) {
   return (
@@ -93,8 +81,6 @@ export function RightPanel({
           onOpenDocument={onOpenDocument}
           onRejectProcessDocument={onRejectProcessDocument}
           onAttachInboxDocument={onAttachInboxDocument}
-          onReceiveMail={onReceiveMail}
-          onReceiveChat={onReceiveChat}
           onOpenProcessBuilder={onOpenProcessBuilder}
         />
       ) : (
@@ -103,13 +89,9 @@ export function RightPanel({
           level={level}
           node={node}
           onNodeUpdate={onNodeUpdate}
-          onStartLink={onStartLink}
-          onOpenNodeLevel={onOpenNodeLevel}
+          onSelectProcess={onSelectProcess}
           onOpenDocument={onOpenDocument}
           onMoveDocumentNode={onMoveDocumentNode}
-          onAddRandomFile={onAddRandomFile}
-          onReceiveMail={onReceiveMail}
-          onReceiveChat={onReceiveChat}
         />
       )}
     </aside>
@@ -121,25 +103,17 @@ function NodeInfo({
   level,
   node,
   onNodeUpdate,
-  onStartLink,
-  onOpenNodeLevel,
+  onSelectProcess,
   onOpenDocument,
   onMoveDocumentNode,
-  onAddRandomFile,
-  onReceiveMail,
-  onReceiveChat,
 }: {
   project: DemoProject;
   level: MapLevel;
   node: ProjectNode;
   onNodeUpdate: (nodeId: string, edit: NodeEdit) => void;
-  onStartLink: (nodeId: string) => void;
-  onOpenNodeLevel: (node: ProjectNode) => void;
+  onSelectProcess: (processId: string) => void;
   onOpenDocument: (document: ProcessDocument) => void;
   onMoveDocumentNode: (documentNodeId: string, targetNodeId: string | null) => void;
-  onAddRandomFile: (targetNodeId?: string) => void;
-  onReceiveMail: (processId?: string) => void;
-  onReceiveChat: (processId?: string) => void;
 }) {
   if (node.type === "document") {
     return (
@@ -158,7 +132,6 @@ function NodeInfo({
   const documents = getNodeDocuments(project, node.id);
   const progress = getProjectProgress(project, level);
   const isLevelCenter = node.id === level.centralNodeId;
-  const canDrill = canOpenNodeLevel(node, level.id);
 
   return (
     <>
@@ -177,33 +150,12 @@ function NodeInfo({
 
       <TagsEditor node={node} onNodeUpdate={onNodeUpdate} />
 
-      <section className="quick-actions">
-        {node.type !== "central" ? (
-          <button onClick={() => onStartLink(node.id)}>
-            <GitBranch size={17} />
-            Связать с нодой
-          </button>
-        ) : null}
-        {canDrill ? (
-          <button onClick={() => onOpenNodeLevel(node)}>
-            <ExternalLink size={17} />
-            Провалиться внутрь
-          </button>
-        ) : null}
-        {isContainerNode(node) || isLevelCenter ? (
-          <button onClick={() => onAddRandomFile(node.id)}>
-            <FilePlus2 size={17} />
-            Добавить документ
-          </button>
-        ) : null}
-        <button onClick={() => onReceiveMail()}>
-          <Mail size={17} />
-          Получить письмо
-        </button>
-        <button onClick={() => onReceiveChat()}>
-          <MessageCircle size={17} />
-          Сообщение в мессенджер
-        </button>
+      <section className="node-constructor-note">
+        <GitBranch size={17} />
+        <div>
+          <b>Создание бизнес-процесса</b>
+          <span>На карте наведите на ноду, нажмите плюс и выберите вторую ноду. После этого откроется конструктор процесса.</span>
+        </div>
       </section>
 
       <div className="info-grid">
@@ -216,15 +168,15 @@ function NodeInfo({
 
       <section className="process-list">
         <h3>Связанные бизнес-процессы</h3>
-        {processes.length ? processes.slice(0, 6).map((process) => (
-          <article key={process.id}>
+        {processes.length ? processes.map((process) => (
+          <button key={process.id} onClick={() => onSelectProcess(process.id)}>
             <i style={{ background: getProcessStatusColor(process.status) }} />
             <div>
               <b>{process.title}</b>
               <span>{getProcessStatusText(process.status)}</span>
             </div>
             <em>{process.documents.length}</em>
-          </article>
+          </button>
         )) : <p>У ноды пока нет ручных контейнеров связей.</p>}
       </section>
 
@@ -309,8 +261,6 @@ function ProcessInfo({
   onOpenDocument,
   onRejectProcessDocument,
   onAttachInboxDocument,
-  onReceiveMail,
-  onReceiveChat,
   onOpenProcessBuilder,
 }: {
   project: DemoProject;
@@ -320,8 +270,6 @@ function ProcessInfo({
   onOpenDocument: (document: ProcessDocument) => void;
   onRejectProcessDocument: (processId: string, documentId: string) => void;
   onAttachInboxDocument: (processId: string, documentId: string) => void;
-  onReceiveMail: (processId?: string) => void;
-  onReceiveChat: (processId?: string) => void;
   onOpenProcessBuilder: (processId: string) => void;
 }) {
   const from = project.nodes.find((node) => node.id === process.from);
@@ -379,27 +327,17 @@ function ProcessInfo({
       </section>
 
       <section className="quick-actions">
-        {process.status === "draft" ? (
-          <button onClick={() => onOpenProcessBuilder(process.id)}>
-            <GitBranch size={17} />
-            Конструктор процесса
-          </button>
-        ) : null}
+        <button onClick={() => onOpenProcessBuilder(process.id)}>
+          <GitBranch size={17} />
+          Настроить бизнес-процесс
+        </button>
         <button onClick={() => onProcessUpdate(process.id, { status: "sent" })}>
           <Send size={17} />
-          Отправить
-        </button>
-        <button onClick={() => onReceiveMail(process.id)}>
-          <Mail size={17} />
-          Получить из почты
-        </button>
-        <button onClick={() => onReceiveChat(process.id)}>
-          <MessageCircle size={17} />
-          Получить из мессенджера
+          Отправить на согласование
         </button>
         <button className="danger" onClick={() => onDeleteProcess(process.id)}>
           <Trash2 size={17} />
-          Удалить
+          Удалить процесс
         </button>
       </section>
 

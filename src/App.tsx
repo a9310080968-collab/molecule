@@ -10,6 +10,7 @@ import { OrphanFilesPanel } from "./components/OrphanFilesPanel";
 import { ProjectChatPanel } from "./components/ProjectChatPanel";
 import { ProjectManagerModal } from "./components/ProjectManagerModal";
 import { ProcessBuilderModal } from "./components/ProcessBuilderModal";
+import { ProcessDetailModal } from "./components/ProcessDetailModal";
 import { PersonalIntegrationsModal } from "./components/PersonalIntegrationsModal";
 import { MvpGuide } from "./components/MvpGuide";
 import { demoProjects, initialNotifications } from "./data/mockProject";
@@ -45,6 +46,7 @@ import type {
   ParticipantEdit,
   ProcessDocument,
   ProcessEdit,
+  ProjectParticipantSeed,
   ProjectNode,
   ProjectTemplate,
   UserIntegration,
@@ -135,6 +137,7 @@ export default function App() {
   const [projectManagerOpen, setProjectManagerOpen] = useState(false);
   const [personalSettingsOpen, setPersonalSettingsOpen] = useState(false);
   const [processBuilderId, setProcessBuilderId] = useState<string | null>(null);
+  const [processDetailId, setProcessDetailId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [fontScale, setFontScale] = useState(persistedState?.fontScale ?? 1);
   const [guideDismissed, setGuideDismissed] = useState(Boolean(persistedState?.guideDismissed));
@@ -151,6 +154,7 @@ export default function App() {
   const selectedNode = getNodeById(activeProject, selectedNodeId) ?? getNodeById(activeProject, activeLevel.centralNodeId) ?? levelNodes[0];
   const selectedProcess = getProcessById(activeProject, selectedProcessId) ?? null;
   const builderProcess = getProcessById(activeProject, processBuilderId) ?? null;
+  const detailProcess = getProcessById(activeProject, processDetailId) ?? null;
   const currentUser = activeProject.participants.find((participant) => participant.name === "Павел Андреев") ?? activeProject.participants.find((participant) => participant.role === "admin") ?? activeProject.participants[0];
   const matches = useMemo(() => getSearchMatches(query, activeProject, activeLevel), [activeLevel, activeProject, query]);
   const isSearching = query.trim().length > 0;
@@ -225,6 +229,7 @@ export default function App() {
     setNotifications(snapshot.notifications);
     setLinkingFromId(null);
     setProcessBuilderId(null);
+    setProcessDetailId(null);
     setLevelTransition(null);
   }
 
@@ -276,20 +281,24 @@ export default function App() {
     setSelectedProcessId(null);
     setLinkingFromId(null);
     setProcessBuilderId(null);
+    setProcessDetailId(null);
     setPersonalSettingsOpen(false);
     setQuery("");
     setLevelTransition(null);
     setActiveMenu("map");
   }
 
-  function createProject(title: string, address: string, templateId: string) {
+  function createProject(title: string, address: string, templateId: string, teamMembers: ProjectParticipantSeed[] = []) {
     const template = projectTemplates.find((item) => item.id === templateId) ?? projectTemplates[0];
     if (!template) {
       return;
     }
 
     recordHistory();
-    const project = createProjectFromTemplate(template, title || `Проект ${projects.length + 1}`, address || "Адрес не указан");
+    const project = applyProjectTeam(
+      createProjectFromTemplate(template, title || `Проект ${projects.length + 1}`, address || "Адрес не указан"),
+      teamMembers,
+    );
     const defaultLevel = getDefaultLevel(project);
     setProjects((current) => [...current, project]);
     setActiveProjectId(project.id);
@@ -298,6 +307,7 @@ export default function App() {
     setSelectedProcessId(null);
     setLinkingFromId(null);
     setProcessBuilderId(null);
+    setProcessDetailId(null);
     setQuery("");
     setActiveMenu("map");
     setProjectManagerOpen(false);
@@ -334,8 +344,13 @@ export default function App() {
     setSelectedProcessId(processId);
     setSelectedNodeId(process.from);
     setActiveMenu("map");
-    setProcessBuilderId(process.status === "draft" ? process.id : null);
+    setProcessBuilderId(null);
     sceneRef.current?.focusNode(process.from);
+  }
+
+  function openProcessDetails(processId: string) {
+    selectProcess(processId);
+    setProcessDetailId(processId);
   }
 
   function openNodeLevel(node: ProjectNode) {
@@ -624,6 +639,7 @@ export default function App() {
     }));
     setSelectedProcessId(null);
     setProcessBuilderId((current) => (current === processId ? null : current));
+    setProcessDetailId((current) => (current === processId ? null : current));
     showToast("Контейнер связи удален.");
   }
 
@@ -1029,6 +1045,7 @@ export default function App() {
         onOpenNodeLevel={openNodeLevel}
         onBackLevel={backLevel}
         onSelectProcess={selectProcess}
+        onOpenProcessDetails={openProcessDetails}
         onStartLink={startLink}
         onCompleteLink={completeLink}
         onOpenDocument={setModalDocument}
@@ -1069,15 +1086,11 @@ export default function App() {
           onNodeUpdate={updateNode}
           onProcessUpdate={updateProcess}
           onDeleteProcess={deleteProcess}
-          onStartLink={startLink}
-          onOpenNodeLevel={openNodeLevel}
+          onSelectProcess={selectProcess}
           onOpenDocument={setModalDocument}
           onMoveDocumentNode={moveDocumentNode}
-          onAddRandomFile={addRandomFile}
           onRejectProcessDocument={rejectProcessDocument}
           onAttachInboxDocument={attachInboxDocument}
-          onReceiveMail={receiveMail}
-          onReceiveChat={receiveChat}
           onOpenProcessBuilder={(processId) => setProcessBuilderId(processId)}
         />
       ) : null}
@@ -1130,6 +1143,18 @@ export default function App() {
           onOpenDocument={setModalDocument}
         />
       ) : null}
+      {detailProcess ? (
+        <ProcessDetailModal
+          project={activeProject}
+          process={detailProcess}
+          onClose={() => setProcessDetailId(null)}
+          onOpenDocument={setModalDocument}
+          onConfigure={(processId) => {
+            setProcessDetailId(null);
+            setProcessBuilderId(processId);
+          }}
+        />
+      ) : null}
       {isDropActive ? (
         <div className="drop-overlay">
           <strong>Отпустите файлы</strong>
@@ -1139,6 +1164,54 @@ export default function App() {
       {toast ? <div className="toast glass-panel">{toast}</div> : null}
     </div>
   );
+}
+
+function applyProjectTeam(project: DemoProject, teamMembers: ProjectParticipantSeed[]) {
+  if (!teamMembers.length) {
+    return project;
+  }
+
+  const fallbackAdmin = project.participants.find((participant) => participant.role === "admin") ?? project.participants[0];
+  const seeds = teamMembers.some((participant) => participant.role === "admin")
+    ? teamMembers
+    : [
+        {
+          name: fallbackAdmin.name,
+          position: fallbackAdmin.position,
+          role: fallbackAdmin.role,
+          email: fallbackAdmin.email,
+          phone: fallbackAdmin.phone,
+          messenger: fallbackAdmin.messenger,
+          otherContacts: fallbackAdmin.otherContacts,
+          visibilityMode: fallbackAdmin.visibilityMode ?? "all",
+          visibleNodeIds: fallbackAdmin.visibleNodeIds ?? [],
+        },
+        ...teamMembers,
+      ];
+  const seen = new Set<string>();
+  const participants = seeds
+    .filter((participant) => {
+      const key = participant.email.toLocaleLowerCase();
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    })
+    .map((participant, index) => ({
+      ...participant,
+      id: `participant-${project.id}-${index}`,
+      projectId: project.id,
+      status: "active" as const,
+      integrations: [],
+      visibilityMode: participant.visibilityMode ?? "all",
+      visibleNodeIds: participant.visibleNodeIds ?? [],
+    }));
+
+  return {
+    ...project,
+    participants,
+  };
 }
 
 function findBestProcessForIncoming(project: DemoProject, levelId: string, marker: string) {
