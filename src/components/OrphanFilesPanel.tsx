@@ -1,31 +1,65 @@
 import clsx from "clsx";
+import { type DragEvent, useState } from "react";
 import { FilePlus2, FileText, LocateFixed, Maximize2 } from "lucide-react";
-import { useState } from "react";
-import { getDocumentFromNode, getFileLabel, getFileTypeColor, getOrphanDocumentNodes } from "../lib/graph";
+import { getFileLabel, getFileTypeColor } from "../lib/graph";
 import type { DemoProject, ProcessDocument } from "../types";
 
 type OrphanFilesPanelProps = {
   project: DemoProject;
   onAddRandomFile: (tag?: string) => void;
-  onFocusDocumentNode: (nodeId: string) => void;
+  onMaterializeInboxDocument: (documentId: string) => void;
+  onMoveDocumentNodeToInbox: (documentNodeId: string) => void;
+  onImportFiles: (files: File[]) => void;
   onOpenDocument: (document: ProcessDocument) => void;
 };
 
 export function OrphanFilesPanel({
   project,
   onAddRandomFile,
-  onFocusDocumentNode,
+  onMaterializeInboxDocument,
+  onMoveDocumentNodeToInbox,
+  onImportFiles,
   onOpenDocument,
 }: OrphanFilesPanelProps) {
   const [tag, setTag] = useState("");
-  const files = getOrphanDocumentNodes(project);
+  const [dropActive, setDropActive] = useState(false);
+  const files = project.inboxDocuments;
 
   function addFile() {
     onAddRandomFile(tag.trim() || undefined);
   }
 
+  function handleDragOver(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "move";
+    setDropActive(true);
+  }
+
+  function handleDrop(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    setDropActive(false);
+
+    const documentNodeId = event.dataTransfer.getData("application/x-molecule-document-node");
+    if (documentNodeId) {
+      onMoveDocumentNodeToInbox(documentNodeId);
+      return;
+    }
+
+    const droppedFiles = Array.from(event.dataTransfer.files ?? []);
+    if (droppedFiles.length) {
+      onImportFiles(droppedFiles);
+    }
+  }
+
   return (
-    <aside className="orphan-files-panel glass-panel">
+    <aside
+      className={clsx("orphan-files-panel glass-panel", dropActive && "drop-active")}
+      onDragOver={handleDragOver}
+      onDragLeave={() => setDropActive(false)}
+      onDrop={handleDrop}
+    >
       <header>
         <div>
           <span>Неразобранные</span>
@@ -47,12 +81,20 @@ export function OrphanFilesPanel({
 
       {files.length ? (
         <div className="orphan-files-list">
-          {files.slice(0, 6).map((node) => {
-            const document = getDocumentFromNode(node);
+          {files.slice(0, 8).map((document) => {
             const color = getFileTypeColor(document.fileType);
             return (
-              <article key={node.id} className={clsx(document.isNew && "incoming-new")}>
-                <button className="orphan-main-action" onClick={() => onFocusDocumentNode(node.id)}>
+              <article key={document.id} className={clsx(document.isNew && "incoming-new")}>
+                <button
+                  className="orphan-main-action"
+                  draggable
+                  onDragStart={(event) => {
+                    event.dataTransfer.setData("application/x-molecule-inbox-document", document.id);
+                    event.dataTransfer.effectAllowed = "move";
+                  }}
+                  onClick={() => onMaterializeInboxDocument(document.id)}
+                  title="Перетащите на рабочую область или нажмите, чтобы вынести файл на карту"
+                >
                   <span style={{ color }}>
                     <FileText size={16} />
                   </span>
@@ -70,7 +112,7 @@ export function OrphanFilesPanel({
           })}
         </div>
       ) : (
-        <p>Нет бесхозных файлов. Новые файлы появятся здесь перед разбором по разделам.</p>
+        <p>Нет бесхозных файлов. Перетащите сюда файл с компьютера или отправьте тестовый файл из интеграций.</p>
       )}
     </aside>
   );

@@ -20,6 +20,7 @@ import {
   createProcessId,
   formatBytes,
   getDefaultLevel,
+  getDocumentFromNode,
   getLevelById,
   getLevelNodes,
   getLevelProcesses,
@@ -383,6 +384,43 @@ export default function App() {
     showToast(`Проект «${project.title}» удален.`);
   }
 
+  function addSectionNode() {
+    const sectionCount = levelNodes.filter((node) => node.type !== "central" && node.type !== "document").length + 1;
+    const shortCode = `Б${sectionCount}`;
+    const node: ProjectNode = {
+      id: `node-section-${Date.now()}-${Math.round(Math.random() * 10000)}`,
+      projectId: activeProject.id,
+      levelId: activeLevel.id,
+      type: "section",
+      title: `Новый блок ${sectionCount}`,
+      shortCode,
+      description: "Новый средний блок проекта. Переименуйте его и задайте теги автопривязки в правой панели.",
+      status: "unchecked",
+      responsible: currentUser?.name,
+      updatedAt: "только что",
+      tags: [shortCode],
+    };
+
+    updateActiveProject((project) => ({
+      ...project,
+      nodes: [node, ...project.nodes],
+      levels: project.levels.map((level) =>
+        level.id === activeLevel.id
+          ? {
+              ...level,
+              nodeIds: appendUnique(level.nodeIds, node.id),
+            }
+          : level,
+      ),
+      updatedAt: "только что",
+    }));
+    setSelectedNodeId(node.id);
+    setSelectedProcessId(null);
+    setActiveMenu("map");
+    window.setTimeout(() => sceneRef.current?.focusNode(node.id), 80);
+    showToast(`Добавлен средний блок «${node.title}».`);
+  }
+
   function createTemplate(title: string, description: string) {
     const template = createTemplateFromProject(
       activeProject,
@@ -541,33 +579,32 @@ export default function App() {
     const normalizedTitle = title.trim() || "Новый_документ.pdf";
     const normalizedTag = normalizeFileTag(tag);
     const taggedTitle = appendTagToFileName(normalizedTitle, normalizedTag);
-    const targetNode = normalizedTag ? findNodeByTag(activeProject, normalizedTag) : undefined;
     const document: ProcessDocument = {
       ...createDocumentFromName(taggedTitle, "manual"),
       from: "Тестовый импорт",
       detectedTag: normalizedTag || undefined,
-      autoRouted: Boolean(targetNode),
       isNew: true,
-      status: targetNode ? "review" : "draft",
       updatedAt: "только что",
     };
-    const result = addDocumentNodeToProject(activeProject, activeLevel.id, document, targetNode?.id);
+    const result = routeDocumentToNodeOrInbox(activeProject, activeLevel.id, document);
 
     updateActiveProject(() => result.project);
-    setActiveLevelId(result.levelId);
-    setSelectedNodeId(result.documentNode.id);
     setSelectedProcessId(null);
     setActiveMenu("map");
-    window.setTimeout(() => sceneRef.current?.focusNode(result.documentNode.id), 80);
+    if (result.documentNode) {
+      setActiveLevelId(result.levelId);
+      setSelectedNodeId(result.documentNode.id);
+      window.setTimeout(() => sceneRef.current?.focusNode(result.documentNode!.id), 80);
+    }
 
     pushNotification({
-      title: targetNode ? "Документ распределен по тегу" : "Документ создан без совпадения тега",
-      description: targetNode
-        ? `Тег «${normalizedTag}» совпал с нодой «${targetNode.shortCode ?? targetNode.title}».`
-        : "Совпадающая нода не найдена, документ остался бесхозным.",
-      targetNodeId: result.documentNode.id,
+      title: result.targetNode ? "Документ распределен по тегу" : "Документ создан без совпадения тега",
+      description: result.targetNode
+        ? `Тег «${normalizedTag}» совпал с нодой «${result.targetNode.shortCode ?? result.targetNode.title}».`
+        : "Совпадающая нода не найдена, документ остался в бесхозных.",
+      targetNodeId: result.documentNode?.id,
     });
-    showToast(targetNode ? `Документ попал в ноду «${targetNode.shortCode ?? targetNode.title}».` : "Документ создан как бесхозная малая нода.");
+    showToast(result.targetNode ? `Документ попал в ноду «${result.targetNode.shortCode ?? result.targetNode.title}».` : "Документ добавлен в бесхозные.");
   }
 
   function createTaskDraft(edit: WorkspaceTaskDraft) {
@@ -765,6 +802,34 @@ export default function App() {
     ingestIncomingDocuments(documents, provider, participantId);
   }
 
+  function routeDocumentToNodeOrInbox(project: DemoProject, levelId: string, document: ProcessDocument) {
+    const detectedTag = detectDocumentTag(project, document.title);
+    const targetNode = detectedTag ? findNodeByTag(project, detectedTag) : undefined;
+    const incomingDocument: ProcessDocument = {
+      ...document,
+      status: targetNode ? "review" : "draft",
+      detectedTag,
+      autoRouted: Boolean(targetNode),
+      isNew: true,
+      updatedAt: "только что",
+    };
+
+    if (targetNode) {
+      return {
+        ...addDocumentNodeToProject(project, levelId, incomingDocument, targetNode.id),
+        routed: true,
+      };
+    }
+
+    return {
+      project: addDocumentToInbox(project, incomingDocument),
+      documentNode: undefined,
+      levelId,
+      targetNode: undefined,
+      routed: false,
+    };
+  }
+
   function ingestIncomingDocuments(documents: ProcessDocument[], provider: IntegrationProvider, participantId: string) {
     const recipient = activeProject.participants.find((participant) => participant.id === participantId);
     let nextProject = activeProject;
@@ -787,10 +852,12 @@ export default function App() {
         autoRouted: Boolean(targetNode),
         isNew: true,
       };
-      const result = addDocumentNodeToProject(nextProject, activeLevel.id, incomingDocument, targetNode?.id);
+      const result = routeDocumentToNodeOrInbox(nextProject, activeLevel.id, incomingDocument);
       nextProject = result.project;
-      importedNodes.push(result.documentNode);
-      if (targetNode) {
+      if (result.documentNode) {
+        importedNodes.push(result.documentNode);
+      }
+      if (result.routed) {
         routedCount += 1;
       } else {
         unassignedCount += 1;
@@ -978,9 +1045,7 @@ export default function App() {
             ? appendUnique(level.nodeIds.filter((id) => id !== rejectedNode.id), rejectedNode.id)
             : level.nodeIds.filter((id) => id !== rejectedNode.id),
       })),
-      inboxDocuments: project.inboxDocuments.some((item) => item.id === rejectedDocument.id)
-        ? project.inboxDocuments.map((item) => (item.id === rejectedDocument.id ? rejectedDocument : item))
-        : [rejectedDocument, ...project.inboxDocuments],
+      inboxDocuments: project.inboxDocuments.filter((item) => item.id !== rejectedDocument.id),
       updatedAt: "только что",
     }));
 
@@ -1087,6 +1152,21 @@ export default function App() {
 
   function addRandomFile(targetNodeId?: string, customTag?: string) {
     const document = createDocumentFromName(appendTagToFileName(getRandomFileName(), customTag), "manual", undefined, undefined, undefined, getRandomFileSize());
+    if (!targetNodeId) {
+      const result = routeDocumentToNodeOrInbox(activeProject, activeLevel.id, document);
+      updateActiveProject(() => result.project);
+      setSelectedProcessId(null);
+      if (result.documentNode) {
+        setActiveLevelId(result.levelId);
+        setSelectedNodeId(result.documentNode.id);
+        window.setTimeout(() => sceneRef.current?.focusNode(result.documentNode!.id), 80);
+        showToast("Файл распределен по тегу и добавлен в нужную ноду.");
+      } else {
+        showToast("Файл добавлен в бесхозные. Перетащите его на рабочую область, когда будете готовы разобрать.");
+      }
+      return;
+    }
+
     const result = addDocumentNodeToProject(activeProject, activeLevel.id, document, targetNodeId);
     const targetLabel = result.targetNode?.shortCode ?? result.targetNode?.title ?? "";
     updateActiveProject(() => result.project);
@@ -1120,18 +1200,38 @@ export default function App() {
     showToast("Файл вынесен из ноды и снова стал бесхозным.");
   }
 
-  function focusDocumentNode(nodeId: string) {
-    const node = getNodeById(activeProject, nodeId);
-    if (!node) {
+  function materializeInboxDocument(documentId: string) {
+    const document = activeProject.inboxDocuments.find((item) => item.id === documentId);
+    if (!document) {
       return;
     }
 
-    setActiveLevelId(node.levelId);
-    setLevelTransition(null);
-    setSelectedNodeId(node.id);
+    const result = addDocumentNodeToProject(activeProject, activeLevel.id, { ...document, isNew: false, updatedAt: "только что" });
+    updateActiveProject(() => result.project);
+    setActiveLevelId(result.levelId);
+    setSelectedNodeId(result.documentNode.id);
     setSelectedProcessId(null);
     setActiveMenu("map");
-    window.setTimeout(() => sceneRef.current?.focusNode(node.id), 80);
+    window.setTimeout(() => sceneRef.current?.focusNode(result.documentNode.id), 80);
+    showToast("Файл вынесен из бесхозных на рабочую область.");
+  }
+
+  function moveDocumentNodeToInbox(documentNodeId: string) {
+    const node = getNodeById(activeProject, documentNodeId);
+    if (!node || node.type !== "document") {
+      return;
+    }
+
+    const document = {
+      ...getDocumentFromNode(node),
+      status: "draft" as const,
+      isNew: true,
+      updatedAt: "только что",
+    };
+    updateActiveProject((project) => addDocumentToInbox(project, document));
+    setSelectedNodeId(activeLevel.centralNodeId);
+    setSelectedProcessId(null);
+    showToast("Файл возвращен в бесхозные и убран с рабочей области.");
   }
 
   function sendProjectChatMessage(text: string) {
@@ -1152,21 +1252,11 @@ export default function App() {
     showToast("Сообщение отправлено в мессенджер проекта.");
   }
 
-  async function handleDrop(event: DragEvent<HTMLDivElement>) {
-    event.preventDefault();
-    setIsDropActive(false);
-
-    const documentNodeId = event.dataTransfer.getData("application/x-molecule-document-node");
-    if (documentNodeId) {
-      moveDocumentNode(documentNodeId, null);
+  async function importFilesToProjectPool(files: File[]) {
+    if (!files.length) {
       return;
     }
 
-    if (!event.dataTransfer.files.length) {
-      return;
-    }
-
-    const files = Array.from(event.dataTransfer.files);
     const documents = await Promise.all(
       files.map(async (file) =>
         createDocumentFromName(
@@ -1181,10 +1271,20 @@ export default function App() {
     );
 
     let nextProject = activeProject;
-    const documentNodes = documents.map((document) => {
-      const result = addDocumentNodeToProject(nextProject, activeLevel.id, document);
+    const documentNodes: ProjectNode[] = [];
+    let routedCount = 0;
+    let inboxCount = 0;
+    documents.forEach((document) => {
+      const result = routeDocumentToNodeOrInbox(nextProject, activeLevel.id, document);
       nextProject = result.project;
-      return result.documentNode;
+      if (result.documentNode) {
+        documentNodes.push(result.documentNode);
+      }
+      if (result.routed) {
+        routedCount += 1;
+      } else {
+        inboxCount += 1;
+      }
     });
 
     updateActiveProject(() => nextProject);
@@ -1192,7 +1292,26 @@ export default function App() {
       setSelectedNodeId(documentNodes[0].id);
       setSelectedProcessId(null);
     }
-    showToast("Файлы добавлены как бесхозные малые ноды. Перетащите их в нужный раздел вручную.");
+    showToast(`Файлы импортированы: ${routedCount} распределено по тегам, ${inboxCount} добавлено в бесхозные.`);
+  }
+
+  async function handleDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setIsDropActive(false);
+
+    const documentNodeId = event.dataTransfer.getData("application/x-molecule-document-node");
+    if (documentNodeId) {
+      moveDocumentNode(documentNodeId, null);
+      return;
+    }
+
+    const inboxDocumentId = event.dataTransfer.getData("application/x-molecule-inbox-document");
+    if (inboxDocumentId) {
+      materializeInboxDocument(inboxDocumentId);
+      return;
+    }
+
+    await importFilesToProjectPool(Array.from(event.dataTransfer.files));
   }
 
   function handleNotificationClick(notification: DemoNotification) {
@@ -1267,7 +1386,8 @@ export default function App() {
       style={fontVars}
       onDragOver={(event) => {
         event.preventDefault();
-        if (!Array.from(event.dataTransfer.types).includes("application/x-molecule-document-node")) {
+        const types = Array.from(event.dataTransfer.types);
+        if (!types.includes("application/x-molecule-document-node") && !types.includes("application/x-molecule-inbox-document")) {
           setIsDropActive(true);
         }
       }}
@@ -1326,13 +1446,18 @@ export default function App() {
         onOpenDocument={setModalDocument}
         onMoveDocumentNode={moveDocumentNode}
         onAddRandomFile={addRandomFile}
+        onAddSectionNode={addSectionNode}
         onUpdateDocumentStatus={updateDocumentStatus}
         sceneRef={sceneRef}
       />
       <OrphanFilesPanel
         project={activeProject}
         onAddRandomFile={(tag) => addRandomFile(undefined, tag)}
-        onFocusDocumentNode={focusDocumentNode}
+        onMaterializeInboxDocument={materializeInboxDocument}
+        onMoveDocumentNodeToInbox={moveDocumentNodeToInbox}
+        onImportFiles={(files) => {
+          void importFilesToProjectPool(files);
+        }}
         onOpenDocument={(document) => setModalDocument(document)}
       />
       <ProjectChatPanel
@@ -1490,6 +1615,28 @@ function applyProjectTeam(project: DemoProject, teamMembers: ProjectParticipantS
   return {
     ...project,
     participants,
+  };
+}
+
+function addDocumentToInbox(project: DemoProject, document: ProcessDocument): DemoProject {
+  const nodeIdsToRemove = new Set(
+    project.nodes
+      .filter((node) => node.type === "document" && node.document?.id === document.id)
+      .map((node) => node.id),
+  );
+
+  return {
+    ...project,
+    nodes: project.nodes.filter((node) => !nodeIdsToRemove.has(node.id)),
+    levels: project.levels.map((level) => ({
+      ...level,
+      nodeIds: level.nodeIds.filter((id) => !nodeIdsToRemove.has(id)),
+    })),
+    inboxDocuments: [
+      document,
+      ...project.inboxDocuments.filter((item) => item.id !== document.id),
+    ],
+    updatedAt: "только что",
   };
 }
 

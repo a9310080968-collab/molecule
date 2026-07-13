@@ -776,7 +776,7 @@ button {
   display: flex;
   align-items: center;
   gap: 14px;
-  max-width: min(520px, calc(100vw - var(--left-width) - var(--right-width) - 92px));
+  max-width: min(680px, calc(100vw - var(--left-width) - var(--right-width) - 92px));
   padding: 12px 14px;
   border-radius: 16px;
   pointer-events: auto;
@@ -818,6 +818,13 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.level-chip-actions {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  flex: 0 0 auto;
 }
 
 .linking-hint {
@@ -1399,6 +1406,11 @@ button {
   bottom: 92px;
   left: calc(var(--left-width) + 42px);
   width: min(330px, calc(100vw - var(--left-width) - var(--right-width) - 90px));
+}
+
+.orphan-files-panel.drop-active {
+  border-color: rgba(53, 217, 255, 0.46);
+  box-shadow: 0 0 0 1px rgba(53, 217, 255, 0.18), 0 0 34px rgba(53, 217, 255, 0.12);
 }
 
 .orphan-files-panel header,

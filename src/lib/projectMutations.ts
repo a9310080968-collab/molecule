@@ -81,7 +81,7 @@ export function addDocumentNodeToProject(
         levels: project.levels.map((level) =>
           level.id === activeLevelId ? { ...level, nodeIds: appendUnique(level.nodeIds, documentNode.id) } : level,
         ),
-        inboxDocuments: [document, ...project.inboxDocuments],
+        inboxDocuments: project.inboxDocuments.filter((item) => item.id !== document.id),
         updatedAt: NOW,
       },
     };
@@ -188,7 +188,7 @@ export function removeDocumentFromNode(project: DemoProject, documentNodeId: str
           : node,
       ),
       levels: moveNodeToLevel(project.levels, documentNodeId, destinationLevelId),
-      inboxDocuments: project.inboxDocuments.some((item) => item.id === document.id) ? project.inboxDocuments : [document, ...project.inboxDocuments],
+      inboxDocuments: project.inboxDocuments.filter((item) => item.id !== document.id),
       updatedAt: NOW,
     },
   };

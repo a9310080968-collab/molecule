@@ -52,6 +52,7 @@ type ProjectSceneProps = {
   onOpenDocument: (document: ProcessDocument) => void;
   onMoveDocumentNode: (documentNodeId: string, targetNodeId: string | null) => void;
   onAddRandomFile: (targetNodeId?: string) => void;
+  onAddSectionNode: () => void;
   onUpdateDocumentStatus: (documentId: string, status: NodeStatus) => void;
   sceneRef: MutableRefObject<SceneHandle | null>;
 };
@@ -110,6 +111,7 @@ export function ProjectScene({
   onOpenDocument,
   onMoveDocumentNode,
   onAddRandomFile,
+  onAddSectionNode,
   onUpdateDocumentStatus,
   sceneRef,
 }: ProjectSceneProps) {
@@ -456,18 +458,30 @@ export function ProjectScene({
           <strong>{level.title}</strong>
           <small>{level.subtitle}</small>
         </div>
-        {level.parentLevelId ? (
+        <div className="level-chip-actions">
           <button
             onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => {
               event.stopPropagation();
-              onBackLevel();
+              onAddSectionNode();
             }}
           >
-            <ChevronUp size={17} />
-            Уровень выше
+            <Plus size={16} />
+            Добавить блок
           </button>
-        ) : null}
+          {level.parentLevelId ? (
+            <button
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onBackLevel();
+              }}
+            >
+              <ChevronUp size={17} />
+              Уровень выше
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {linkingFromId ? (
