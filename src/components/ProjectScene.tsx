@@ -15,6 +15,8 @@ import {
   getFileLabel,
   getDocumentFromNode,
   getNodeVisualTone,
+  getProcessDeadlineLabel,
+  getProcessRuntimeColor,
   getProcessStatusColor,
   getProcessStatusText,
   getProjectProgress,
@@ -720,13 +722,12 @@ function ProcessPath({
 
   const radiusFrom = getNodeRadius(fromNode, centralNodeId);
   const radiusTo = getNodeRadius(toNode, centralNodeId);
-  const inactive = process.status === "accepted" || process.status === "in_work";
   const geometry = buildProcessGeometry(from, to, radiusFrom, radiusTo, (process.parallelIndex ?? 0) * 2.2);
-  const color = getProcessStatusColor(process.status);
-  const documentLabel = process.documents.length ? `${process.documents.length} док.` : getProcessStatusText(process.status);
+  const color = getProcessRuntimeColor(process);
+  const documentLabel = getProcessDeadlineLabel(process);
 
   return (
-    <g className={clsx("process-group", selected && "selected", matched && "matched", dimmed && "dimmed", inactive && "inactive")}>
+    <g className={clsx("process-group", selected && "selected", matched && "matched", dimmed && "dimmed")}>
       <path className="process-glow" d={geometry.path} style={{ stroke: color }} />
       <path
         className="process-line"
@@ -751,7 +752,7 @@ function ProcessPath({
           onOpenDetails();
         }}
       />
-      <foreignObject x={geometry.label.x - 92} y={geometry.label.y - 16} width="184" height="34">
+      <foreignObject x={geometry.label.x - 116} y={geometry.label.y - 20} width="232" height="44">
         <button
           className="process-label"
           onPointerDown={(event) => {

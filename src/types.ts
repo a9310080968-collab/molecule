@@ -126,6 +126,7 @@ export type BusinessProcess = {
   createdAt: string;
   validationAt?: string;
   dueAt?: string;
+  dueBackAt?: string;
   approver?: string;
   parallelIndex?: number;
   source: "demo" | "manual" | "mail" | "chat";
@@ -208,6 +209,7 @@ export type ProcessEdit = Partial<
     | "participantNames"
     | "validationAt"
     | "dueAt"
+    | "dueBackAt"
     | "approver"
     | "documents"
     | "requiredFields"

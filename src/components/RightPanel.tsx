@@ -21,6 +21,8 @@ import {
   getNodeCompletion,
   getNodeVisualTone,
   getOwnedDocumentNodes,
+  getProcessDeadlineLabel,
+  getProcessRuntimeColor,
   getProcessStatusColor,
   getProcessStatusText,
   getProjectProgress,
@@ -375,7 +377,7 @@ function ProcessInfo({
 }) {
   const from = project.nodes.find((node) => node.id === process.from);
   const to = project.nodes.find((node) => node.id === process.to);
-  const color = getProcessStatusColor(process.status);
+  const color = getProcessRuntimeColor(process);
 
   return (
     <>
@@ -421,9 +423,15 @@ function ProcessInfo({
             </select>
           </label>
           <label>
-            <span>Дата валидации</span>
-            <input value={process.validationAt ?? ""} onChange={(event) => onProcessUpdate(process.id, { validationAt: event.currentTarget.value })} placeholder="сегодня / дата" />
+            <span>Срок передачи</span>
+            <input type="datetime-local" value={process.dueAt ?? ""} onChange={(event) => onProcessUpdate(process.id, { dueAt: event.currentTarget.value })} />
           </label>
+          {process.direction === "both" ? (
+            <label>
+              <span>Срок обратно</span>
+              <input type="datetime-local" value={process.dueBackAt ?? ""} onChange={(event) => onProcessUpdate(process.id, { dueBackAt: event.currentTarget.value })} />
+            </label>
+          ) : null}
         </div>
       </section>
 
@@ -445,7 +453,9 @@ function ProcessInfo({
       <div className="info-grid">
         <Metric icon={<UserRound size={16} />} label="От кого" value={process.sender} />
         <Metric icon={<UserRound size={16} />} label="Кому" value={process.receiver} />
+        <Metric icon={<UserRound size={16} />} label="Согласует" value={process.approver ?? process.receiver} />
         <Metric icon={<Clock3 size={16} />} label="Создано" value={process.createdAt} />
+        <Metric icon={<Clock3 size={16} />} label="Таймер" value={getProcessDeadlineLabel(process)} />
         <Metric icon={<Inbox size={16} />} label="Документов" value={String(process.documents.length)} />
       </div>
 

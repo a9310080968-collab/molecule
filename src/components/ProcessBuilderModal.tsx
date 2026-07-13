@@ -1,6 +1,5 @@
 import {
   ArrowLeftRight,
-  CalendarClock,
   ExternalLink,
   FileCheck2,
   Route,
@@ -16,6 +15,7 @@ import {
   getFileLabel,
   getFileTypeColor,
   getNodeById,
+  parseDeadline,
   getProcessStatusColor,
   getProcessStatusText,
 } from "../lib/graph";
@@ -26,7 +26,6 @@ import type {
   ProcessDocument,
   ProcessDocumentRequirement,
   ProcessEdit,
-  ProcessFieldKey,
   ProcessFieldRequirement,
   ProjectParticipantSeed,
 } from "../types";
@@ -48,6 +47,13 @@ type DocumentChoice = {
   ownerTitle?: string;
 };
 
+type ParticipantOption = {
+  name: string;
+  label: string;
+  inProject: boolean;
+  seed?: ProjectParticipantSeed;
+};
+
 const fieldDefaults: ProcessFieldRequirement[] = [
   { key: "documents", label: "Документы для проверки", required: true },
   { key: "sender", label: "Кто передает", required: true },
@@ -61,18 +67,15 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
   const fromNode = getNodeById(project, process.from);
   const toNode = getNodeById(project, process.to);
   const documentChoices = useMemo(() => getDocumentChoices(project, process), [project, process]);
-  const participants = useMemo(() => getParticipants(project, process), [project, process]);
+  const participantOptions = useMemo(() => getParticipantOptions(project, process), [project, process]);
   const [title, setTitle] = useState(process.title);
   const [description, setDescription] = useState(process.description);
   const [direction, setDirection] = useState<ProcessDirection>(process.direction);
-  const [sender, setSender] = useState(process.sender);
-  const [receiver, setReceiver] = useState(process.receiver);
-  const [approver, setApprover] = useState(process.approver ?? process.receiver);
-  const [participantQuery, setParticipantQuery] = useState("");
-  const [selectedParticipantNames, setSelectedParticipantNames] = useState<string[]>(() =>
-    uniqueNames([process.sender, process.receiver, process.approver, ...(process.participantNames ?? [])]),
-  );
-  const [dueAt, setDueAt] = useState(process.dueAt ?? "");
+  const [sender, setSender] = useState(() => getInitialPerson(process.sender, participantOptions));
+  const [receiver, setReceiver] = useState(() => getInitialPerson(process.receiver, participantOptions));
+  const [approver, setApprover] = useState(() => getInitialPerson(process.approver ?? process.receiver, participantOptions));
+  const [dueAt, setDueAt] = useState(() => toDateTimeLocalValue(process.dueAt) || getDefaultDeadlineInput(24));
+  const [dueBackAt, setDueBackAt] = useState(() => toDateTimeLocalValue(process.dueBackAt) || getDefaultDeadlineInput(48));
   const [fieldRequirements, setFieldRequirements] = useState<ProcessFieldRequirement[]>(() => buildFieldRequirements(process));
   const [documentRequirements, setDocumentRequirements] = useState<Record<string, { selected: boolean; required: boolean }>>(() =>
     buildDocumentRequirements(process, documentChoices),
@@ -82,11 +85,11 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
     setTitle(process.title);
     setDescription(process.description);
     setDirection(process.direction);
-    setSender(process.sender);
-    setReceiver(process.receiver);
-    setApprover(process.approver ?? process.receiver);
-    setSelectedParticipantNames(uniqueNames([process.sender, process.receiver, process.approver, ...(process.participantNames ?? [])]));
-    setDueAt(process.dueAt ?? "");
+    setSender(getInitialPerson(process.sender, participantOptions));
+    setReceiver(getInitialPerson(process.receiver, participantOptions));
+    setApprover(getInitialPerson(process.approver ?? process.receiver, participantOptions));
+    setDueAt(toDateTimeLocalValue(process.dueAt) || getDefaultDeadlineInput(24));
+    setDueBackAt(toDateTimeLocalValue(process.dueBackAt) || getDefaultDeadlineInput(48));
     setFieldRequirements(buildFieldRequirements(process));
     setDocumentRequirements(buildDocumentRequirements(process, documentChoices));
   }, [documentChoices, process]);
@@ -95,24 +98,7 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
     .filter((choice) => documentRequirements[choice.document.id]?.selected)
     .map((choice) => choice.document);
   const selectedRequiredCount = selectedDocuments.filter((document) => documentRequirements[document.id]?.required).length;
-  const projectParticipantEmails = new Set(project.participants.map((participant) => participant.email));
-  const visibleDirectory = teamDirectory.filter((participant) => {
-    const query = participantQuery.trim().toLocaleLowerCase("ru-RU");
-    if (!query) {
-      return true;
-    }
-    return [participant.name, participant.position, participant.role, participant.email, participant.phone, participant.messenger]
-      .filter(Boolean)
-      .join(" ")
-      .toLocaleLowerCase("ru-RU")
-      .includes(query);
-  });
-
-  function toggleField(key: ProcessFieldKey) {
-    setFieldRequirements((current) =>
-      current.map((field) => (field.key === key ? { ...field, required: !field.required } : field)),
-    );
-  }
+  const canSave = Boolean(sender && receiver && approver && dueAt && (direction !== "both" || dueBackAt));
 
   function toggleDocument(documentId: string) {
     setDocumentRequirements((current) => {
@@ -141,7 +127,14 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
   }
 
   function save(mode: BuilderMode) {
-    const participantNames = uniqueNames([sender, receiver, approver, ...selectedParticipantNames]);
+    if (!canSave) {
+      return;
+    }
+
+    ensureSelectedPersonInProject(sender);
+    ensureSelectedPersonInProject(receiver);
+    ensureSelectedPersonInProject(approver);
+    const participantNames = uniqueNames([sender, receiver, approver]);
     const documentRequirementList: ProcessDocumentRequirement[] = selectedDocuments.map((document) => ({
       documentId: document.id,
       required: documentRequirements[document.id]?.required ?? true,
@@ -163,6 +156,7 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
         participantNames,
         approver,
         dueAt,
+        dueBackAt: direction === "both" ? dueBackAt : undefined,
         requiredFields: fieldRequirements,
         documentRequirements: documentRequirementList,
         documents,
@@ -173,9 +167,25 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
     );
   }
 
-  function addParticipant(participant: ProjectParticipantSeed) {
-    onAddParticipant(participant);
-    setSelectedParticipantNames((current) => uniqueNames([...current, participant.name]));
+  function setDirectionValue(value: ProcessDirection) {
+    setDirection(value);
+    if (value === "both" && !dueBackAt) {
+      setDueBackAt(getDefaultDeadlineInput(48));
+    }
+  }
+
+  function handlePersonChange(role: "sender" | "receiver" | "approver", name: string) {
+    ensureSelectedPersonInProject(name);
+    if (role === "sender") setSender(name);
+    if (role === "receiver") setReceiver(name);
+    if (role === "approver") setApprover(name);
+  }
+
+  function ensureSelectedPersonInProject(name: string) {
+    const option = participantOptions.find((item) => item.name === name);
+    if (option?.seed && !option.inProject) {
+      onAddParticipant(option.seed);
+    }
   }
 
   return (
@@ -226,7 +236,7 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
               </label>
               <label>
                 <span>Направление</span>
-                <select value={direction} onChange={(event) => setDirection(event.currentTarget.value as ProcessDirection)}>
+                <select value={direction} onChange={(event) => setDirectionValue(event.currentTarget.value as ProcessDirection)}>
                   <option value="forward">В одну сторону</option>
                   <option value="backward">Обратно</option>
                   <option value="both">В обе стороны</option>
@@ -234,7 +244,7 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
               </label>
               <label className="wide">
                 <span>Описание / суть передачи</span>
-                <textarea value={description} onChange={(event) => setDescription(event.currentTarget.value)} />
+                <input value={description} onChange={(event) => setDescription(event.currentTarget.value)} placeholder="Коротко: что передается и зачем" />
               </label>
             </div>
           </section>
@@ -251,68 +261,28 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
             <div className="builder-form-grid">
               <label>
                 <span>Кто передает</span>
-                <input list="process-builder-participants" value={sender} onChange={(event) => setSender(event.currentTarget.value)} />
+                <PersonSelect value={sender} options={participantOptions} onChange={(value) => handlePersonChange("sender", value)} />
               </label>
               <label>
                 <span>Кому передается</span>
-                <input list="process-builder-participants" value={receiver} onChange={(event) => setReceiver(event.currentTarget.value)} />
+                <PersonSelect value={receiver} options={participantOptions} onChange={(value) => handlePersonChange("receiver", value)} />
               </label>
               <label>
                 <span>Кто согласует</span>
-                <input list="process-builder-participants" value={approver} onChange={(event) => setApprover(event.currentTarget.value)} />
+                <PersonSelect value={approver} options={participantOptions} onChange={(value) => handlePersonChange("approver", value)} />
               </label>
               <label>
-                <span>Срок согласования</span>
-                <input value={dueAt} onChange={(event) => setDueAt(event.currentTarget.value)} placeholder="например: 21.06, 18:00" />
+                <span>{direction === "backward" ? "Срок обратно" : "Срок передачи"}</span>
+                <input type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.currentTarget.value)} />
               </label>
-            </div>
-            <datalist id="process-builder-participants">
-              {participants.map((participant) => (
-                <option key={participant} value={participant} />
-              ))}
-            </datalist>
-
-            <div className="process-participants-manager">
-              <div className="process-participants-selected">
-                <strong>Участники процесса</strong>
-                {selectedParticipantNames.length ? (
-                  selectedParticipantNames.map((name) => (
-                    <button key={name} onClick={() => setSelectedParticipantNames((current) => current.filter((item) => item !== name))}>
-                      <span>{name}</span>
-                      <em>убрать</em>
-                    </button>
-                  ))
-                ) : (
-                  <p>Добавьте участников, которые должны видеть и исполнять этот бизнес-процесс.</p>
-                )}
-              </div>
-
-              <div className="process-participants-directory">
+              {direction === "both" ? (
                 <label>
-                  <span>Добавить из команды</span>
-                  <input
-                    value={participantQuery}
-                    onChange={(event) => setParticipantQuery(event.currentTarget.value)}
-                    placeholder="Поиск по имени, роли, почте..."
-                  />
+                  <span>Срок обратной передачи</span>
+                  <input type="datetime-local" value={dueBackAt} onChange={(event) => setDueBackAt(event.currentTarget.value)} />
                 </label>
-                <div>
-                  {visibleDirectory.slice(0, 8).map((participant) => {
-                    const alreadyInProject = projectParticipantEmails.has(participant.email);
-                    const alreadySelected = selectedParticipantNames.includes(participant.name);
-                    return (
-                      <button key={participant.email} onClick={() => addParticipant(participant)} disabled={alreadySelected}>
-                        <span>
-                          <b>{participant.name}</b>
-                          <small>{participant.position}</small>
-                        </span>
-                        <em>{alreadySelected ? "в процессе" : alreadyInProject ? "добавить" : "добавить в проект"}</em>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              ) : null}
             </div>
+            {!canSave ? <p className="builder-required-note">Выберите передающего, получателя, согласующего и срок.</p> : null}
           </section>
 
           <section className="builder-section builder-documents-section">
@@ -360,24 +330,6 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
             </div>
           </section>
 
-          <section className="builder-section">
-            <div className="section-title">
-              <CalendarClock size={18} />
-              <div>
-                <h3>Обязательность полей</h3>
-                <p>Можно задать, какие поля обязательно заполнить перед отправкой и при проверке.</p>
-              </div>
-            </div>
-
-            <div className="builder-field-list">
-              {fieldRequirements.map((field) => (
-                <button key={field.key} className={field.required ? "required" : ""} onClick={() => toggleField(field.key)}>
-                  <span>{field.label}</span>
-                  <em>{field.required ? "обязательное" : "необязательное"}</em>
-                </button>
-              ))}
-            </div>
-          </section>
         </div>
 
         <footer className="process-builder-footer">
@@ -385,17 +337,48 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
             <span style={{ color: getProcessStatusColor(process.status) }}>{getProcessStatusText(process.status)}</span>
             <small>{selectedDocuments.length ? "Можно сохранить или отправить на проверку." : "Процесс можно сохранить без документов как черновик."}</small>
           </div>
-          <button onClick={() => save("draft")}>
+          <button onClick={() => save("draft")} disabled={!canSave}>
             <Save size={17} />
             Сохранить черновик
           </button>
-          <button className="primary-action" onClick={() => save("launch")}>
+          <button className="primary-action" onClick={() => save("launch")} disabled={!canSave}>
             <Send size={17} />
             Отправить на согласование
           </button>
         </footer>
       </article>
     </div>
+  );
+}
+
+function PersonSelect({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: ParticipantOption[];
+  onChange: (value: string) => void;
+}) {
+  const projectOptions = options.filter((option) => option.inProject);
+  const directoryOptions = options.filter((option) => !option.inProject);
+
+  return (
+    <select value={value} onChange={(event) => onChange(event.currentTarget.value)} required>
+      <option value="" disabled>Выберите участника</option>
+      <optgroup label="Команда проекта">
+        {projectOptions.map((option) => (
+          <option key={option.name} value={option.name}>{option.label}</option>
+        ))}
+      </optgroup>
+      {directoryOptions.length ? (
+        <optgroup label="Добавить из справочника">
+          {directoryOptions.slice(0, 12).map((option) => (
+            <option key={option.name} value={option.name}>{option.label}</option>
+          ))}
+        </optgroup>
+      ) : null}
+    </select>
   );
 }
 
@@ -458,23 +441,67 @@ function getOriginText(choice: DocumentChoice) {
   return `входящие без связи · ${choice.document.version}`;
 }
 
-function getParticipants(project: DemoProject, process: BusinessProcess) {
-  return Array.from(
-    new Set(
-      [
-        process.sender,
-        process.receiver,
-        process.approver,
-        ...(process.participantNames ?? []),
-        ...project.participants.map((participant) => participant.name),
-        ...teamDirectory.map((participant) => participant.name),
-        ...project.nodes.map((node) => node.responsible),
-        ...project.processes.flatMap((item) => [item.sender, item.receiver, item.approver]),
-      ].filter(Boolean) as string[],
-    ),
-  );
-}
-
 function uniqueNames(values: Array<string | undefined>) {
   return Array.from(new Set(values.map((value) => value?.trim()).filter(Boolean) as string[]));
+}
+
+function getParticipantOptions(project: DemoProject, process: BusinessProcess): ParticipantOption[] {
+  const projectEmails = new Set(project.participants.map((participant) => participant.email));
+  const byName = new Map<string, ParticipantOption>();
+
+  project.participants.forEach((participant) => {
+    byName.set(participant.name, {
+      name: participant.name,
+      label: `${participant.name} · ${participant.position}`,
+      inProject: true,
+    });
+  });
+
+  teamDirectory.forEach((participant) => {
+    if (byName.has(participant.name)) {
+      return;
+    }
+    byName.set(participant.name, {
+      name: participant.name,
+      label: `${participant.name} · ${participant.position}`,
+      inProject: projectEmails.has(participant.email),
+      seed: participant,
+    });
+  });
+
+  [process.sender, process.receiver, process.approver, ...(process.participantNames ?? [])].forEach((name) => {
+    if (name && !byName.has(name)) {
+      byName.set(name, {
+        name,
+        label: name,
+        inProject: true,
+      });
+    }
+  });
+
+  return Array.from(byName.values());
+}
+
+function getInitialPerson(value: string | undefined, options: ParticipantOption[]) {
+  if (value && options.some((option) => option.name === value)) {
+    return value;
+  }
+  return options[0]?.name ?? "";
+}
+
+function toDateTimeLocalValue(value?: string) {
+  const date = parseDeadline(value);
+  if (!date) return "";
+  return formatDateTimeLocal(date);
+}
+
+function getDefaultDeadlineInput(hoursFromNow: number) {
+  const date = new Date();
+  date.setHours(date.getHours() + hoursFromNow, 0, 0, 0);
+  return formatDateTimeLocal(date);
+}
+
+function formatDateTimeLocal(date: Date) {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }

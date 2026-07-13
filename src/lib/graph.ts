@@ -135,6 +135,110 @@ export function getProcessStatusColor(status: ProcessStatus) {
   return processStatusColors[status];
 }
 
+export type ProcessRuntimeState = "draft" | "active" | "due_soon" | "urgent" | "overdue" | "done" | "rejected";
+
+export function getProcessRuntimeState(process: BusinessProcess): ProcessRuntimeState {
+  if (process.status === "accepted") return "done";
+  if (process.status === "rejected") return "rejected";
+  if (process.status === "draft") return "draft";
+
+  const deadlines = getProcessDeadlineEntries(process)
+    .map((entry) => parseDeadline(entry.value))
+    .filter((date): date is Date => Boolean(date));
+
+  if (!deadlines.length) return "active";
+
+  const now = Date.now();
+  const minMs = Math.min(...deadlines.map((date) => date.getTime() - now));
+  const hours = minMs / 36e5;
+
+  if (hours < 0) return "overdue";
+  if (hours <= 24) return "urgent";
+  if (hours <= 72) return "due_soon";
+  return "active";
+}
+
+export function getProcessRuntimeColor(process: BusinessProcess) {
+  const state = getProcessRuntimeState(process);
+  if (state === "done") return "#2ed8a3";
+  if (state === "rejected" || state === "overdue") return "#ff4c5f";
+  if (state === "urgent") return "#ff9a3d";
+  if (state === "due_soon") return "#ffe26d";
+  if (state === "active") return "#35d9ff";
+  return "#8b93a6";
+}
+
+export function getProcessDeadlineLabel(process: BusinessProcess) {
+  const entries = getProcessDeadlineEntries(process);
+  if (!entries.length) {
+    return getProcessStatusText(process.status);
+  }
+
+  return entries.map((entry) => `${entry.label} ${formatDeadlineDistance(entry.value)}`).join(" / ");
+}
+
+export function getProcessDeadlineEntries(process: BusinessProcess) {
+  if (process.direction === "both") {
+    return [
+      { key: "forward" as const, label: "→", value: process.dueAt },
+      { key: "backward" as const, label: "←", value: process.dueBackAt },
+    ].filter((entry) => entry.value);
+  }
+
+  return [{ key: process.direction, label: process.direction === "backward" ? "←" : "→", value: process.dueAt }]
+    .filter((entry) => entry.value);
+}
+
+export function parseDeadline(value?: string) {
+  if (!value?.trim()) return undefined;
+  const text = value.trim();
+  const direct = new Date(text);
+  if (!Number.isNaN(direct.getTime())) return direct;
+
+  const now = new Date();
+  const timeMatch = text.match(/(\d{1,2}):(\d{2})/);
+  if (/сегодня/i.test(text) && timeMatch) {
+    const date = new Date(now);
+    date.setHours(Number(timeMatch[1]), Number(timeMatch[2]), 0, 0);
+    return date;
+  }
+  if (/завтра/i.test(text) && timeMatch) {
+    const date = new Date(now);
+    date.setDate(date.getDate() + 1);
+    date.setHours(Number(timeMatch[1]), Number(timeMatch[2]), 0, 0);
+    return date;
+  }
+
+  const dateMatch = text.match(/(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2,4}))?(?:\D+(\d{1,2}):(\d{2}))?/);
+  if (!dateMatch) return undefined;
+  const year = dateMatch[3] ? normalizeYear(Number(dateMatch[3])) : now.getFullYear();
+  const hours = dateMatch[4] ? Number(dateMatch[4]) : 18;
+  const minutes = dateMatch[5] ? Number(dateMatch[5]) : 0;
+  const date = new Date(year, Number(dateMatch[2]) - 1, Number(dateMatch[1]), hours, minutes, 0, 0);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+export function formatDeadlineDistance(value?: string) {
+  const deadline = parseDeadline(value);
+  if (!deadline) return value || "без срока";
+
+  const diffMs = deadline.getTime() - Date.now();
+  const absHours = Math.abs(diffMs) / 36e5;
+  const prefix = diffMs < 0 ? "просрочено " : "осталось ";
+
+  if (absHours < 1) {
+    return `${prefix}${Math.max(1, Math.round(absHours * 60))} мин`;
+  }
+  if (absHours < 48) {
+    return `${prefix}${Math.round(absHours)} ч`;
+  }
+  return `${prefix}${Math.round(absHours / 24)} д`;
+}
+
+function normalizeYear(year: number) {
+  return year < 100 ? 2000 + year : year;
+}
+
 export function getNodeVisualTone(node: ProjectNode) {
   if (node.type === "document") {
     const color = getFileTypeColor(node.fileType ?? node.document?.fileType);

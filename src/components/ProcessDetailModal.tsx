@@ -3,7 +3,8 @@ import {
   getFileLabel,
   getFileTypeColor,
   getNodeById,
-  getProcessStatusColor,
+  getProcessDeadlineLabel,
+  getProcessRuntimeColor,
   getProcessStatusText,
   getStatusText,
 } from "../lib/graph";
@@ -26,7 +27,7 @@ export function ProcessDetailModal({
 }: ProcessDetailModalProps) {
   const fromNode = getNodeById(project, process.from);
   const toNode = getNodeById(project, process.to);
-  const color = getProcessStatusColor(process.status);
+  const color = getProcessRuntimeColor(process);
 
   return (
     <div className="modal-backdrop process-detail-backdrop" role="dialog" aria-modal="true">
@@ -60,7 +61,7 @@ export function ProcessDetailModal({
           <article className="status-card">
             <small>Статус</small>
             <strong style={{ color }}>{getProcessStatusText(process.status)}</strong>
-            <span>{process.validationAt ?? process.dueAt ?? "срок не задан"}</span>
+            <span>{getProcessDeadlineLabel(process)}</span>
           </article>
         </section>
 

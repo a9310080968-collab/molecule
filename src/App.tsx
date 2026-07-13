@@ -24,8 +24,11 @@ import {
   getLevelNodes,
   getLevelProcesses,
   getNodeById,
+  getProcessDeadlineEntries,
   getProcessById,
+  formatDeadlineDistance,
   getSearchMatches,
+  parseDeadline,
 } from "./lib/graph";
 import {
   addDocumentNodeToProject,
@@ -217,6 +220,13 @@ export default function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [projects, activeProjectId, activeLevelId, selectedNodeId, selectedProcessId, notifications, undoStack, redoStack]);
+
+  useEffect(() => {
+    setNotifications((current) => {
+      const additions = buildDeadlineNotifications(projects, current);
+      return additions.length ? [...additions, ...current].slice(0, 30) : current;
+    });
+  }, [projects]);
 
   function getSnapshot(): HistorySnapshot {
     return {
@@ -569,7 +579,7 @@ export default function App() {
       receiver: to.responsible ?? to.title,
       participantNames: [from.responsible ?? from.title, to.responsible ?? to.title],
       createdAt: "только что",
-      dueAt: edit.dueAt,
+      dueAt: edit.dueAt || getDefaultProcessDueAt(24),
       parallelIndex: pairCount ? pairCount - 0.5 : 0,
       source: "manual",
       documents: [],
@@ -827,6 +837,7 @@ export default function App() {
       receiver: to.responsible ?? to.title,
       participantNames: [from.responsible ?? from.title, to.responsible ?? to.title],
       createdAt: "только что",
+      dueAt: getDefaultProcessDueAt(24),
       parallelIndex: offset,
       source: "manual",
       documents: [],
@@ -1598,6 +1609,85 @@ function getRandomFileName() {
 function getRandomFileSize() {
   const sizes = ["420 КБ", "1.2 МБ", "2.8 МБ", "4.1 МБ", "740 КБ"];
   return sizes[Math.floor(Math.random() * sizes.length)];
+}
+
+type DeadlineNotificationPhase = "due_soon" | "urgent" | "overdue";
+
+function buildDeadlineNotifications(projects: DemoProject[], current: DemoNotification[]) {
+  const existingIds = new Set(current.map((notification) => notification.id));
+  const notifications: DemoNotification[] = [];
+
+  projects.forEach((project) => {
+    project.processes.forEach((process) => {
+      if (process.status === "draft" || process.status === "accepted" || process.status === "rejected") {
+        return;
+      }
+
+      getProcessDeadlineEntries(process).forEach((entry) => {
+        const phase = getDeadlineNotificationPhase(entry.value);
+        if (!phase) {
+          return;
+        }
+
+        const id = `deadline-${project.id}-${process.id}-${entry.key}-${phase}`;
+        if (existingIds.has(id)) {
+          return;
+        }
+
+        notifications.push({
+          id,
+          projectId: project.id,
+          title: getDeadlineNotificationTitle(phase),
+          description: `${process.title}: ${entry.label} ${formatDeadlineDistance(entry.value)}. Передает: ${process.sender}; получает: ${process.receiver}; согласует: ${process.approver ?? process.receiver}.`,
+          time: "только что",
+          targetProcessId: process.id,
+          unread: true,
+        });
+      });
+    });
+  });
+
+  return notifications;
+}
+
+function getDeadlineNotificationPhase(value?: string): DeadlineNotificationPhase | null {
+  const deadline = parseDeadline(value);
+  if (!deadline) {
+    return null;
+  }
+
+  const hoursLeft = (deadline.getTime() - Date.now()) / 36e5;
+  if (hoursLeft < 0) {
+    return "overdue";
+  }
+  if (hoursLeft <= 24) {
+    return "urgent";
+  }
+  if (hoursLeft <= 72) {
+    return "due_soon";
+  }
+  return null;
+}
+
+function getDeadlineNotificationTitle(phase: DeadlineNotificationPhase) {
+  if (phase === "overdue") {
+    return "Срок бизнес-процесса просрочен";
+  }
+  if (phase === "urgent") {
+    return "До срока бизнес-процесса меньше суток";
+  }
+  return "Срок бизнес-процесса близко";
+}
+
+function getDefaultProcessDueAt(hoursFromNow: number) {
+  const date = new Date();
+  date.setHours(date.getHours() + hoursFromNow, 0, 0, 0);
+  return formatAppDateTimeLocal(date);
+}
+
+function formatAppDateTimeLocal(date: Date) {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 const fontSizes = [9, 10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 24, 28, 34, 42, 54];
