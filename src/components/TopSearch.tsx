@@ -53,7 +53,7 @@ export function TopSearch({
             ))}
           </select>
         </label>
-        <button className="project-add-tab" onClick={onOpenProjectManager} title="Создать или настроить проект">
+        <button className="project-add-tab" onClick={onOpenProjectManager} title="Создать проект">
           <Plus size={18} />
           <span>Создать</span>
         </button>

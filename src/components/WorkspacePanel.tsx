@@ -6,6 +6,7 @@ import {
   Paperclip,
   PencilLine,
   FileStack,
+  FilePlus2,
   FolderPlus,
   MessageCircle,
   Phone,
@@ -32,7 +33,18 @@ import {
   getProcessStatusColor,
   getProcessStatusText,
 } from "../lib/graph";
-import type { BusinessProcess, DemoProject, ParticipantEdit, ProcessDocument, ProjectParticipant, ProjectParticipantRole, ProjectParticipantStatus, ProjectVisibilityMode } from "../types";
+import type {
+  BusinessProcess,
+  DemoProject,
+  NodeStatus,
+  ParticipantEdit,
+  ProcessDocument,
+  ProjectParticipant,
+  ProjectParticipantRole,
+  ProjectParticipantStatus,
+  ProjectTemplate,
+  ProjectVisibilityMode,
+} from "../types";
 import type { SidebarMenuId } from "./Sidebar";
 
 type WorkspacePanelProps = {
@@ -44,10 +56,22 @@ type WorkspacePanelProps = {
   onReceiveMail: () => void;
   onReceiveChat: () => void;
   onSendMessage: (text: string) => void;
-  onOpenProjectManager: () => void;
+  projectTemplates: ProjectTemplate[];
+  onCreateTemplate: (title: string, description: string) => ProjectTemplate;
+  onCreateTaggedDocument: (title: string, tag: string) => void;
+  onCreateTaskDraft: (edit: WorkspaceTaskDraft) => void;
+  onUpdateDocumentStatus: (documentId: string, status: NodeStatus) => void;
   onAddParticipant: (edit: ParticipantEdit) => void;
   onUpdateParticipant: (participantId: string, edit: ParticipantEdit) => void;
   onDeleteParticipant: (participantId: string) => void;
+};
+
+export type WorkspaceTaskDraft = {
+  title: string;
+  description: string;
+  fromNodeId: string;
+  toNodeId: string;
+  dueAt?: string;
 };
 
 const menuMeta = {
@@ -112,7 +136,11 @@ export function WorkspacePanel({
   onReceiveMail,
   onReceiveChat,
   onSendMessage,
-  onOpenProjectManager,
+  projectTemplates,
+  onCreateTemplate,
+  onCreateTaggedDocument,
+  onCreateTaskDraft,
+  onUpdateDocumentStatus,
   onAddParticipant,
   onUpdateParticipant,
   onDeleteParticipant,
@@ -148,7 +176,11 @@ export function WorkspacePanel({
         onReceiveMail={onReceiveMail}
         onReceiveChat={onReceiveChat}
         onSendMessage={onSendMessage}
-        onOpenProjectManager={onOpenProjectManager}
+        projectTemplates={projectTemplates}
+        onCreateTemplate={onCreateTemplate}
+        onCreateTaggedDocument={onCreateTaggedDocument}
+        onCreateTaskDraft={onCreateTaskDraft}
+        onUpdateDocumentStatus={onUpdateDocumentStatus}
         onAddParticipant={onAddParticipant}
         onUpdateParticipant={onUpdateParticipant}
         onDeleteParticipant={onDeleteParticipant}
@@ -165,17 +197,34 @@ function WorkspaceContent({
   onReceiveMail,
   onReceiveChat,
   onSendMessage,
-  onOpenProjectManager,
+  projectTemplates,
+  onCreateTemplate,
+  onCreateTaggedDocument,
+  onCreateTaskDraft,
+  onUpdateDocumentStatus,
   onAddParticipant,
   onUpdateParticipant,
   onDeleteParticipant,
 }: Omit<WorkspacePanelProps, "onClose">) {
   if (activeMenu === "documents") {
-    return <DocumentsRegistry project={project} onOpenDocument={onOpenDocument} />;
+    return (
+      <DocumentsRegistry
+        project={project}
+        onOpenDocument={onOpenDocument}
+        onCreateTaggedDocument={onCreateTaggedDocument}
+      />
+    );
   }
 
   if (activeMenu === "tasks") {
-    return <ProcessRows processes={project.processes} onSelectProcess={onSelectProcess} />;
+    return (
+      <TasksWorkspace
+        project={project}
+        processes={project.processes}
+        onSelectProcess={onSelectProcess}
+        onCreateTaskDraft={onCreateTaskDraft}
+      />
+    );
   }
 
   if (activeMenu === "checks") {
@@ -225,7 +274,77 @@ function WorkspaceContent({
   }
 
   return (
-    <div className="workspace-grid settings-grid">
+    <SettingsWorkspace
+      project={project}
+      projectTemplates={projectTemplates}
+      onCreateTemplate={onCreateTemplate}
+    />
+  );
+}
+
+function SettingsWorkspace({
+  project,
+  projectTemplates,
+  onCreateTemplate,
+}: {
+  project: DemoProject;
+  projectTemplates: ProjectTemplate[];
+  onCreateTemplate: (title: string, description: string) => ProjectTemplate;
+}) {
+  const [title, setTitle] = useState(`${project.title}: шаблон`);
+  const [description, setDescription] = useState("Структура проекта без рабочих документов.");
+
+  function saveTemplate() {
+    const template = onCreateTemplate(title, description);
+    setTitle(`${template.title}: копия`);
+    setDescription(template.description);
+  }
+
+  return (
+    <div className="settings-workspace">
+      <section className="template-settings-card">
+        <div className="section-title">
+          <FolderPlus size={18} />
+          <div>
+            <h3>Шаблоны проектов</h3>
+            <p>Шаблоны создаются здесь, отдельно от конструктора нового проекта.</p>
+          </div>
+        </div>
+        <div className="template-settings-form">
+          <label>
+            <span>Название шаблона</span>
+            <input value={title} onChange={(event) => setTitle(event.currentTarget.value)} />
+          </label>
+          <label>
+            <span>Описание</span>
+            <textarea value={description} onChange={(event) => setDescription(event.currentTarget.value)} />
+          </label>
+          <button className="settings-open-button" onClick={saveTemplate}>
+            Сохранить текущий проект как шаблон
+          </button>
+        </div>
+      </section>
+
+      <section className="template-settings-card">
+        <div className="section-title">
+          <FileStack size={18} />
+          <div>
+            <h3>Доступные шаблоны</h3>
+            <p>Эти шаблоны доступны в форме создания нового проекта.</p>
+          </div>
+        </div>
+        <div className="settings-template-list">
+          {projectTemplates.map((template) => (
+            <article key={template.id}>
+              <strong>{template.title}</strong>
+              <span>{template.description}</span>
+              <em>{template.nodes.length} нод · {template.levels.length} уровней · {template.sourceProjectTitle}</em>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <div className="workspace-grid settings-grid">
       <article className="workspace-row">
         <b>Цвет</b>
         <div>
@@ -250,18 +369,111 @@ function WorkspaceContent({
         </div>
         <em>демо</em>
       </article>
-      <article className="workspace-row project-template-settings-row">
-        <b>
-          <FolderPlus size={16} />
-        </b>
+    </div>
+    </div>
+  );
+}
+
+function TasksWorkspace({
+  project,
+  processes,
+  onSelectProcess,
+  onCreateTaskDraft,
+}: {
+  project: DemoProject;
+  processes: BusinessProcess[];
+  onSelectProcess: (processId: string) => void;
+  onCreateTaskDraft: (edit: WorkspaceTaskDraft) => void;
+}) {
+  const rootLevel = getDefaultLevel(project);
+  const nodes = getLevelNodes(project, rootLevel).filter((node) => node.type !== "central" && node.type !== "document");
+  const [creatorOpen, setCreatorOpen] = useState(false);
+  const [title, setTitle] = useState("Новое задание");
+  const [description, setDescription] = useState("Передать комплект документов на проверку.");
+  const [fromNodeId, setFromNodeId] = useState(nodes[0]?.id ?? "");
+  const [toNodeId, setToNodeId] = useState(nodes[1]?.id ?? nodes[0]?.id ?? "");
+  const [dueAt, setDueAt] = useState("сегодня, 18:00");
+  const canCreate = Boolean(title.trim() && fromNodeId && toNodeId && fromNodeId !== toNodeId);
+
+  function createTask() {
+    if (!canCreate) {
+      return;
+    }
+    onCreateTaskDraft({
+      title,
+      description,
+      fromNodeId,
+      toNodeId,
+      dueAt,
+    });
+    setCreatorOpen(false);
+  }
+
+  return (
+    <div className="tasks-workspace">
+      <section className="tasks-toolbar">
         <div>
-          <strong>Проекты и шаблоны</strong>
-          <span>Создайте новый проект, сохраните текущую структуру как шаблон или запустите проект из готовой схемы.</span>
+          <strong>Задания проекта</strong>
+          <span>Задание можно создать прямо здесь, без выбора ноды на карте.</span>
         </div>
-        <button className="settings-open-button" onClick={onOpenProjectManager}>
-          Открыть
+        <button onClick={() => setCreatorOpen(true)}>
+          <ClipboardCheck size={17} />
+          Создать задание
         </button>
-      </article>
+      </section>
+
+      {creatorOpen ? (
+        <section className="task-create-card">
+          <header>
+            <strong>Новое задание</strong>
+            <button className="icon-button" onClick={() => setCreatorOpen(false)} aria-label="Закрыть создание задания">
+              <X size={18} />
+            </button>
+          </header>
+          <div className="task-create-grid">
+            <label>
+              <span>Название</span>
+              <input value={title} onChange={(event) => setTitle(event.currentTarget.value)} />
+            </label>
+            <label>
+              <span>Срок</span>
+              <input value={dueAt} onChange={(event) => setDueAt(event.currentTarget.value)} />
+            </label>
+            <label>
+              <span>Откуда</span>
+              <select value={fromNodeId} onChange={(event) => setFromNodeId(event.currentTarget.value)}>
+                {nodes.map((node) => (
+                  <option key={node.id} value={node.id}>
+                    {node.shortCode ?? node.title} · {node.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Куда</span>
+              <select value={toNodeId} onChange={(event) => setToNodeId(event.currentTarget.value)}>
+                {nodes.map((node) => (
+                  <option key={node.id} value={node.id}>
+                    {node.shortCode ?? node.title} · {node.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="wide">
+              <span>Описание</span>
+              <textarea value={description} onChange={(event) => setDescription(event.currentTarget.value)} />
+            </label>
+          </div>
+          <footer>
+            <span>{canCreate ? "Будет создан черновик бизнес-процесса." : "Выберите разные ноды отправителя и получателя."}</span>
+            <button className="primary-action" disabled={!canCreate} onClick={createTask}>
+              Создать задание
+            </button>
+          </footer>
+        </section>
+      ) : null}
+
+      <ProcessRows processes={processes} onSelectProcess={onSelectProcess} />
     </div>
   );
 }
@@ -408,17 +620,53 @@ type DocumentGroup = {
   isOrphan: boolean;
 };
 
-function DocumentsRegistry({ project, onOpenDocument }: { project: DemoProject; onOpenDocument: (document: ProcessDocument) => void }) {
+function DocumentsRegistry({
+  project,
+  onOpenDocument,
+  onCreateTaggedDocument,
+}: {
+  project: DemoProject;
+  onOpenDocument: (document: ProcessDocument) => void;
+  onCreateTaggedDocument: (title: string, tag: string) => void;
+}) {
   const groups = buildDocumentRegistry(project);
   const total = groups.reduce((sum, group) => sum + group.documents.length, 0);
   const orphanCount = groups.find((group) => group.isOrphan)?.documents.length ?? 0;
+  const [creatorOpen, setCreatorOpen] = useState(false);
 
   if (!total) {
-    return <p className="workspace-empty">В проекте пока нет документов.</p>;
+    return (
+      <div className="documents-registry empty-documents-registry">
+        <button className="documents-create-button" onClick={() => setCreatorOpen(true)}>
+          <FilePlus2 size={17} />
+          Создать тестовый документ
+        </button>
+        <p className="workspace-empty">В проекте пока нет документов.</p>
+        {creatorOpen ? (
+          <TaggedDocumentModal
+            onClose={() => setCreatorOpen(false)}
+            onCreate={(title, tag) => {
+              onCreateTaggedDocument(title, tag);
+              setCreatorOpen(false);
+            }}
+          />
+        ) : null}
+      </div>
+    );
   }
 
   return (
     <div className="documents-registry">
+      <div className="documents-registry-toolbar">
+        <div>
+          <strong>Реестр последних версий</strong>
+          <span>Одинаковые названия внутри одного раздела схлопываются до самой поздней записи.</span>
+        </div>
+        <button onClick={() => setCreatorOpen(true)}>
+          <FilePlus2 size={17} />
+          Создать тестовый документ
+        </button>
+      </div>
       <section className="documents-registry-summary">
         <article>
           <strong>{total}</strong>
@@ -459,6 +707,61 @@ function DocumentsRegistry({ project, onOpenDocument }: { project: DemoProject; 
           </section>
         ))}
       </div>
+      {creatorOpen ? (
+        <TaggedDocumentModal
+          onClose={() => setCreatorOpen(false)}
+          onCreate={(title, tag) => {
+            onCreateTaggedDocument(title, tag);
+            setCreatorOpen(false);
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function TaggedDocumentModal({
+  onClose,
+  onCreate,
+}: {
+  onClose: () => void;
+  onCreate: (title: string, tag: string) => void;
+}) {
+  const [title, setTitle] = useState("Планировка_АР.pdf");
+  const [tag, setTag] = useState("АР");
+  const canCreate = Boolean(title.trim());
+
+  return (
+    <div className="inner-modal-backdrop" role="dialog" aria-modal="true">
+      <article className="tagged-document-modal glass-panel">
+        <header>
+          <div>
+            <span>
+              <FilePlus2 size={17} />
+              Тестовый документ
+            </span>
+            <h3>Создать документ с тегом</h3>
+            <p>Если тег совпадет с тегом ноды, документ сразу попадет внутрь этой ноды.</p>
+          </div>
+          <button className="icon-button" onClick={onClose} aria-label="Закрыть">
+            <X size={18} />
+          </button>
+        </header>
+        <label>
+          <span>Название файла</span>
+          <input value={title} onChange={(event) => setTitle(event.currentTarget.value)} placeholder="Например: Планировка_АР.pdf" />
+        </label>
+        <label>
+          <span>Тег маршрутизации</span>
+          <input value={tag} onChange={(event) => setTag(event.currentTarget.value)} placeholder="АР, КР, ПЗ, ВК..." />
+        </label>
+        <footer>
+          <button onClick={onClose}>Отмена</button>
+          <button className="primary-action" disabled={!canCreate} onClick={() => onCreate(title, tag)}>
+            Создать документ
+          </button>
+        </footer>
+      </article>
     </div>
   );
 }
@@ -561,7 +864,7 @@ function getLatestRegistryEntries(entries: RegistryDocument[]) {
   const byIdentity = new Map<string, RegistryDocument>();
 
   entries.forEach((entry) => {
-    const identity = `${entry.groupKey}-${normalizeDocumentTitle(entry.document.title)}-${entry.document.fileType}`;
+    const identity = `${entry.groupKey}-${normalizeExactDocumentTitle(entry.document.title)}-${entry.document.fileType}`;
     const current = byIdentity.get(identity);
     if (!current || compareDocumentVersions(entry.document, current.document) > 0) {
       byIdentity.set(identity, entry);
@@ -572,12 +875,14 @@ function getLatestRegistryEntries(entries: RegistryDocument[]) {
 }
 
 function compareDocumentVersions(left: ProcessDocument, right: ProcessDocument) {
+  const leftDate = parseDocumentDateScore(left.updatedAt);
+  const rightDate = parseDocumentDateScore(right.updatedAt);
+  if (leftDate !== rightDate) {
+    return leftDate - rightDate;
+  }
   const leftVersion = parseVersionScore(left.version) || parseVersionScore(left.title);
   const rightVersion = parseVersionScore(right.version) || parseVersionScore(right.title);
-  if (leftVersion !== rightVersion) {
-    return leftVersion - rightVersion;
-  }
-  return left.updatedAt.localeCompare(right.updatedAt);
+  return leftVersion - rightVersion;
 }
 
 function parseVersionScore(value: string) {
@@ -585,14 +890,32 @@ function parseVersionScore(value: string) {
   return match ? Number(match[1].replace(",", ".")) : 0;
 }
 
-function normalizeDocumentTitle(title: string) {
+function normalizeExactDocumentTitle(title: string) {
   return title
-    .replace(/\.[^.]+$/, "")
-    .replace(/[_\s-]*v(?:er)?\.?\s*\d+(?:[.,]\d+)?/gi, "")
     .toLocaleLowerCase("ru-RU")
     .replace(/ё/g, "е")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function parseDocumentDateScore(value: string) {
+  const normalized = value.toLocaleLowerCase("ru-RU");
+  if (normalized.includes("только")) {
+    return 9_999_999_999;
+  }
+  if (normalized.includes("сегодня")) {
+    return 9_000_000_000;
+  }
+
+  const match = normalized.match(/(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})/);
+  if (!match) {
+    return 0;
+  }
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3].length === 2 ? `20${match[3]}` : match[3]);
+  return year * 10000 + month * 100 + day;
 }
 
 function findDocumentOwnerNode(project: DemoProject, document: ProcessDocument, fallbackNodeId?: string) {

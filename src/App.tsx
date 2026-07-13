@@ -4,7 +4,7 @@ import { TopSearch } from "./components/TopSearch";
 import { ProjectScene, type SceneHandle } from "./components/ProjectScene";
 import { BottomControls } from "./components/BottomControls";
 import { RightPanel } from "./components/RightPanel";
-import { WorkspacePanel } from "./components/WorkspacePanel";
+import { WorkspacePanel, type WorkspaceTaskDraft } from "./components/WorkspacePanel";
 import { DocumentModal } from "./components/DocumentModal";
 import { OrphanFilesPanel } from "./components/OrphanFilesPanel";
 import { ProjectChatPanel } from "./components/ProjectChatPanel";
@@ -43,6 +43,7 @@ import type {
   DemoProject,
   IntegrationProvider,
   NodeEdit,
+  NodeStatus,
   ParticipantEdit,
   ProcessDocument,
   ProcessEdit,
@@ -409,6 +410,114 @@ export default function App() {
       ),
       updatedAt: "только что",
     }));
+  }
+
+  function updateDocumentStatus(documentId: string, status: NodeStatus) {
+    updateActiveProject((project) => ({
+      ...project,
+      nodes: project.nodes.map((node) =>
+        node.type === "document" && node.document?.id === documentId
+          ? {
+              ...node,
+              status,
+              updatedAt: "только что",
+              document: {
+                ...node.document,
+                status,
+                updatedAt: "только что",
+              },
+            }
+          : node,
+      ),
+      processes: project.processes.map((process) => ({
+        ...process,
+        documents: process.documents.map((document) =>
+          document.id === documentId ? { ...document, status, updatedAt: "только что" } : document,
+        ),
+      })),
+      inboxDocuments: project.inboxDocuments.map((document) =>
+        document.id === documentId ? { ...document, status, updatedAt: "только что" } : document,
+      ),
+      updatedAt: "только что",
+    }));
+    showToast(status === "approved" ? "Документ согласован." : status === "comments" ? "Документ отмечен как не принятый." : "Документ принят в работу.");
+  }
+
+  function createTaggedDocument(title: string, tag: string) {
+    const normalizedTitle = title.trim() || "Новый_документ.pdf";
+    const normalizedTag = tag.trim();
+    const targetNode = normalizedTag ? findNodeByTag(activeProject, normalizedTag) : undefined;
+    const document: ProcessDocument = {
+      ...createDocumentFromName(normalizedTitle, "manual"),
+      from: "Тестовый импорт",
+      detectedTag: normalizedTag || undefined,
+      autoRouted: Boolean(targetNode),
+      isNew: true,
+      status: targetNode ? "review" : "draft",
+      updatedAt: "только что",
+    };
+    const result = addDocumentNodeToProject(activeProject, activeLevel.id, document, targetNode?.id);
+
+    updateActiveProject(() => result.project);
+    setActiveLevelId(result.levelId);
+    setSelectedNodeId(result.documentNode.id);
+    setSelectedProcessId(null);
+    setActiveMenu("map");
+    window.setTimeout(() => sceneRef.current?.focusNode(result.documentNode.id), 80);
+
+    pushNotification({
+      title: targetNode ? "Документ распределен по тегу" : "Документ создан без совпадения тега",
+      description: targetNode
+        ? `Тег «${normalizedTag}» совпал с нодой «${targetNode.shortCode ?? targetNode.title}».`
+        : "Совпадающая нода не найдена, документ остался бесхозным.",
+      targetNodeId: result.documentNode.id,
+    });
+    showToast(targetNode ? `Документ попал в ноду «${targetNode.shortCode ?? targetNode.title}».` : "Документ создан как бесхозная малая нода.");
+  }
+
+  function createTaskDraft(edit: WorkspaceTaskDraft) {
+    const from = getNodeById(activeProject, edit.fromNodeId);
+    const to = getNodeById(activeProject, edit.toNodeId);
+    if (!from || !to || from.id === to.id) {
+      showToast("Для задания нужны две разные ноды.");
+      return;
+    }
+
+    const level = activeProject.levels.find((item) => item.nodeIds.includes(from.id) && item.nodeIds.includes(to.id)) ?? getDefaultLevel(activeProject);
+    const pairCount = activeProject.processes.filter(
+      (process) =>
+        process.levelId === level.id &&
+        ((process.from === from.id && process.to === to.id) || (process.from === to.id && process.to === from.id)),
+    ).length;
+    const process: BusinessProcess = {
+      id: createProcessId(from.id, to.id),
+      projectId: activeProject.id,
+      levelId: level.id,
+      from: from.id,
+      to: to.id,
+      title: edit.title.trim() || "Новое задание",
+      description: edit.description.trim() || "Черновик задания, созданный из вкладки «Задания».",
+      status: "draft",
+      direction: "forward",
+      sender: from.responsible ?? from.title,
+      receiver: to.responsible ?? to.title,
+      createdAt: "только что",
+      dueAt: edit.dueAt,
+      parallelIndex: pairCount ? pairCount - 0.5 : 0,
+      source: "manual",
+      documents: [],
+    };
+
+    updateActiveProject((project) => ({
+      ...project,
+      processes: [process, ...project.processes],
+      updatedAt: "только что",
+    }));
+    setActiveLevelId(level.id);
+    setSelectedNodeId(from.id);
+    setSelectedProcessId(process.id);
+    setActiveMenu("map");
+    showToast("Черновик задания создан.");
   }
 
   function addParticipant(edit: ParticipantEdit) {
@@ -1072,7 +1181,11 @@ export default function App() {
         onReceiveMail={() => receiveMail()}
         onReceiveChat={() => receiveChat()}
         onSendMessage={sendProjectChatMessage}
-        onOpenProjectManager={() => setProjectManagerOpen(true)}
+        projectTemplates={projectTemplates}
+        onCreateTemplate={createTemplate}
+        onCreateTaggedDocument={createTaggedDocument}
+        onCreateTaskDraft={createTaskDraft}
+        onUpdateDocumentStatus={updateDocumentStatus}
         onAddParticipant={addParticipant}
         onUpdateParticipant={updateParticipant}
         onDeleteParticipant={deleteParticipant}
@@ -1089,6 +1202,8 @@ export default function App() {
           onSelectProcess={selectProcess}
           onOpenDocument={setModalDocument}
           onMoveDocumentNode={moveDocumentNode}
+          onAddRandomFile={addRandomFile}
+          onUpdateDocumentStatus={updateDocumentStatus}
           onRejectProcessDocument={rejectProcessDocument}
           onAttachInboxDocument={attachInboxDocument}
           onOpenProcessBuilder={(processId) => setProcessBuilderId(processId)}
@@ -1113,13 +1228,9 @@ export default function App() {
       />
       {projectManagerOpen ? (
         <ProjectManagerModal
-          projects={projects}
-          activeProjectId={activeProjectId}
           templates={projectTemplates}
           onClose={() => setProjectManagerOpen(false)}
-          onSelectProject={selectProject}
           onCreateProject={createProject}
-          onCreateTemplate={createTemplate}
         />
       ) : null}
       {personalSettingsOpen && currentUser ? (

@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   Clock3,
   ExternalLink,
+  FilePlus2,
   FileText,
   GitBranch,
   Inbox,
@@ -30,6 +31,7 @@ import type {
   BusinessProcess,
   DemoProject,
   MapLevel,
+  NodeStatus,
   NodeEdit,
   ProcessDocument,
   ProcessEdit,
@@ -48,6 +50,8 @@ type RightPanelProps = {
   onSelectProcess: (processId: string) => void;
   onOpenDocument: (document: ProcessDocument) => void;
   onMoveDocumentNode: (documentNodeId: string, targetNodeId: string | null) => void;
+  onAddRandomFile: (targetNodeId?: string) => void;
+  onUpdateDocumentStatus: (documentId: string, status: NodeStatus) => void;
   onRejectProcessDocument: (processId: string, documentId: string) => void;
   onAttachInboxDocument: (processId: string, documentId: string) => void;
   onOpenProcessBuilder: (processId: string) => void;
@@ -66,6 +70,8 @@ export function RightPanel({
   onSelectProcess,
   onOpenDocument,
   onMoveDocumentNode,
+  onAddRandomFile,
+  onUpdateDocumentStatus,
   onRejectProcessDocument,
   onAttachInboxDocument,
   onOpenProcessBuilder,
@@ -92,6 +98,8 @@ export function RightPanel({
           onSelectProcess={onSelectProcess}
           onOpenDocument={onOpenDocument}
           onMoveDocumentNode={onMoveDocumentNode}
+          onAddRandomFile={onAddRandomFile}
+          onUpdateDocumentStatus={onUpdateDocumentStatus}
         />
       )}
     </aside>
@@ -106,6 +114,8 @@ function NodeInfo({
   onSelectProcess,
   onOpenDocument,
   onMoveDocumentNode,
+  onAddRandomFile,
+  onUpdateDocumentStatus,
 }: {
   project: DemoProject;
   level: MapLevel;
@@ -114,6 +124,8 @@ function NodeInfo({
   onSelectProcess: (processId: string) => void;
   onOpenDocument: (document: ProcessDocument) => void;
   onMoveDocumentNode: (documentNodeId: string, targetNodeId: string | null) => void;
+  onAddRandomFile: (targetNodeId?: string) => void;
+  onUpdateDocumentStatus: (documentId: string, status: NodeStatus) => void;
 }) {
   if (node.type === "document") {
     return (
@@ -158,6 +170,15 @@ function NodeInfo({
         </div>
       </section>
 
+      {node.type !== "central" ? (
+        <section className="single-node-action">
+          <button onClick={() => onAddRandomFile(node.id)}>
+            <FilePlus2 size={17} />
+            Положить тестовый файл в ноду
+          </button>
+        </section>
+      ) : null}
+
       <div className="info-grid">
         <Metric icon={<GitBranch size={16} />} label="Связей" value={String(processes.length)} />
         <Metric icon={<FileText size={16} />} label="Документов в связях" value={String(documents.length)} />
@@ -180,7 +201,12 @@ function NodeInfo({
         )) : <p>У ноды пока нет ручных контейнеров связей.</p>}
       </section>
 
-      <DocumentList title="Документы в процессах" documents={documents.slice(0, 6)} onOpenDocument={onOpenDocument} />
+      <DocumentList
+        title="Документы в ноде и процессах"
+        documents={documents.slice(0, 12)}
+        onOpenDocument={onOpenDocument}
+        onUpdateDocumentStatus={onUpdateDocumentStatus}
+      />
     </>
   );
 }
@@ -436,11 +462,13 @@ function DocumentList({
   documents,
   onOpenDocument,
   onRejectDocument,
+  onUpdateDocumentStatus,
 }: {
   title: string;
   documents: ProcessDocument[];
   onOpenDocument: (document: ProcessDocument) => void;
   onRejectDocument?: (documentId: string) => void;
+  onUpdateDocumentStatus?: (documentId: string, status: NodeStatus) => void;
 }) {
   if (!documents.length) {
     return (
@@ -455,7 +483,7 @@ function DocumentList({
     <section className="document-list">
       <h3>{title}</h3>
       {documents.map((document) => (
-        <article key={document.id} className={clsx("document-row", onRejectDocument && "with-action")}>
+        <article key={document.id} className={clsx("document-row", (onRejectDocument || onUpdateDocumentStatus) && "with-action")}>
           <button onClick={() => onOpenDocument(document)}>
             <span style={{ color: getFileTypeColor(document.fileType) }}>
               <FileText size={17} />
@@ -466,7 +494,18 @@ function DocumentList({
             </div>
             <em>{document.version}</em>
           </button>
-          {onRejectDocument ? (
+          {onUpdateDocumentStatus ? (
+            <div className="document-status-actions">
+              <button onClick={() => onUpdateDocumentStatus(document.id, "review")}>В работу</button>
+              <button onClick={() => onUpdateDocumentStatus(document.id, "approved")}>Согласовать</button>
+              <button
+                className="danger"
+                onClick={() => (onRejectDocument ? onRejectDocument(document.id) : onUpdateDocumentStatus(document.id, "comments"))}
+              >
+                Не принято
+              </button>
+            </div>
+          ) : onRejectDocument ? (
             <button className="document-reject-button" onClick={() => onRejectDocument(document.id)}>
               Не принято
             </button>
