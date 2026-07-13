@@ -56,6 +56,7 @@ import type {
   ProjectNode,
   ProjectTemplate,
   UserIntegration,
+  Vec2,
 } from "./types";
 
 type HistorySnapshot = {
@@ -317,6 +318,16 @@ export default function App() {
       recordHistory();
     }
     setProjects((current) => current.map((project) => (project.id === activeProjectId ? updater(project) : project)));
+  }
+
+  function saveLevelPositions(levelId: string, positions: Record<string, Vec2>, record = true) {
+    updateActiveProject((project) => ({
+      ...project,
+      nodePositions: {
+        ...(project.nodePositions ?? {}),
+        [levelId]: positions,
+      },
+    }), record);
   }
 
   function selectProject(projectId: string) {
@@ -1208,7 +1219,7 @@ export default function App() {
     showToast(targetNodeId ? `Документ добавлен внутрь ноды «${targetLabel}».` : "Бесхозный файл добавлен на карту как малая нода.");
   }
 
-  function moveDocumentNode(documentNodeId: string, targetNodeId: string | null) {
+  function moveDocumentNode(documentNodeId: string, targetNodeId: string | null, position?: Vec2) {
     if (targetNodeId) {
       const result = putDocumentIntoNode(activeProject, documentNodeId, targetNodeId);
       const targetLabel = result.targetNode?.shortCode ?? result.targetNode?.title ?? "";
@@ -1220,26 +1231,28 @@ export default function App() {
     }
 
     const result = removeDocumentFromNode(activeProject, documentNodeId);
-    updateActiveProject(() => result.project);
+    updateActiveProject(() => withNodePosition(result.project, result.levelId, documentNodeId, position));
     setActiveLevelId(result.levelId);
     setSelectedNodeId(documentNodeId);
     setSelectedProcessId(null);
     showToast("Файл вынесен из ноды и снова стал бесхозным.");
   }
 
-  function materializeInboxDocument(documentId: string) {
+  function materializeInboxDocument(documentId: string, position?: Vec2) {
     const document = activeProject.inboxDocuments.find((item) => item.id === documentId);
     if (!document) {
       return;
     }
 
     const result = addDocumentNodeToProject(activeProject, activeLevel.id, { ...document, isNew: false, updatedAt: "только что" });
-    updateActiveProject(() => result.project);
+    updateActiveProject(() => withNodePosition(result.project, result.levelId, result.documentNode.id, position));
     setActiveLevelId(result.levelId);
     setSelectedNodeId(result.documentNode.id);
     setSelectedProcessId(null);
     setActiveMenu("map");
-    window.setTimeout(() => sceneRef.current?.focusNode(result.documentNode.id), 80);
+    if (!position) {
+      window.setTimeout(() => sceneRef.current?.focusNode(result.documentNode.id), 80);
+    }
     showToast("Файл вынесен из бесхозных на рабочую область.");
   }
 
@@ -1279,12 +1292,8 @@ export default function App() {
     showToast("Сообщение отправлено в мессенджер проекта.");
   }
 
-  async function importFilesToProjectPool(files: File[]) {
-    if (!files.length) {
-      return;
-    }
-
-    const documents = await Promise.all(
+  async function createDocumentsFromDroppedFiles(files: File[]) {
+    return Promise.all(
       files.map(async (file) =>
         createDocumentFromName(
           file.name,
@@ -1296,6 +1305,14 @@ export default function App() {
         ),
       ),
     );
+  }
+
+  async function importFilesToProjectPool(files: File[]) {
+    if (!files.length) {
+      return;
+    }
+
+    const documents = await createDocumentsFromDroppedFiles(files);
 
     let nextProject = activeProject;
     const documentNodes: ProjectNode[] = [];
@@ -1322,23 +1339,54 @@ export default function App() {
     showToast(`Файлы импортированы: ${routedCount} распределено по тегам, ${inboxCount} добавлено в бесхозные.`);
   }
 
+  async function importFilesToWorkspace(files: File[], position?: Vec2 | null) {
+    if (!files.length) {
+      return;
+    }
+
+    if (!position) {
+      await importFilesToProjectPool(files);
+      return;
+    }
+
+    const documents = await createDocumentsFromDroppedFiles(files);
+    let nextProject = activeProject;
+    const documentNodes: ProjectNode[] = [];
+
+    documents.forEach((document, index) => {
+      const result = addDocumentNodeToProject(nextProject, activeLevel.id, { ...document, isNew: true, updatedAt: "только что" });
+      nextProject = withNodePosition(result.project, result.levelId, result.documentNode.id, offsetDropPosition(position, index));
+      documentNodes.push(result.documentNode);
+    });
+
+    updateActiveProject(() => nextProject);
+    if (documentNodes[0]) {
+      setActiveLevelId(activeLevel.id);
+      setSelectedNodeId(documentNodes[0].id);
+      setSelectedProcessId(null);
+      setActiveMenu("map");
+    }
+    showToast(`Файлы добавлены на карту в точку перетаскивания: ${documents.length}.`);
+  }
+
   async function handleDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
     setIsDropActive(false);
+    const dropPosition = sceneRef.current?.clientToWorld(event.clientX, event.clientY);
 
     const documentNodeId = event.dataTransfer.getData("application/x-molecule-document-node");
     if (documentNodeId) {
-      moveDocumentNode(documentNodeId, null);
+      moveDocumentNode(documentNodeId, null, dropPosition ?? undefined);
       return;
     }
 
     const inboxDocumentId = event.dataTransfer.getData("application/x-molecule-inbox-document");
     if (inboxDocumentId) {
-      materializeInboxDocument(inboxDocumentId);
+      materializeInboxDocument(inboxDocumentId, dropPosition ?? undefined);
       return;
     }
 
-    await importFilesToProjectPool(Array.from(event.dataTransfer.files));
+    await importFilesToWorkspace(Array.from(event.dataTransfer.files), dropPosition);
   }
 
   function handleNotificationClick(notification: DemoNotification) {
@@ -1475,6 +1523,7 @@ export default function App() {
         onAddRandomFile={addRandomFile}
         onAddSectionNode={addSectionNode}
         onUpdateDocumentStatus={updateDocumentStatus}
+        onPositionsChange={saveLevelPositions}
         sceneRef={sceneRef}
       />
       <OrphanFilesPanel
@@ -1665,6 +1714,40 @@ function addDocumentToInbox(project: DemoProject, document: ProcessDocument): De
     ],
     updatedAt: "только что",
   };
+}
+
+function withNodePosition(project: DemoProject, levelId: string, nodeId: string, position?: Vec2): DemoProject {
+  if (!position) {
+    return project;
+  }
+
+  return {
+    ...project,
+    nodePositions: {
+      ...(project.nodePositions ?? {}),
+      [levelId]: {
+        ...(project.nodePositions?.[levelId] ?? {}),
+        [nodeId]: position,
+      },
+    },
+  };
+}
+
+function offsetDropPosition(position: Vec2, index: number): Vec2 {
+  if (index === 0) {
+    return position;
+  }
+
+  const column = index % 3;
+  const row = Math.floor(index / 3);
+  return {
+    x: clampNumber(position.x + column * 1.35, -42, 42),
+    y: clampNumber(position.y + row * 1.05, -26, 26),
+  };
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
 }
 
 function findBestProcessForIncoming(project: DemoProject, levelId: string, marker: string) {

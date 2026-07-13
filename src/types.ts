@@ -171,6 +171,7 @@ export type DemoProject = {
   inboxDocuments: ProcessDocument[];
   chatMessages: ChatMessage[];
   participants: ProjectParticipant[];
+  nodePositions?: Record<string, Record<string, Vec2>>;
 };
 
 export type ProjectTemplate = {

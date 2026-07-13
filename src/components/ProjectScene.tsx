@@ -28,6 +28,7 @@ export type SceneHandle = {
   normalize: () => void;
   focusNode: (id: string) => void;
   focusSelected: () => void;
+  clientToWorld: (clientX: number, clientY: number) => Vec2 | null;
 };
 
 type ProjectSceneProps = {
@@ -54,6 +55,7 @@ type ProjectSceneProps = {
   onAddRandomFile: (targetNodeId?: string) => void;
   onAddSectionNode: () => void;
   onUpdateDocumentStatus: (documentId: string, status: NodeStatus) => void;
+  onPositionsChange: (levelId: string, positions: Record<string, Vec2>, record?: boolean) => void;
   sceneRef: MutableRefObject<SceneHandle | null>;
 };
 
@@ -113,6 +115,7 @@ export function ProjectScene({
   onAddRandomFile,
   onAddSectionNode,
   onUpdateDocumentStatus,
+  onPositionsChange,
   sceneRef,
 }: ProjectSceneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -121,16 +124,18 @@ export function ProjectScene({
   const clickRef = useRef<{ nodeId: string; time: number } | null>(null);
   const suppressClickRef = useRef(false);
   const panRef = useRef<{ pointerId: number; x: number; y: number; panX: number; panY: number } | null>(null);
+  const centerNodeId = level.centralNodeId;
+  const nodeIdsKey = useMemo(() => nodes.map((node) => node.id).join("|"), [nodes]);
+  const savedPositions = project.nodePositions?.[level.id];
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [view, setView] = useState<ViewState>(INITIAL_VIEW);
-  const [positions, setPositions] = useState<Record<string, Vec2>>(() => buildInitialPositions(nodes, level.id, level.centralNodeId));
+  const [positions, setPositions] = useState<Record<string, Vec2>>(() => buildLevelPositions(nodes, level.id, centerNodeId, savedPositions));
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [dragUi, setDragUi] = useState<DragUiState | null>(null);
   const [contextMenu, setContextMenu] = useState<NodeContextMenuState | null>(null);
   const [levelMotion, setLevelMotion] = useState<"down" | "up" | null>(null);
   const nodeMap = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
   const contextNode = contextMenu ? nodeMap.get(contextMenu.nodeId) : undefined;
-  const centerNodeId = level.centralNodeId;
   const projectProgress = getProjectProgress(project, level);
   const scale = getBaseScale(size) * view.zoom;
 
@@ -152,29 +157,8 @@ export function ProjectScene({
   }, []);
 
   useEffect(() => {
-    setPositions((current) => {
-      const next = { ...current };
-      const ids = new Set(nodes.map((node) => node.id));
-      let changed = false;
-
-      Object.keys(next).forEach((id) => {
-        if (!ids.has(id)) {
-          delete next[id];
-          changed = true;
-        }
-      });
-
-      const fallback = buildInitialPositions(nodes, level.id, centerNodeId);
-      nodes.forEach((node) => {
-        if (!next[node.id]) {
-          next[node.id] = fallback[node.id] ?? { x: 0, y: 0 };
-          changed = true;
-        }
-      });
-
-      return changed ? next : current;
-    });
-  }, [centerNodeId, level.id, nodes]);
+    setPositions(buildLevelPositions(nodes, level.id, centerNodeId, savedPositions));
+  }, [centerNodeId, level.id, nodeIdsKey, nodes, savedPositions]);
 
   useEffect(() => {
     setView(INITIAL_VIEW);
@@ -218,16 +202,24 @@ export function ProjectScene({
   useEffect(() => {
     sceneRef.current = {
       reset: () => {
-        setPositions(buildInitialPositions(nodes, level.id, centerNodeId));
+        const next = buildInitialPositions(nodes, level.id, centerNodeId);
+        setPositions(next);
+        onPositionsChange(level.id, next, true);
         setView(INITIAL_VIEW);
       },
       normalize: () => {
-        setPositions(buildNormalizedPositions(nodes, processes, level.id, centerNodeId));
+        const next = buildNormalizedPositions(nodes, processes, level.id, centerNodeId);
+        setPositions(next);
+        onPositionsChange(level.id, next, true);
       },
       focusNode,
       focusSelected: () => focusNode(selectedNodeId),
+      clientToWorld: (clientX, clientY) => {
+        const rect = containerRef.current?.getBoundingClientRect();
+        return rect ? clientToWorld(clientX, clientY, rect, view) : null;
+      },
     };
-  }, [centerNodeId, focusNode, level.id, nodes, processes, sceneRef, selectedNodeId]);
+  }, [centerNodeId, focusNode, level.id, nodes, onPositionsChange, processes, sceneRef, selectedNodeId, view]);
 
   const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -372,6 +364,9 @@ export function ProjectScene({
         onMoveDocumentNode(node.id, null);
       } else if (target && target.id !== node.documentOwnerNodeId) {
         onMoveDocumentNode(node.id, target.id);
+      } else {
+        setPositions(dropPositions);
+        onPositionsChange(level.id, dropPositions, true);
       }
       return;
     }
@@ -379,6 +374,9 @@ export function ProjectScene({
     setDragUi(null);
     if (drag.moved) {
       suppressClickRef.current = true;
+      const nextPositions = { ...positions, [node.id]: drag.currentPosition };
+      setPositions(nextPositions);
+      onPositionsChange(level.id, nextPositions, true);
     }
   };
 
@@ -830,6 +828,28 @@ function buildInitialPositions(nodes: ProjectNode[], levelId: string, centralNod
   return positions;
 }
 
+function buildLevelPositions(
+  nodes: ProjectNode[],
+  levelId: string,
+  centralNodeId: string,
+  savedPositions?: Record<string, Vec2>,
+) {
+  const fallback = buildInitialPositions(nodes, levelId, centralNodeId);
+  const result: Record<string, Vec2> = {};
+
+  nodes.forEach((node) => {
+    if (node.id === centralNodeId || node.type === "central") {
+      result[node.id] = { x: 0, y: 0 };
+      return;
+    }
+
+    const saved = savedPositions?.[node.id];
+    result[node.id] = isFinitePosition(saved) ? saved : fallback[node.id] ?? { x: 0, y: 0 };
+  });
+
+  return result;
+}
+
 function buildNormalizedPositions(nodes: ProjectNode[], processes: BusinessProcess[], levelId: string, centralNodeId: string) {
   const positions = buildInitialPositions(nodes, levelId, centralNodeId);
   const ids = nodes.map((node) => node.id);
@@ -1060,4 +1080,8 @@ function seededJitter(seed: string): Vec2 {
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function isFinitePosition(position?: Vec2): position is Vec2 {
+  return Boolean(position && Number.isFinite(position.x) && Number.isFinite(position.y));
 }
