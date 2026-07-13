@@ -2,6 +2,44 @@ import type { BusinessProcess, DemoProject, MapLevel, ProjectNode, ProjectPartic
 
 const NOW = "только что";
 
+export function createBlankProjectTemplate(): ProjectTemplate {
+  const projectId = "template-blank";
+  const rootLevelId = "level-template-blank-root";
+  const levels: MapLevel[] = [
+    {
+      id: rootLevelId,
+      projectId,
+      title: "Пустой проект",
+      subtitle: "Стартовый конструктор: назовите блоки и соедините их бизнес-процессами",
+      centralNodeId: "node-template-blank-root",
+      nodeIds: [
+        "node-template-blank-root",
+        "node-template-blank-1",
+        "node-template-blank-2",
+        "node-template-blank-3",
+      ],
+    },
+  ];
+
+  const nodes: ProjectNode[] = [
+    templateNode(projectId, rootLevelId, "node-template-blank-root", "central", "Новый проект", "0%", "Центральная нода проекта. Процент появится после согласования блоков.", "review"),
+    templateNode(projectId, rootLevelId, "node-template-blank-1", "section", "Блок 1", "Б1", "Переименуйте блок и опишите, какой результат должен быть получен.", "unchecked", undefined, ["Б1"]),
+    templateNode(projectId, rootLevelId, "node-template-blank-2", "section", "Блок 2", "Б2", "Переименуйте блок и задайте ответственного в правой панели.", "unchecked", undefined, ["Б2"]),
+    templateNode(projectId, rootLevelId, "node-template-blank-3", "section", "Блок 3", "Б3", "Соедините блоки вручную через плюс на ноде.", "unchecked", undefined, ["Б3"]),
+  ];
+
+  return {
+    id: "template-blank-project",
+    title: "Пустой проект / конструктор",
+    description: "Минимальный старт: центральная нода и три редактируемых бизнес-блока без документов и процессов.",
+    createdAt: "демо",
+    sourceProjectTitle: "Системный шаблон",
+    levels,
+    nodes,
+    processes: [],
+  };
+}
+
 export function createDefaultProjectTemplate(): ProjectTemplate {
   const projectId = "template-base";
   const rootLevelId = "level-template-base-root";

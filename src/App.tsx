@@ -11,6 +11,7 @@ import { ProjectChatPanel } from "./components/ProjectChatPanel";
 import { ProjectManagerModal } from "./components/ProjectManagerModal";
 import { ProcessBuilderModal } from "./components/ProcessBuilderModal";
 import { PersonalIntegrationsModal } from "./components/PersonalIntegrationsModal";
+import { MvpGuide } from "./components/MvpGuide";
 import { demoProjects, initialNotifications } from "./data/mockProject";
 import {
   createDocumentNode,
@@ -33,7 +34,7 @@ import {
   putDocumentIntoNode,
   removeDocumentFromNode,
 } from "./lib/projectMutations";
-import { createDefaultProjectTemplate, createProjectFromTemplate, createTemplateFromProject } from "./lib/projectTemplates";
+import { createBlankProjectTemplate, createDefaultProjectTemplate, createProjectFromTemplate, createTemplateFromProject } from "./lib/projectTemplates";
 import type {
   BusinessProcess,
   ChatMessage,
@@ -59,30 +60,84 @@ type HistorySnapshot = {
 };
 
 const HISTORY_LIMIT = 60;
+const STORAGE_KEY = "molecule-mvp-state-v2";
 type LevelTransition = "down" | "up";
 
+type PersistedAppState = {
+  projects: DemoProject[];
+  projectTemplates: ProjectTemplate[];
+  activeProjectId: string;
+  activeLevelId: string;
+  selectedNodeId: string;
+  notifications: DemoNotification[];
+  fontScale: number;
+  guideDismissed?: boolean;
+};
+
+let cachedPersistedState: PersistedAppState | null | undefined;
+
+function getPersistedState() {
+  if (cachedPersistedState !== undefined) {
+    return cachedPersistedState;
+  }
+
+  if (typeof window === "undefined") {
+    cachedPersistedState = null;
+    return cachedPersistedState;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    cachedPersistedState = raw ? JSON.parse(raw) as PersistedAppState : null;
+  } catch {
+    cachedPersistedState = null;
+  }
+
+  return cachedPersistedState;
+}
+
+function mergeProjectTemplates(savedTemplates: ProjectTemplate[] | undefined, defaultTemplates: ProjectTemplate[]) {
+  if (!savedTemplates?.length) {
+    return defaultTemplates;
+  }
+
+  const savedIds = new Set(savedTemplates.map((template) => template.id));
+  return [
+    ...defaultTemplates.filter((template) => !savedIds.has(template.id)),
+    ...savedTemplates,
+  ];
+}
+
 export default function App() {
-  const [projects, setProjects] = useState<DemoProject[]>(demoProjects);
-  const [projectTemplates, setProjectTemplates] = useState<ProjectTemplate[]>(() => [
+  const persistedState = getPersistedState();
+  const defaultTemplates = useMemo(() => [
+    createBlankProjectTemplate(),
     createDefaultProjectTemplate(),
     createTemplateFromProject(demoProjects[0], "Жилой комплекс / полный комплект", "Структура разделов, внутренних уровней и контейнеров связи без рабочих документов."),
     createTemplateFromProject(demoProjects[1], "Компактный офисный проект", "Легкая структура для небольшого объекта с ИРД, АР, КР, ЭОМ и сметой."),
-  ]);
-  const [activeProjectId, setActiveProjectId] = useState(demoProjects[0].id);
-  const [activeLevelId, setActiveLevelId] = useState(demoProjects[0].levels[0].id);
-  const [selectedNodeId, setSelectedNodeId] = useState(demoProjects[0].levels[0].centralNodeId);
+  ], []);
+  const initialProjects = persistedState?.projects?.length ? persistedState.projects : demoProjects;
+  const initialActiveProject = initialProjects.find((project) => project.id === persistedState?.activeProjectId) ?? initialProjects[0];
+  const initialActiveLevel = initialActiveProject.levels.find((level) => level.id === persistedState?.activeLevelId) ?? getDefaultLevel(initialActiveProject);
+  const initialSelectedNode = getNodeById(initialActiveProject, persistedState?.selectedNodeId) ?? getNodeById(initialActiveProject, initialActiveLevel.centralNodeId);
+  const [projects, setProjects] = useState<DemoProject[]>(initialProjects);
+  const [projectTemplates, setProjectTemplates] = useState<ProjectTemplate[]>(() => mergeProjectTemplates(persistedState?.projectTemplates, defaultTemplates));
+  const [activeProjectId, setActiveProjectId] = useState(initialActiveProject.id);
+  const [activeLevelId, setActiveLevelId] = useState(initialActiveLevel.id);
+  const [selectedNodeId, setSelectedNodeId] = useState(initialSelectedNode?.id ?? initialActiveLevel.centralNodeId);
   const [selectedProcessId, setSelectedProcessId] = useState<string | null>(null);
   const [linkingFromId, setLinkingFromId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [activeMenu, setActiveMenu] = useState<SidebarMenuId>("map");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [notifications, setNotifications] = useState<DemoNotification[]>(initialNotifications);
+  const [notifications, setNotifications] = useState<DemoNotification[]>(persistedState?.notifications ?? initialNotifications);
   const [modalDocument, setModalDocument] = useState<ProcessDocument | null>(null);
   const [projectManagerOpen, setProjectManagerOpen] = useState(false);
   const [personalSettingsOpen, setPersonalSettingsOpen] = useState(false);
   const [processBuilderId, setProcessBuilderId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [fontScale, setFontScale] = useState(1);
+  const [fontScale, setFontScale] = useState(persistedState?.fontScale ?? 1);
+  const [guideDismissed, setGuideDismissed] = useState(Boolean(persistedState?.guideDismissed));
   const [isDropActive, setIsDropActive] = useState(false);
   const [levelTransition, setLevelTransition] = useState<LevelTransition | null>(null);
   const [undoStack, setUndoStack] = useState<HistorySnapshot[]>([]);
@@ -101,6 +156,25 @@ export default function App() {
   const isSearching = query.trim().length > 0;
   const hasNoResults = isSearching && matches.nodeIds.size + matches.processIds.size === 0;
   const fontVars = useMemo(() => buildFontVars(fontScale), [fontScale]);
+
+  useEffect(() => {
+    const state: PersistedAppState = {
+      projects,
+      projectTemplates,
+      activeProjectId,
+      activeLevelId,
+      selectedNodeId,
+      notifications,
+      fontScale,
+      guideDismissed,
+    };
+
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      // Local storage can be unavailable in private browser modes. The demo still works in memory.
+    }
+  }, [activeLevelId, activeProjectId, fontScale, guideDismissed, notifications, projectTemplates, projects, selectedNodeId]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -265,6 +339,11 @@ export default function App() {
   }
 
   function openNodeLevel(node: ProjectNode) {
+    if (activeLevel.parentLevelId) {
+      showToast("В MVP доступен один уровень детализации внутри ноды.");
+      return;
+    }
+
     if (!canOpenNodeLevel(node, activeLevel.id)) {
       return;
     }
@@ -661,31 +740,33 @@ export default function App() {
 
   function receiveMail(processId?: string) {
     const targetProcess = processId ? getProcessById(activeProject, processId) : findBestProcessForIncoming(activeProject, activeLevel.id, "АР");
-    const document = createDocumentFromName("АР_пакет_из_почты_новое.pdf", "mail");
-    updateActiveProject((project) => {
-      if (!targetProcess) {
-        return {
-          ...project,
-          inboxDocuments: [{ ...document, title: "Письмо без тега.pdf" }, ...project.inboxDocuments],
+    const document = {
+      ...createDocumentFromName(targetProcess ? "АР_пакет_из_почты_новое.pdf" : "Письмо без тега.pdf", "mail"),
+      status: targetProcess ? ("review" as const) : ("draft" as const),
+      isNew: true,
+    };
+    const targetNodeId = targetProcess?.to ?? targetProcess?.from;
+    const projectWithProcess = targetProcess
+      ? {
+          ...activeProject,
+          processes: activeProject.processes.map((process) =>
+            process.id === targetProcess.id
+              ? {
+                  ...process,
+                  status: "sent" as const,
+                  documents: [document, ...process.documents],
+                  source: "mail" as const,
+                }
+              : process,
+          ),
           updatedAt: "только что",
-        };
-      }
-
-      return {
-        ...project,
-        processes: project.processes.map((process) =>
-          process.id === targetProcess.id
-            ? {
-                ...process,
-                status: "sent",
-                documents: [{ ...document, status: "review" }, ...process.documents],
-                source: "mail",
-              }
-            : process,
-        ),
-        updatedAt: "только что",
-      };
-    });
+        }
+      : activeProject;
+    const result = addDocumentNodeToProject(projectWithProcess, activeLevel.id, document, targetNodeId);
+    updateActiveProject(() => result.project);
+    setActiveLevelId(result.levelId);
+    setSelectedNodeId(result.documentNode.id);
+    setSelectedProcessId(null);
 
     pushNotification({
       title: targetProcess ? "Письмо привязано к связи" : "Письмо попало во входящие",
@@ -708,27 +789,35 @@ export default function App() {
       time: "только что",
       processId: targetProcess?.id,
     };
-    const document = createDocumentFromName("сообщение_из_мессенджера.txt", "chat", undefined, message.text);
-
-    updateActiveProject((project) => ({
-      ...project,
-      chatMessages: [message, ...project.chatMessages],
-      inboxDocuments: targetProcess ? project.inboxDocuments : [document, ...project.inboxDocuments],
+    const document = {
+      ...createDocumentFromName("сообщение_из_мессенджера.txt", "chat", undefined, message.text),
+      status: targetProcess ? ("review" as const) : ("draft" as const),
+      isNew: true,
+    };
+    const targetNodeId = targetProcess?.to ?? targetProcess?.from;
+    const projectWithMessage: DemoProject = {
+      ...activeProject,
+      chatMessages: [message, ...activeProject.chatMessages],
       processes: targetProcess
-        ? project.processes.map((process) =>
+        ? activeProject.processes.map((process) =>
             process.id === targetProcess.id
               ? {
                   ...process,
                   status: "in_work",
                   validationAt: "только что",
-                  documents: [{ ...document, status: "review" }, ...process.documents],
+                  documents: [document, ...process.documents],
                   source: "chat",
                 }
               : process,
           )
-        : project.processes,
+        : activeProject.processes,
       updatedAt: "только что",
-    }));
+    };
+    const result = addDocumentNodeToProject(projectWithMessage, activeLevel.id, document, targetNodeId);
+    updateActiveProject(() => result.project);
+    setActiveLevelId(result.levelId);
+    setSelectedNodeId(result.documentNode.id);
+    setSelectedProcessId(null);
 
     pushNotification({
       title: targetProcess ? "Мессенджер изменил статус связи" : "Сообщение без тега",
@@ -876,6 +965,15 @@ export default function App() {
     window.setTimeout(() => setToast(null), 2600);
   }
 
+  function toggleFullscreen() {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+      return;
+    }
+
+    void document.documentElement.requestFullscreen();
+  }
+
   return (
     <div
       className="app-shell"
@@ -888,13 +986,18 @@ export default function App() {
       onDrop={handleDrop}
     >
       <div className="cosmos-backdrop" />
+      {!guideDismissed ? (
+        <MvpGuide
+          onCreateProject={() => setProjectManagerOpen(true)}
+          onClose={() => setGuideDismissed(true)}
+        />
+      ) : null}
       <Sidebar
         isOpen={mobileMenuOpen}
         activeMenu={activeMenu}
         project={activeProject}
         onMenuSelect={setActiveMenu}
         onClose={() => setMobileMenuOpen(false)}
-        onPlannedClick={() => showToast("Функция находится в разработке и будет доступна в следующей версии.")}
       />
       <TopSearch
         value={query}
@@ -986,6 +1089,7 @@ export default function App() {
         onNormalize={() => sceneRef.current?.normalize()}
         onReset={() => sceneRef.current?.reset()}
         onFocus={() => sceneRef.current?.focusSelected()}
+        onFullscreen={toggleFullscreen}
         fontScale={fontScale}
         onFontScaleChange={setFontScale}
       />

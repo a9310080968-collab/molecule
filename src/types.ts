@@ -12,6 +12,8 @@ export type ProjectParticipantRole = "admin" | "gip" | "coordinator" | "architec
 
 export type ProjectParticipantStatus = "active" | "invited" | "blocked";
 
+export type ProjectVisibilityMode = "all" | "assigned" | "custom";
+
 export type IntegrationProvider = "outlook" | "yandex" | "gmail" | "telegram" | "folder";
 
 export type IntegrationStatus = "connected" | "not_connected" | "needs_permission";
@@ -38,6 +40,8 @@ export type ProjectParticipant = {
   otherContacts?: string;
   status: ProjectParticipantStatus;
   integrations?: UserIntegration[];
+  visibilityMode?: ProjectVisibilityMode;
+  visibleNodeIds?: string[];
 };
 
 export type ProcessFieldKey = "documents" | "sender" | "approver" | "deadline" | "comment" | "result";
@@ -92,6 +96,8 @@ export type ProcessDocument = {
   autoRouted?: boolean;
   isNew?: boolean;
   originPath?: string;
+  previewText?: string;
+  previewRows?: string[][];
 };
 
 export type BusinessProcess = {

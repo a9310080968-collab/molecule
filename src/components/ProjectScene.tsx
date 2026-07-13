@@ -377,7 +377,7 @@ export function ProjectScene({
         onOpenDocument(node.document);
         return;
       }
-      if (canDrillIntoNode(node, level.id)) {
+      if (canDrillIntoNode(node, level)) {
         onOpenNodeLevel(node);
         return;
       }
@@ -399,7 +399,7 @@ export function ProjectScene({
       return;
     }
 
-    if (canDrillIntoNode(node, level.id)) {
+    if (canDrillIntoNode(node, level)) {
       onOpenNodeLevel(node);
     }
   };
@@ -483,7 +483,7 @@ export function ProjectScene({
         const selected = selectedNodeId === node.id;
         const matched = matchedNodeIds.has(node.id);
         const dimmed = isSearching && !matched;
-        const canDrill = canDrillIntoNode(node, level.id);
+        const canDrill = canDrillIntoNode(node, level);
         const progress = isCenter ? projectProgress : undefined;
         const isLinkSource = linkingFromId === node.id;
         const canCompleteLink = linkingFromId && linkingFromId !== node.id;
@@ -769,8 +769,8 @@ function findDocumentDropTarget(documentNode: ProjectNode, nodes: ProjectNode[],
   return best?.node;
 }
 
-function canDrillIntoNode(node: ProjectNode, currentLevelId: string) {
-  return node.type !== "document" && node.type !== "central" && node.childrenLevelId !== currentLevelId;
+function canDrillIntoNode(node: ProjectNode, currentLevel: MapLevel) {
+  return !currentLevel.parentLevelId && node.type !== "document" && node.type !== "central" && node.childrenLevelId !== currentLevel.id;
 }
 
 function getNodeAbsorbRadius(node: ProjectNode, centralNodeId: string) {

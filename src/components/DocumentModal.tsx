@@ -38,7 +38,7 @@ export function DocumentModal({ document, onShowInFolder, onClose }: DocumentMod
           <span>{document.version}</span>
           <span>{nodeStatusLabels[document.status]}</span>
           <span>{document.updatedAt}</span>
-          <button onClick={() => document.fileUrl ? window.open(document.fileUrl, "_blank", "noopener,noreferrer") : undefined}>
+          <button disabled={!document.fileUrl} onClick={() => document.fileUrl ? window.open(document.fileUrl, "_blank", "noopener,noreferrer") : undefined}>
             Открыть документ
             <ExternalLink size={17} />
           </button>
@@ -57,6 +57,42 @@ function DocumentPreview({ document }: { document: ProcessDocument }) {
     return (
       <div className="document-preview live-preview">
         <iframe src={document.fileUrl} title={document.title} />
+      </div>
+    );
+  }
+
+  if (document.fileType === "xlsx" && document.previewRows?.length) {
+    return (
+      <div className="document-preview">
+        <div className="sheet-preview real-sheet-preview">
+          <FileSpreadsheet size={28} />
+          <b>{document.title}</b>
+          <span>{document.size ?? "Демо-таблица"}</span>
+          <table>
+            <tbody>
+              {document.previewRows.map((row, rowIndex) => (
+                <tr key={`${rowIndex}-${row.join("-")}`}>
+                  {row.map((cell, cellIndex) => rowIndex === 0 ? <th key={`${cellIndex}-${cell}`}>{cell}</th> : <td key={`${cellIndex}-${cell}`}>{cell}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  if (document.fileType === "docx" && document.previewText) {
+    const paragraphs = document.previewText.split(/\n+/).filter(Boolean);
+    return (
+      <div className="document-preview">
+        <div className="preview-page docx-preview-page">
+          <p>{document.title}</p>
+          <h3>{paragraphs[0] ?? "Документ"}</h3>
+          {paragraphs.slice(1).map((paragraph) => (
+            <span key={paragraph}>{paragraph}</span>
+          ))}
+        </div>
       </div>
     );
   }
@@ -88,9 +124,9 @@ function DocumentPreview({ document }: { document: ProcessDocument }) {
     <div className="document-preview">
       <div className="preview-page">
         <p>{document.title}</p>
-        <h3>{document.fileUrl ? "Файл загружен в демо" : "Демонстрационный просмотр документа"}</h3>
+        <h3>{document.previewText ? document.previewText.split("\n")[0] : document.fileUrl ? "Файл загружен в демо" : "Демонстрационный просмотр документа"}</h3>
         <span>
-          В рабочей версии здесь будет отображаться PDF/DOCX/XLSX-превью, история передачи по контейнеру связи, комментарии и решения валидации.
+          {document.previewText ?? "В рабочей версии здесь будет отображаться PDF/DOCX/XLSX-превью, история передачи по контейнеру связи, комментарии и решения валидации."}
         </span>
         <div className="preview-lines">
           <i />

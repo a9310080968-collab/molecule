@@ -1,6 +1,5 @@
 import {
   Archive,
-  Bot,
   CheckCircle2,
   ClipboardCheck,
   FileStack,
@@ -8,12 +7,10 @@ import {
   LayoutDashboard,
   MessageCircle,
   Settings,
-  Sparkles,
   Users,
   type LucideIcon,
 } from "lucide-react";
 import clsx from "clsx";
-import { plannedFeatures } from "../data/mockProject";
 import type { DemoProject } from "../types";
 
 export type SidebarMenuId =
@@ -32,7 +29,6 @@ type SidebarProps = {
   project: DemoProject;
   onMenuSelect: (menu: SidebarMenuId) => void;
   onClose: () => void;
-  onPlannedClick: () => void;
 };
 
 const navItems = [
@@ -46,7 +42,7 @@ const navItems = [
   { id: "settings", label: "Настройки", icon: Settings },
 ] satisfies Array<{ id: SidebarMenuId; label: string; icon: LucideIcon }>;
 
-export function Sidebar({ isOpen, activeMenu, project, onMenuSelect, onClose, onPlannedClick }: SidebarProps) {
+export function Sidebar({ isOpen, activeMenu, project, onMenuSelect, onClose }: SidebarProps) {
   const sent = project.processes.filter((process) => process.status === "sent").length;
   const rejected = project.processes.filter((process) => process.status === "rejected").length;
   const accepted = project.processes.filter((process) => process.status === "accepted").length;
@@ -90,7 +86,6 @@ export function Sidebar({ isOpen, activeMenu, project, onMenuSelect, onClose, on
           <div className="progress-track">
             <i style={{ width: `${storagePercent}%` }} />
           </div>
-          <button onClick={onPlannedClick}>Управление хранилищем</button>
         </section>
 
         <section className="review-card">
@@ -98,17 +93,6 @@ export function Sidebar({ isOpen, activeMenu, project, onMenuSelect, onClose, on
           <StatusCounter label="Отправлено" value={String(sent)} tone="sent" />
           <StatusCounter label="Не принято" value={String(rejected)} tone="rejected" />
           <StatusCounter label="Принято" value={String(accepted)} tone="accepted" />
-        </section>
-
-        <section className="planned-card">
-          <h2>Планируемые функции</h2>
-          {plannedFeatures.map((feature, index) => (
-            <button key={feature} onClick={onPlannedClick}>
-              {index === 2 ? <Bot size={16} /> : <Sparkles size={16} />}
-              <span>{feature}</span>
-              <em>В разработке</em>
-            </button>
-          ))}
         </section>
 
         <p className="hint">

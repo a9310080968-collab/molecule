@@ -1,6 +1,5 @@
 import { Bell, Menu, Plus, Search, SlidersHorizontal, UserCog, X } from "lucide-react";
 import { useState } from "react";
-import clsx from "clsx";
 import type { DemoNotification, DemoProject } from "../types";
 
 type TopSearchProps = {
@@ -43,20 +42,20 @@ export function TopSearch({
         <Menu size={20} />
       </button>
 
-      <div className="project-tabs glass-panel" aria-label="Проекты">
-        {projects.map((project) => (
-          <button
-            key={project.id}
-            className={clsx(project.id === activeProjectId && "active")}
-            onClick={() => onProjectChange(project.id)}
-          >
-            <span>{project.title}</span>
-            <small>{project.address}</small>
-          </button>
-        ))}
-        <button className="project-add-tab" onClick={onOpenProjectManager} title="Проекты и шаблоны">
+      <div className="project-selector glass-panel" aria-label="Проекты">
+        <label>
+          <span>Проект</span>
+          <select value={activeProjectId} onChange={(event) => onProjectChange(event.currentTarget.value)}>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.title} — {project.address}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button className="project-add-tab" onClick={onOpenProjectManager} title="Создать или настроить проект">
           <Plus size={18} />
-          <span>Новый</span>
+          <span>Создать</span>
         </button>
       </div>
 

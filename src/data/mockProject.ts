@@ -36,12 +36,6 @@ export const processStatusColors: Record<ProcessStatus, string> = {
   accepted: "#2ed8a3",
 };
 
-export const plannedFeatures = [
-  "Шаблоны документов",
-  "Автоправила маршрутизации",
-  "ИИ-разбор вложений",
-];
-
 export const demoProjects: DemoProject[] = [
   createSiriusProject(),
   createVegaProject(),
@@ -505,6 +499,7 @@ function doc(
   from: string,
   source: ProcessDocument["source"] = "demo",
 ): ProcessDocument {
+  const preview = buildMockDocumentPreview(title, fileType);
   return {
     id,
     title,
@@ -515,5 +510,58 @@ function doc(
     source,
     updatedAt: "сегодня",
     size: fileType === "xlsx" ? "1.6 МБ" : fileType === "pdf" ? "4.2 МБ" : "820 КБ",
+    fileUrl: getMockDemoFileUrl(fileType),
+    fileText: preview.text,
+    previewRows: preview.rows,
   };
+}
+
+function getMockDemoFileUrl(fileType: FileType) {
+  const files: Partial<Record<FileType, string>> = {
+    pdf: "demo-plan.pdf",
+    docx: "demo-task.docx",
+    xlsx: "demo-register.xlsx",
+    txt: "demo-note.txt",
+  };
+  const file = files[fileType];
+  return file ? `${import.meta.env.BASE_URL}demo-files/${file}` : undefined;
+}
+
+function buildMockDocumentPreview(title: string, fileType: FileType): { text?: string; rows?: string[][] } {
+  if (fileType === "xlsx") {
+    return {
+      rows: [
+        ["Раздел", "Документ", "Версия", "Статус", "Ответственный"],
+        ["АР", "План 1 этажа", "v4", "На проверке", "Анна Лебедева"],
+        ["КР", "Расчет нагрузок", "v2", "Есть замечания", "Игорь Мельников"],
+        ["ПЗ", "ТЭП", "v1", "В работе", "Мария Соколова"],
+        ["ОВ/ВК", "Сводка стояков", "v1", "Принято", "Роман Фадеев"],
+      ],
+    };
+  }
+
+  if (fileType === "docx") {
+    return {
+      text: [
+        title,
+        "",
+        "1. Назначение",
+        "Файл используется как рабочее задание внутри проектной молекулы.",
+        "",
+        "2. Состав передачи",
+        "Ответственный, срок, версия документа и комментарий к согласованию.",
+        "",
+        "3. Действие",
+        "Документ можно вложить в ноду, передать по бизнес-процессу и открыть на проверке.",
+      ].join("\n"),
+    };
+  }
+
+  if (fileType === "pdf") {
+    return {
+      text: `${title}\nДемонстрационный PDF-лист с рамкой, штампом и зоной согласования.`,
+    };
+  }
+
+  return {};
 }

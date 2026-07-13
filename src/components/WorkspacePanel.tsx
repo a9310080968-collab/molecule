@@ -23,14 +23,16 @@ import { useEffect, useState } from "react";
 import {
   getAcceptedAssignments,
   getChecks,
+  getDefaultLevel,
   getDocumentFromNode,
   getFileLabel,
   getFileTypeColor,
+  getLevelNodes,
   getNodeById,
   getProcessStatusColor,
   getProcessStatusText,
 } from "../lib/graph";
-import type { BusinessProcess, DemoProject, ParticipantEdit, ProcessDocument, ProjectParticipant, ProjectParticipantRole, ProjectParticipantStatus } from "../types";
+import type { BusinessProcess, DemoProject, ParticipantEdit, ProcessDocument, ProjectParticipant, ProjectParticipantRole, ProjectParticipantStatus, ProjectVisibilityMode } from "../types";
 import type { SidebarMenuId } from "./Sidebar";
 
 type WorkspacePanelProps = {
@@ -629,6 +631,12 @@ const participantStatusLabels: Record<ProjectParticipantStatus, string> = {
   blocked: "Отключен",
 };
 
+const visibilityModeLabels: Record<ProjectVisibilityMode, string> = {
+  all: "Видит все ноды",
+  assigned: "Только назначенные",
+  custom: "Выбранные ноды",
+};
+
 const emptyParticipantForm: ParticipantEdit = {
   name: "",
   position: "",
@@ -638,6 +646,8 @@ const emptyParticipantForm: ParticipantEdit = {
   messenger: "",
   otherContacts: "",
   status: "active",
+  visibilityMode: "all",
+  visibleNodeIds: [],
 };
 
 function ParticipantsManager({
@@ -656,6 +666,8 @@ function ParticipantsManager({
   const [form, setForm] = useState<ParticipantEdit>(emptyParticipantForm);
   const adminCount = project.participants.filter((participant) => participant.role === "admin").length;
   const canSubmit = Boolean(form.name.trim() && form.position.trim() && form.email.trim() && form.phone.trim());
+  const rootLevel = getDefaultLevel(project);
+  const accessNodes = getLevelNodes(project, rootLevel).filter((node) => node.type !== "central" && node.type !== "document");
 
   useEffect(() => {
     setEditorOpen(false);
@@ -680,8 +692,22 @@ function ParticipantsManager({
       messenger: participant.messenger ?? "",
       otherContacts: participant.otherContacts ?? "",
       status: participant.status,
+      visibilityMode: participant.visibilityMode ?? "all",
+      visibleNodeIds: participant.visibleNodeIds ?? [],
     });
     setEditorOpen(true);
+  }
+
+  function toggleVisibleNode(nodeId: string) {
+    setForm((current) => {
+      const ids = new Set(current.visibleNodeIds ?? []);
+      if (ids.has(nodeId)) {
+        ids.delete(nodeId);
+      } else {
+        ids.add(nodeId);
+      }
+      return { ...current, visibleNodeIds: Array.from(ids), visibilityMode: "custom" };
+    });
   }
 
   function submitParticipant() {
@@ -697,6 +723,8 @@ function ParticipantsManager({
       phone: form.phone.trim(),
       messenger: form.messenger?.trim(),
       otherContacts: form.otherContacts?.trim(),
+      visibilityMode: form.visibilityMode ?? "all",
+      visibleNodeIds: form.visibilityMode === "custom" ? form.visibleNodeIds ?? [] : [],
     };
 
     if (editingId) {
@@ -791,7 +819,30 @@ function ParticipantsManager({
               <span>Другие способы связи</span>
               <input value={form.otherContacts ?? ""} onChange={(event) => setForm({ ...form, otherContacts: event.currentTarget.value })} placeholder="Teams, Диадок, внутренний номер" />
             </label>
+            <label>
+              <span>Видимость в проекте</span>
+              <select value={form.visibilityMode ?? "all"} onChange={(event) => setForm({ ...form, visibilityMode: event.currentTarget.value as ProjectVisibilityMode })}>
+                {Object.entries(visibilityModeLabels).map(([mode, label]) => (
+                  <option key={mode} value={mode}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
+
+          {form.visibilityMode === "custom" ? (
+            <section className="participant-access-list">
+              <span>Доступные ноды</span>
+              <div>
+                {accessNodes.map((node) => (
+                  <button key={node.id} className={(form.visibleNodeIds ?? []).includes(node.id) ? "active" : ""} onClick={() => toggleVisibleNode(node.id)}>
+                    {node.shortCode ?? node.title}
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <footer>
             <small>{canSubmit ? "Карточка готова к сохранению." : "Заполните ФИО, должность, почту и телефон."}</small>
@@ -832,7 +883,7 @@ function ParticipantsManager({
                 </div>
                 <footer>
                   <small>{participantStatusLabels[participant.status]}</small>
-                  <small>{relatedNodes ? `${relatedNodes} зон ответственности` : "без назначенных зон"}</small>
+                  <small>{getParticipantAccessText(participant, relatedNodes)}</small>
                 </footer>
               </div>
               <div className="participant-actions">
@@ -862,6 +913,16 @@ function getInitials(name: string) {
     .join("")
     .slice(0, 2)
     .toUpperCase();
+}
+
+function getParticipantAccessText(participant: ProjectParticipant, relatedNodes: number) {
+  if (participant.visibilityMode === "custom") {
+    return `${participant.visibleNodeIds?.length ?? 0} нод в доступе`;
+  }
+  if (participant.visibilityMode === "assigned") {
+    return relatedNodes ? `${relatedNodes} назначенных зон` : "только назначенные зоны";
+  }
+  return "видит все ноды проекта";
 }
 
 function ProcessRows({ processes, onSelectProcess }: { processes: BusinessProcess[]; onSelectProcess: (processId: string) => void }) {

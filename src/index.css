@@ -321,6 +321,82 @@ button {
   line-height: 1.45;
 }
 
+.mvp-guide {
+  position: absolute;
+  z-index: 24;
+  top: 166px;
+  left: calc(var(--left-width) + 42px);
+  display: grid;
+  gap: 12px;
+  width: min(360px, calc(100vw - var(--left-width) - var(--right-width) - 92px));
+  padding: 14px;
+  border-radius: 16px;
+  animation: panel-in 220ms ease both;
+}
+
+.mvp-guide header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mvp-guide header span,
+.mvp-guide ol li svg {
+  color: #9ceeff;
+}
+
+.mvp-guide header span {
+  display: block;
+  font-size: var(--fs-11);
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.mvp-guide header strong {
+  display: block;
+  margin-top: 5px;
+  color: #fff;
+  font-size: var(--fs-16);
+}
+
+.mvp-guide ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mvp-guide li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  color: rgba(223, 235, 255, 0.76);
+  font-size: var(--fs-12);
+  line-height: 1.4;
+}
+
+.mvp-guide p {
+  margin: 0;
+}
+
+.mvp-guide-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  border: 1px solid rgba(53, 217, 255, 0.24);
+  border-radius: 12px;
+  background: rgba(53, 217, 255, 0.12);
+  color: #dbfbff;
+  cursor: pointer;
+  font-size: var(--fs-13);
+  font-weight: 820;
+}
+
 .topbar {
   position: absolute;
   z-index: 26;
@@ -334,82 +410,72 @@ button {
   pointer-events: none;
 }
 
-.project-tabs,
+.project-selector,
 .search-wrap,
 .user-chip {
   pointer-events: auto;
 }
 
-.project-tabs {
-  display: flex;
-  gap: 6px;
+.project-selector {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
   min-height: 54px;
   padding: 6px;
   border-radius: 17px;
-  overflow-x: auto;
-  scrollbar-width: none;
 }
 
-.project-tabs::-webkit-scrollbar {
-  display: none;
-}
-
-.project-tabs button {
+.project-selector label {
+  display: grid;
+  gap: 2px;
   min-width: 0;
-  flex: 0 0 136px;
+  padding-left: 8px;
+}
+
+.project-selector label span {
+  color: rgba(255, 226, 164, 0.76);
+  font-size: var(--fs-11);
+  font-weight: 780;
+  text-transform: uppercase;
+}
+
+.project-selector select {
+  min-width: 0;
   border: 0;
-  border-radius: 12px;
   background: transparent;
-  color: rgba(223, 234, 255, 0.7);
-  text-align: left;
-  cursor: pointer;
-  padding: 7px 10px;
-}
-
-.project-tabs button.active {
-  background: rgba(215, 187, 120, 0.14);
   color: #fff;
+  outline: 0;
+  font-size: var(--fs-14);
+  font-weight: 760;
 }
 
-.project-tabs .project-add-tab {
-  flex: 0 0 auto;
+.project-selector select option {
+  color: #111a2d;
+}
+
+.project-selector .project-add-tab {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-width: 88px;
+  min-width: 104px;
+  min-height: 42px;
+  border-radius: 12px;
   border: 1px solid rgba(115, 226, 255, 0.22);
   background: rgba(31, 211, 255, 0.08);
   color: #9ceeff;
+  cursor: pointer;
   text-align: center;
 }
 
-.project-tabs .project-add-tab:hover {
+.project-selector .project-add-tab:hover {
   border-color: rgba(115, 226, 255, 0.42);
   background: rgba(31, 211, 255, 0.14);
 }
 
-.project-tabs .project-add-tab span {
+.project-selector .project-add-tab span {
   font-size: var(--fs-13);
-}
-
-.project-tabs span,
-.project-tabs small {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.project-tabs span {
-  font-size: var(--fs-14);
-  font-weight: 700;
-}
-
-.project-tabs small {
-  margin-top: 2px;
-  color: rgba(212, 224, 248, 0.58);
-  font-size: var(--fs-12);
 }
 
 .search-wrap {
@@ -2129,6 +2195,42 @@ button {
   box-shadow: 0 0 0 3px rgba(31, 211, 255, 0.08);
 }
 
+.participant-access-list {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid rgba(171, 205, 255, 0.1);
+  padding-top: 10px;
+}
+
+.participant-access-list > span {
+  color: rgba(220, 232, 255, 0.68);
+  font-size: var(--fs-12);
+  font-weight: 760;
+}
+
+.participant-access-list div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.participant-access-list button {
+  min-height: 30px;
+  border: 1px solid rgba(171, 205, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(145, 166, 207, 0.07);
+  color: rgba(230, 240, 255, 0.74);
+  cursor: pointer;
+  font-size: var(--fs-12);
+  padding: 5px 9px;
+}
+
+.participant-access-list button.active {
+  border-color: rgba(53, 217, 255, 0.38);
+  background: rgba(53, 217, 255, 0.12);
+  color: #dbfbff;
+}
+
 .participant-editor footer {
   align-items: center;
 }
@@ -2756,6 +2858,7 @@ button {
 }
 
 .view-tools button,
+.view-tool-static,
 .fullscreen-button {
   display: grid;
   place-items: center;
@@ -2767,7 +2870,7 @@ button {
 }
 
 .view-tools button:hover,
-.view-tools button.active,
+.view-tool-static.active,
 .fullscreen-button:hover {
   background: rgba(184, 206, 255, 0.12);
   color: #fff;
@@ -2879,6 +2982,42 @@ button {
   border-bottom: 1px solid rgba(171, 205, 255, 0.12);
 }
 
+.project-wizard-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px 16px 0;
+}
+
+.project-wizard-steps article {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  min-height: 48px;
+  border: 1px solid rgba(171, 205, 255, 0.1);
+  border-radius: 13px;
+  background: rgba(145, 166, 207, 0.07);
+  padding: 8px 10px;
+}
+
+.project-wizard-steps b {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(53, 217, 255, 0.12);
+  color: #9ceeff;
+  font-size: var(--fs-13);
+}
+
+.project-wizard-steps span {
+  color: rgba(228, 238, 255, 0.78);
+  font-size: var(--fs-12);
+  line-height: 1.32;
+}
+
 .project-manager-header span,
 .section-title {
   display: flex;
@@ -2910,7 +3049,7 @@ button {
   display: grid;
   grid-template-columns: minmax(300px, 0.9fr) minmax(340px, 1.1fr);
   gap: 14px;
-  max-height: calc(92vh - 124px);
+  max-height: calc(92vh - 196px);
   overflow: auto;
   padding: 16px;
 }
@@ -3779,8 +3918,18 @@ button {
 }
 
 .preview-page span {
+  display: block;
   color: #4d5b75;
   line-height: 1.55;
+}
+
+.docx-preview-page span + span {
+  margin-top: 10px;
+}
+
+.docx-preview-page span:nth-of-type(odd) {
+  font-weight: 760;
+  color: #24324a;
 }
 
 .preview-lines {
@@ -3831,6 +3980,34 @@ button {
   margin-top: 18px;
 }
 
+.real-sheet-preview table {
+  width: 100%;
+  margin-top: 14px;
+  overflow: hidden;
+  border-collapse: collapse;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(21, 42, 72, 0.12);
+}
+
+.real-sheet-preview th,
+.real-sheet-preview td {
+  border: 1px solid rgba(21, 42, 72, 0.11);
+  padding: 9px 10px;
+  font-size: var(--fs-12);
+  text-align: left;
+}
+
+.real-sheet-preview th {
+  background: rgba(34, 201, 111, 0.14);
+  color: #123a25;
+  font-weight: 850;
+}
+
+.real-sheet-preview td {
+  color: #23324a;
+}
+
 .sheet-preview i {
   height: 30px;
   border-radius: 5px;
@@ -3859,6 +4036,11 @@ button {
   background: rgba(53, 217, 255, 0.14);
   color: #fff;
   cursor: pointer;
+}
+
+.document-modal footer button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .drop-overlay {
@@ -3937,7 +4119,7 @@ button {
 
   .project-manager-grid {
     grid-template-columns: 1fr;
-    max-height: calc(92vh - 118px);
+    max-height: calc(92vh - 196px);
   }
 
   .process-builder-body {
@@ -4009,7 +4191,7 @@ button {
     grid-template-columns: 44px minmax(220px, 1fr) auto;
   }
 
-  .project-tabs {
+  .project-selector {
     display: none;
   }
 
@@ -4017,6 +4199,13 @@ button {
   .linking-hint,
   .document-exit-zone {
     left: 18px;
+  }
+
+  .mvp-guide {
+    top: 146px;
+    right: 18px;
+    left: 18px;
+    width: auto;
   }
 
   .right-panel {
@@ -4068,8 +4257,14 @@ button {
 
   .project-manager-grid {
     gap: 10px;
-    max-height: calc(94vh - 120px);
+    max-height: calc(94vh - 214px);
     padding: 10px;
+  }
+
+  .project-wizard-steps {
+    grid-template-columns: 1fr;
+    gap: 7px;
+    padding: 10px 10px 0;
   }
 
   .project-manager-section {

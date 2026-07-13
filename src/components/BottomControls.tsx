@@ -10,6 +10,7 @@ type BottomControlsProps = {
   onNormalize: () => void;
   onReset: () => void;
   onFocus: () => void;
+  onFullscreen: () => void;
   fontScale: number;
   onFontScaleChange: (scale: number) => void;
 };
@@ -24,15 +25,16 @@ export function BottomControls({
   onNormalize,
   onReset,
   onFocus,
+  onFullscreen,
   fontScale,
   onFontScaleChange,
 }: BottomControlsProps) {
   return (
     <footer className="bottom-controls">
       <div className="view-tools glass-panel">
-        <button title="Карта процессов" className="active">
+        <span title="Карта процессов" className="view-tool-static active">
           <Waypoints size={20} />
-        </button>
+        </span>
         <button title="Отменить действие (Ctrl+Z)" onClick={onUndo} disabled={!canUndo}>
           <Undo2 size={20} />
         </button>
@@ -87,7 +89,7 @@ export function BottomControls({
         ))}
       </div>
 
-      <button className="fullscreen-button glass-panel" title="Полноэкранный вид">
+      <button className="fullscreen-button glass-panel" title="Полноэкранный вид" onClick={onFullscreen}>
         <Maximize2 size={20} />
       </button>
     </footer>

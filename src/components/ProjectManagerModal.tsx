@@ -64,6 +64,21 @@ export function ProjectManagerModal({
           </button>
         </header>
 
+        <section className="project-wizard-steps">
+          <article>
+            <b>1</b>
+            <span>Назовите проект и объект</span>
+          </article>
+          <article>
+            <b>2</b>
+            <span>Выберите пустой или готовый шаблон</span>
+          </article>
+          <article>
+            <b>3</b>
+            <span>Создайте проект и редактируйте ноды на карте</span>
+          </article>
+        </section>
+
         <div className="project-manager-grid">
           <div className="project-manager-stack">
             <section className="project-manager-section project-create-section">

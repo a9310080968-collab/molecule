@@ -335,19 +335,22 @@ export function createProcessId(from: string, to: string) {
 }
 
 export function createDocumentFromName(name: string, source: ProcessDocument["source"] = "drop", fileUrl?: string, fileText?: string, mimeType?: string, size?: string): ProcessDocument {
+  const fileType = inferFileType(name);
+  const preview = buildDocumentPreview(name, fileType);
   return {
     id: `doc-${Date.now()}-${Math.round(Math.random() * 10000)}`,
     title: name,
-    fileType: inferFileType(name),
+    fileType,
     version: "v1",
     status: "draft",
     from: source === "mail" ? "Почта" : source === "chat" ? "Мессенджер" : "Импорт",
     updatedAt: "только что",
     source,
-    fileUrl,
-    fileText,
+    fileUrl: fileUrl ?? getDemoFileUrl(fileType),
+    fileText: fileText ?? preview.text,
     mimeType,
     size,
+    previewRows: preview.rows,
   };
 }
 
@@ -398,6 +401,60 @@ export function formatBytes(bytes: number) {
   const units = ["Б", "КБ", "МБ", "ГБ"];
   const power = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
   return `${(bytes / 1024 ** power).toFixed(power === 0 ? 0 : 1)} ${units[power]}`;
+}
+
+function getDemoFileUrl(fileType: FileType) {
+  const files: Partial<Record<FileType, string>> = {
+    pdf: "demo-plan.pdf",
+    docx: "demo-task.docx",
+    xlsx: "demo-register.xlsx",
+    txt: "demo-note.txt",
+  };
+  const file = files[fileType];
+  return file ? `${import.meta.env.BASE_URL}demo-files/${file}` : undefined;
+}
+
+function buildDocumentPreview(title: string, fileType: FileType): { text?: string; rows?: string[][] } {
+  if (fileType === "xlsx") {
+    return {
+      rows: [
+        ["Раздел", "Документ", "Версия", "Статус", "Ответственный"],
+        ["АР", "План 1 этажа", "v4", "На проверке", "Анна Лебедева"],
+        ["КР", "Расчет нагрузок", "v2", "Есть замечания", "Игорь Мельников"],
+        ["ПЗ", "ТЭП", "v1", "В работе", "Мария Соколова"],
+        ["ОВ/ВК", "Сводка стояков", "v1", "Принято", "Роман Фадеев"],
+      ],
+    };
+  }
+
+  if (fileType === "docx") {
+    return {
+      text: [
+        title,
+        "",
+        "1. Назначение документа",
+        "Документ фиксирует исходные требования, ответственных участников и состав данных для передачи в бизнес-процесс.",
+        "",
+        "2. Проверяемые материалы",
+        "В пакет входят актуальная версия файла, комментарий исполнителя, срок согласования и список обязательных полей.",
+        "",
+        "3. Результат",
+        "После проверки ГИП принимает документ, возвращает его с замечаниями или переводит задачу в статус частичного согласования.",
+      ].join("\n"),
+    };
+  }
+
+  if (fileType === "pdf") {
+    return {
+      text: [
+        title,
+        "Демонстрационный PDF-лист",
+        "На листе показаны рамка документа, штамп, зона согласования и перечень изменений. В продовой версии здесь отображается реальный PDF.",
+      ].join("\n"),
+    };
+  }
+
+  return {};
 }
 
 function getNodeSearchText(node: ProjectNode) {
