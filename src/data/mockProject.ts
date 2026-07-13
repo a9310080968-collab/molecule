@@ -11,6 +11,7 @@ import type {
   ProjectParticipant,
   ProjectNode,
 } from "../types";
+import { createRogaProject } from "./rogaProject";
 
 export const nodeStatusLabels: Record<NodeStatus, string> = {
   approved: "Согласовано",
@@ -37,11 +38,30 @@ export const processStatusColors: Record<ProcessStatus, string> = {
 };
 
 export const demoProjects: DemoProject[] = [
+  createRogaProject(),
   createSiriusProject(),
   createVegaProject(),
 ];
 
 export const initialNotifications: DemoNotification[] = [
+  {
+    id: "notif-roga-gp-ar-deadline",
+    projectId: "project-roga-kopyta",
+    title: "БП «Задание ГП → АР» близко к дедлайну",
+    description: "Архитектурная группа должна принять пакет генплана и подтвердить состав исходных данных.",
+    time: "сегодня, 15:05",
+    targetProcessId: "bp-roga-gp-ar",
+    unread: true,
+  },
+  {
+    id: "notif-roga-mail-tag-ar",
+    projectId: "project-roga-kopyta",
+    title: "Файл из почты распределен по тегу АР",
+    description: "Вложение «АР_Фасады_замечания.pdf» автоматически попало в архитектурный контур проекта.",
+    time: "сегодня, 14:58",
+    targetNodeId: "node-roga-ar",
+    unread: true,
+  },
   {
     id: "notif-sirius-mail-ar",
     projectId: "project-sirius",

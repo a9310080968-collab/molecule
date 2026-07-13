@@ -116,16 +116,43 @@ function mergeProjectTemplates(savedTemplates: ProjectTemplate[] | undefined, de
   ];
 }
 
+function mergeDemoProjects(savedProjects: DemoProject[] | undefined, defaults: DemoProject[]) {
+  if (!savedProjects?.length) {
+    return defaults;
+  }
+
+  const savedIds = new Set(savedProjects.map((project) => project.id));
+  return [
+    ...defaults.filter((project) => !savedIds.has(project.id)),
+    ...savedProjects,
+  ];
+}
+
+function mergeDemoNotifications(savedNotifications: DemoNotification[] | undefined, defaults: DemoNotification[]) {
+  if (!savedNotifications?.length) {
+    return defaults;
+  }
+
+  const savedIds = new Set(savedNotifications.map((notification) => notification.id));
+  return [
+    ...defaults.filter((notification) => !savedIds.has(notification.id)),
+    ...savedNotifications,
+  ];
+}
+
 export default function App() {
   const persistedState = getPersistedState();
   const defaultTemplates = useMemo(() => [
     createBlankProjectTemplate(),
     createDefaultProjectTemplate(),
-    createTemplateFromProject(demoProjects[0], "Жилой комплекс / полный комплект", "Структура разделов, внутренних уровней и контейнеров связи без рабочих документов."),
-    createTemplateFromProject(demoProjects[1], "Компактный офисный проект", "Легкая структура для небольшого объекта с ИРД, АР, КР, ЭОМ и сметой."),
+    createTemplateFromProject(demoProjects[0], "ЖК Рога и копыта / ТЗ с готовыми БП", "Структура по приложенному ТЗ: ИРД, РД, разделы, подразделы, участники и готовые бизнес-процессы."),
+    createTemplateFromProject(demoProjects[1], "Жилой комплекс / полный комплект", "Структура разделов, внутренних уровней и контейнеров связи без рабочих документов."),
+    createTemplateFromProject(demoProjects[2], "Компактный офисный проект", "Легкая структура для небольшого объекта с ИРД, АР, КР, ЭОМ и сметой."),
   ], []);
-  const initialProjects = persistedState?.projects ? persistedState.projects : demoProjects;
-  const initialActiveProject = initialProjects.find((project) => project.id === persistedState?.activeProjectId) ?? initialProjects[0] ?? demoProjects[0];
+  const initialProjects = mergeDemoProjects(persistedState?.projects, demoProjects);
+  const savedHasPrimaryDemo = Boolean(persistedState?.projects?.some((project) => project.id === demoProjects[0]?.id));
+  const preferredActiveProjectId = savedHasPrimaryDemo ? persistedState?.activeProjectId : demoProjects[0]?.id;
+  const initialActiveProject = initialProjects.find((project) => project.id === preferredActiveProjectId) ?? initialProjects[0] ?? demoProjects[0];
   const initialActiveLevel = initialActiveProject.levels.find((level) => level.id === persistedState?.activeLevelId) ?? getDefaultLevel(initialActiveProject);
   const initialSelectedNode = getNodeById(initialActiveProject, persistedState?.selectedNodeId) ?? getNodeById(initialActiveProject, initialActiveLevel.centralNodeId);
   const [projects, setProjects] = useState<DemoProject[]>(initialProjects);
@@ -138,7 +165,7 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [activeMenu, setActiveMenu] = useState<SidebarMenuId>("map");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [notifications, setNotifications] = useState<DemoNotification[]>(persistedState?.notifications ?? initialNotifications);
+  const [notifications, setNotifications] = useState<DemoNotification[]>(() => mergeDemoNotifications(persistedState?.notifications, initialNotifications));
   const [modalDocument, setModalDocument] = useState<ProcessDocument | null>(null);
   const [projectManagerOpen, setProjectManagerOpen] = useState(false);
   const [personalSettingsOpen, setPersonalSettingsOpen] = useState(false);
