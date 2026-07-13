@@ -3,7 +3,6 @@ import {
   CheckCircle2,
   Clock3,
   ExternalLink,
-  FilePlus2,
   FileText,
   GitBranch,
   Inbox,
@@ -19,9 +18,9 @@ import {
   getFileTypeColor,
   getDocumentFromNode,
   getLevelNodes,
-  getNodeDocuments,
-  getNodeProcesses,
+  getNodeCompletion,
   getNodeVisualTone,
+  getOwnedDocumentNodes,
   getProcessStatusColor,
   getProcessStatusText,
   getProjectProgress,
@@ -31,6 +30,7 @@ import type {
   BusinessProcess,
   DemoProject,
   MapLevel,
+  NodeChecklistItem,
   NodeStatus,
   NodeEdit,
   ProcessDocument,
@@ -47,10 +47,8 @@ type RightPanelProps = {
   onNodeUpdate: (nodeId: string, edit: NodeEdit) => void;
   onProcessUpdate: (processId: string, edit: ProcessEdit) => void;
   onDeleteProcess: (processId: string) => void;
-  onSelectProcess: (processId: string) => void;
   onOpenDocument: (document: ProcessDocument) => void;
   onMoveDocumentNode: (documentNodeId: string, targetNodeId: string | null) => void;
-  onAddRandomFile: (targetNodeId?: string) => void;
   onUpdateDocumentStatus: (documentId: string, status: NodeStatus) => void;
   onRejectProcessDocument: (processId: string, documentId: string) => void;
   onAttachInboxDocument: (processId: string, documentId: string) => void;
@@ -68,10 +66,8 @@ export function RightPanel({
   onNodeUpdate,
   onProcessUpdate,
   onDeleteProcess,
-  onSelectProcess,
   onOpenDocument,
   onMoveDocumentNode,
-  onAddRandomFile,
   onUpdateDocumentStatus,
   onRejectProcessDocument,
   onAttachInboxDocument,
@@ -97,10 +93,8 @@ export function RightPanel({
           level={level}
           node={node}
           onNodeUpdate={onNodeUpdate}
-          onSelectProcess={onSelectProcess}
           onOpenDocument={onOpenDocument}
           onMoveDocumentNode={onMoveDocumentNode}
-          onAddRandomFile={onAddRandomFile}
           onUpdateDocumentStatus={onUpdateDocumentStatus}
         />
       )}
@@ -113,20 +107,16 @@ function NodeInfo({
   level,
   node,
   onNodeUpdate,
-  onSelectProcess,
   onOpenDocument,
   onMoveDocumentNode,
-  onAddRandomFile,
   onUpdateDocumentStatus,
 }: {
   project: DemoProject;
   level: MapLevel;
   node: ProjectNode;
   onNodeUpdate: (nodeId: string, edit: NodeEdit) => void;
-  onSelectProcess: (processId: string) => void;
   onOpenDocument: (document: ProcessDocument) => void;
   onMoveDocumentNode: (documentNodeId: string, targetNodeId: string | null) => void;
-  onAddRandomFile: (targetNodeId?: string) => void;
   onUpdateDocumentStatus: (documentId: string, status: NodeStatus) => void;
 }) {
   if (node.type === "document") {
@@ -143,16 +133,35 @@ function NodeInfo({
   }
 
   const tone = getNodeVisualTone(node);
-  const processes = getNodeProcesses(project, node.id);
-  const documents = getNodeDocuments(project, node.id);
-  const progress = getProjectProgress(project, level);
+  const ownedDocumentNodes = getOwnedDocumentNodes(project, node.id);
+  const documents = ownedDocumentNodes.map((documentNode) => getDocumentFromNode(documentNode));
+  const nodeCompletion = getNodeCompletion(node);
+  const progress = node.id === level.centralNodeId ? getProjectProgress(project, level) : nodeCompletion;
   const isLevelCenter = node.id === level.centralNodeId;
+  const responsibleOptions = project.participants;
 
   return (
     <>
       <PanelHeader eyebrow={node.shortCode ?? "Нода"} title={node.title} status={getStatusText(node.status)} statusColor={tone.glow} />
 
       <section className="node-editor">
+        <div className="inline-form-grid">
+          <label>
+            <span>Код на сфере</span>
+            <input value={node.shortCode ?? ""} onChange={(event) => onNodeUpdate(node.id, { shortCode: event.currentTarget.value })} placeholder="АР / Б1 / ИРД" />
+          </label>
+          <label>
+            <span>Ответственный</span>
+            <select value={node.responsible ?? ""} onChange={(event) => onNodeUpdate(node.id, { responsible: event.currentTarget.value })}>
+              <option value="">Не назначен</option>
+              {responsibleOptions.map((participant) => (
+                <option key={participant.id} value={participant.name}>
+                  {participant.name} · {participant.position}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <label>
           <span>Название ноды</span>
           <input value={node.title} onChange={(event) => onNodeUpdate(node.id, { title: event.currentTarget.value })} />
@@ -165,52 +174,109 @@ function NodeInfo({
 
       <TagsEditor node={node} onNodeUpdate={onNodeUpdate} />
 
-      <section className="node-constructor-note">
-        <GitBranch size={17} />
-        <div>
-          <b>Создание бизнес-процесса</b>
-          <span>На карте наведите на ноду, нажмите плюс и выберите вторую ноду. После этого откроется конструктор процесса.</span>
-        </div>
-      </section>
-
-      {node.type !== "central" ? (
-        <section className="single-node-action">
-          <button onClick={() => onAddRandomFile(node.id)}>
-            <FilePlus2 size={17} />
-            Положить тестовый файл в ноду
-          </button>
-        </section>
-      ) : null}
+      {node.type !== "central" ? <NodeChecklistEditor node={node} onNodeUpdate={onNodeUpdate} /> : null}
 
       <div className="info-grid">
-        <Metric icon={<GitBranch size={16} />} label="Связей" value={String(processes.length)} />
-        <Metric icon={<FileText size={16} />} label="Документов в связях" value={String(documents.length)} />
+        <Metric icon={<CheckCircle2 size={16} />} label="Готовность ноды" value={`${progress}%`} />
+        <Metric icon={<FileText size={16} />} label="Файлов внутри" value={String(documents.length)} />
         <Metric icon={<UserRound size={16} />} label="Ответственный" value={node.responsible ?? "Не назначен"} wide />
         <Metric icon={<Clock3 size={16} />} label="Обновлено" value={node.updatedAt ?? "сегодня"} />
         {isLevelCenter ? <Metric icon={<CheckCircle2 size={16} />} label="Готовность уровня" value={`${progress}%`} /> : null}
       </div>
 
-      <section className="process-list">
-        <h3>Связанные бизнес-процессы</h3>
-        {processes.length ? processes.map((process) => (
-          <button key={process.id} onClick={() => onSelectProcess(process.id)}>
-            <i style={{ background: getProcessStatusColor(process.status) }} />
-            <div>
-              <b>{process.title}</b>
-              <span>{getProcessStatusText(process.status)}</span>
-            </div>
-            <em>{process.documents.length}</em>
-          </button>
-        )) : <p>У ноды пока нет ручных контейнеров связей.</p>}
-      </section>
-
       <DocumentList
-        title="Документы в ноде и процессах"
-        documents={documents.slice(0, 12)}
+        title="Файлы внутри ноды"
+        documents={documents}
+        documentNodes={ownedDocumentNodes}
         onOpenDocument={onOpenDocument}
+        onMoveDocumentNode={onMoveDocumentNode}
         onUpdateDocumentStatus={onUpdateDocumentStatus}
       />
     </>
+  );
+}
+
+function NodeChecklistEditor({
+  node,
+  onNodeUpdate,
+}: {
+  node: ProjectNode;
+  onNodeUpdate: (nodeId: string, edit: NodeEdit) => void;
+}) {
+  const checklist = node.checklist ?? [];
+  const [newTitle, setNewTitle] = useState("");
+
+  function updateChecklist(next: NodeChecklistItem[]) {
+    onNodeUpdate(node.id, { checklist: next });
+  }
+
+  function addItem() {
+    const title = newTitle.trim();
+    if (!title) {
+      return;
+    }
+
+    updateChecklist([
+      ...checklist,
+      {
+        id: `check-${node.id}-${Date.now()}-${Math.round(Math.random() * 10000)}`,
+        title,
+        done: false,
+        required: true,
+      },
+    ]);
+    setNewTitle("");
+  }
+
+  return (
+    <section className="node-checklist-editor">
+      <header>
+        <div>
+          <h3>Документы ноды</h3>
+          <span>{checklist.filter((item) => item.done).length} из {checklist.length} закрыто</span>
+        </div>
+        <b>{getNodeCompletion(node)}%</b>
+      </header>
+
+      <div className="checklist-add-row">
+        <input
+          value={newTitle}
+          onChange={(event) => setNewTitle(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              addItem();
+            }
+          }}
+          placeholder="Название документа или результата..."
+        />
+        <button onClick={addItem}>Добавить</button>
+      </div>
+
+      <div className="checklist-items">
+        {checklist.length ? checklist.map((item) => (
+          <article key={item.id} className={clsx(item.done && "done")}>
+            <label>
+              <input
+                type="checkbox"
+                checked={item.done}
+                onChange={(event) =>
+                  updateChecklist(checklist.map((current) => (current.id === item.id ? { ...current, done: event.currentTarget.checked } : current)))
+                }
+              />
+              <span />
+            </label>
+            <input
+              value={item.title}
+              onChange={(event) =>
+                updateChecklist(checklist.map((current) => (current.id === item.id ? { ...current, title: event.currentTarget.value } : current)))
+              }
+            />
+            <button onClick={() => updateChecklist(checklist.filter((current) => current.id !== item.id))}>Удалить</button>
+          </article>
+        )) : <p>Добавьте документы, которые должны быть получены и согласованы внутри этой ноды.</p>}
+      </div>
+    </section>
   );
 }
 
@@ -470,16 +536,28 @@ function TagsEditor({
 function DocumentList({
   title,
   documents,
+  documentNodes = [],
   onOpenDocument,
+  onMoveDocumentNode,
   onRejectDocument,
   onUpdateDocumentStatus,
 }: {
   title: string;
   documents: ProcessDocument[];
+  documentNodes?: ProjectNode[];
   onOpenDocument: (document: ProcessDocument) => void;
+  onMoveDocumentNode?: (documentNodeId: string, targetNodeId: string | null) => void;
   onRejectDocument?: (documentId: string) => void;
   onUpdateDocumentStatus?: (documentId: string, status: NodeStatus) => void;
 }) {
+  const [contextMenu, setContextMenu] = useState<{ documentId: string; x: number; y: number } | null>(null);
+  const documentNodeByDocumentId = useMemo(
+    () => new Map(documentNodes.filter((node) => node.document).map((node) => [node.document!.id, node])),
+    [documentNodes],
+  );
+  const contextDocument = contextMenu ? documents.find((document) => document.id === contextMenu.documentId) : undefined;
+  const contextDocumentNode = contextDocument ? documentNodeByDocumentId.get(contextDocument.id) : undefined;
+
   if (!documents.length) {
     return (
       <section className="document-list">
@@ -493,7 +571,23 @@ function DocumentList({
     <section className="document-list">
       <h3>{title}</h3>
       {documents.map((document) => (
-        <article key={document.id} className={clsx("document-row", (onRejectDocument || onUpdateDocumentStatus) && "with-action")}>
+        <article
+          key={document.id}
+          className={clsx("document-row", (onRejectDocument || onUpdateDocumentStatus) && "with-action")}
+          draggable={Boolean(documentNodeByDocumentId.get(document.id))}
+          onDragStart={(event) => {
+            const documentNode = documentNodeByDocumentId.get(document.id);
+            if (!documentNode) {
+              return;
+            }
+            event.dataTransfer.setData("application/x-molecule-document-node", documentNode.id);
+            event.dataTransfer.effectAllowed = "move";
+          }}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            setContextMenu({ documentId: document.id, x: event.clientX, y: event.clientY });
+          }}
+        >
           <DocumentStatusControl
             document={document}
             onChange={
@@ -520,6 +614,41 @@ function DocumentList({
           </button>
         </article>
       ))}
+      {contextMenu && contextDocument ? (
+        <div
+          className="document-context-menu glass-panel"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <strong>{contextDocument.title}</strong>
+          <button
+            onClick={() => {
+              onOpenDocument(contextDocument);
+              setContextMenu(null);
+            }}
+          >
+            Открыть документ
+          </button>
+          {contextDocumentNode && onMoveDocumentNode ? (
+            <button
+              onClick={() => {
+                onMoveDocumentNode(contextDocumentNode.id, null);
+                setContextMenu(null);
+              }}
+            >
+              Вынести в пространство
+            </button>
+          ) : null}
+          {onUpdateDocumentStatus ? (
+            <>
+              <button onClick={() => { onUpdateDocumentStatus(contextDocument.id, "review"); setContextMenu(null); }}>На проверке</button>
+              <button onClick={() => { onUpdateDocumentStatus(contextDocument.id, "approved"); setContextMenu(null); }}>Согласовано</button>
+              <button className="danger" onClick={() => { onUpdateDocumentStatus(contextDocument.id, "comments"); setContextMenu(null); }}>Не принято</button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }

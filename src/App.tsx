@@ -42,6 +42,7 @@ import type {
   DemoNotification,
   DemoProject,
   IntegrationProvider,
+  NodeChecklistItem,
   NodeEdit,
   NodeStatus,
   ParticipantEdit,
@@ -397,11 +398,37 @@ export default function App() {
   }
 
   function updateNode(nodeId: string, edit: NodeEdit) {
-    updateActiveProject((project) => ({
-      ...project,
-      nodes: project.nodes.map((node) => (node.id === nodeId ? { ...node, ...edit, updatedAt: "только что" } : node)),
-      updatedAt: "только что",
-    }));
+    updateActiveProject((project) => {
+      const nodes = project.nodes.map((node) => {
+        if (node.id !== nodeId) {
+          return node;
+        }
+
+        const checklistStatus = edit.checklist ? getChecklistStatus(edit.checklist, node.status) : undefined;
+        return {
+          ...node,
+          ...edit,
+          status: checklistStatus ?? edit.status ?? node.status,
+          updatedAt: "только что",
+        };
+      });
+      const renamedNode = nodes.find((node) => node.id === nodeId);
+      const levelTitle = renamedNode ? formatNodeLevelTitle(renamedNode) : undefined;
+
+      return {
+        ...project,
+        nodes,
+        levels: project.levels.map((level) =>
+          level.centralNodeId === nodeId || level.parentNodeId === nodeId
+            ? {
+                ...level,
+                title: levelTitle ?? level.title,
+              }
+            : level,
+        ),
+        updatedAt: "только что",
+      };
+    });
   }
 
   function updateProcess(processId: string, edit: ProcessEdit) {
@@ -1044,6 +1071,13 @@ export default function App() {
   async function handleDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
     setIsDropActive(false);
+
+    const documentNodeId = event.dataTransfer.getData("application/x-molecule-document-node");
+    if (documentNodeId) {
+      moveDocumentNode(documentNodeId, null);
+      return;
+    }
+
     if (!event.dataTransfer.files.length) {
       return;
     }
@@ -1127,7 +1161,9 @@ export default function App() {
       style={fontVars}
       onDragOver={(event) => {
         event.preventDefault();
-        setIsDropActive(true);
+        if (!Array.from(event.dataTransfer.types).includes("application/x-molecule-document-node")) {
+          setIsDropActive(true);
+        }
       }}
       onDragLeave={() => setIsDropActive(false)}
       onDrop={handleDrop}
@@ -1224,10 +1260,8 @@ export default function App() {
           onNodeUpdate={updateNode}
           onProcessUpdate={updateProcess}
           onDeleteProcess={deleteProcess}
-          onSelectProcess={selectProcess}
           onOpenDocument={setModalDocument}
           onMoveDocumentNode={moveDocumentNode}
-          onAddRandomFile={addRandomFile}
           onUpdateDocumentStatus={updateDocumentStatus}
           onRejectProcessDocument={rejectProcessDocument}
           onAttachInboxDocument={attachInboxDocument}
@@ -1466,6 +1500,27 @@ function getRandomProjectTag(project: DemoProject) {
   );
 
   return tags[Math.floor(Math.random() * tags.length)];
+}
+
+function getChecklistStatus(checklist: NodeChecklistItem[], fallback?: NodeStatus): NodeStatus {
+  if (!checklist.length) {
+    return fallback ?? "unchecked";
+  }
+
+  if (checklist.every((item) => item.done)) {
+    return "approved";
+  }
+
+  if (checklist.some((item) => item.done)) {
+    return "review";
+  }
+
+  return "unchecked";
+}
+
+function formatNodeLevelTitle(node: ProjectNode) {
+  const code = node.shortCode?.trim();
+  return code ? `${code} / ${node.title}` : node.title;
 }
 
 function normalizeTag(value: string) {

@@ -105,8 +105,22 @@ export function getProjectProgress(project: DemoProject, level: MapLevel) {
     return 0;
   }
 
-  const approved = nodes.filter((node) => node.status === "approved").length;
-  return Math.round((approved / nodes.length) * 100);
+  const total = nodes.reduce((sum, node) => sum + getNodeCompletion(node), 0);
+  return Math.round(total / nodes.length);
+}
+
+export function getNodeCompletion(node: ProjectNode) {
+  if (node.type === "document") {
+    return node.status === "approved" ? 100 : 0;
+  }
+
+  const checklist = node.checklist ?? [];
+  if (checklist.length) {
+    const done = checklist.filter((item) => item.done).length;
+    return Math.round((done / checklist.length) * 100);
+  }
+
+  return node.status === "approved" ? 100 : 0;
 }
 
 export function getStatusText(status?: ProjectNode["status"]) {

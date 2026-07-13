@@ -1,4 +1,4 @@
-import type { BusinessProcess, DemoProject, MapLevel, ProjectNode, ProjectParticipant, ProjectTemplate } from "../types";
+import type { BusinessProcess, DemoProject, MapLevel, NodeChecklistItem, ProjectNode, ProjectParticipant, ProjectTemplate } from "../types";
 
 const NOW = "только что";
 
@@ -23,9 +23,9 @@ export function createBlankProjectTemplate(): ProjectTemplate {
 
   const nodes: ProjectNode[] = [
     templateNode(projectId, rootLevelId, "node-template-blank-root", "central", "Новый проект", "0%", "Центральная нода проекта. Процент появится после согласования блоков.", "review"),
-    templateNode(projectId, rootLevelId, "node-template-blank-1", "section", "Блок 1", "Б1", "Переименуйте блок и опишите, какой результат должен быть получен.", "unchecked", undefined, ["Б1"]),
-    templateNode(projectId, rootLevelId, "node-template-blank-2", "section", "Блок 2", "Б2", "Переименуйте блок и задайте ответственного в правой панели.", "unchecked", undefined, ["Б2"]),
-    templateNode(projectId, rootLevelId, "node-template-blank-3", "section", "Блок 3", "Б3", "Соедините блоки вручную через плюс на ноде.", "unchecked", undefined, ["Б3"]),
+    templateNode(projectId, rootLevelId, "node-template-blank-1", "section", "Блок 1", "Б1", "Переименуйте блок и опишите, какой результат должен быть получен.", "unchecked", undefined, ["Б1"], starterChecklist("node-template-blank-1")),
+    templateNode(projectId, rootLevelId, "node-template-blank-2", "section", "Блок 2", "Б2", "Переименуйте блок и задайте ответственного в правой панели.", "unchecked", undefined, ["Б2"], starterChecklist("node-template-blank-2")),
+    templateNode(projectId, rootLevelId, "node-template-blank-3", "section", "Блок 3", "Б3", "Соедините блоки вручную через плюс на ноде.", "unchecked", undefined, ["Б3"], starterChecklist("node-template-blank-3")),
   ];
 
   return {
@@ -292,6 +292,7 @@ function templateNode(
   status: ProjectNode["status"],
   childrenLevelId?: string,
   tags: string[] = [],
+  checklist?: NodeChecklistItem[],
 ): ProjectNode {
   return {
     id,
@@ -306,7 +307,16 @@ function templateNode(
     updatedAt: NOW,
     childrenLevelId,
     tags,
+    checklist,
   };
+}
+
+function starterChecklist(prefix: string): NodeChecklistItem[] {
+  return [
+    { id: `${prefix}-check-1`, title: "Документ 1", done: false, required: true },
+    { id: `${prefix}-check-2`, title: "Документ 2", done: false, required: true },
+    { id: `${prefix}-check-3`, title: "Документ 3", done: false, required: true },
+  ];
 }
 
 function slugify(value: string) {

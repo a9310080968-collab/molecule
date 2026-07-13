@@ -525,6 +525,7 @@ export function ProjectScene({
         const canCompleteLink = linkingFromId && linkingFromId !== node.id;
         const isDocumentDropTarget = dragUi?.targetNodeId === node.id;
         const isIncomingNew = node.type === "document" && getDocumentFromNode(node).isNew;
+        const label = getNodeDisplayLabel(node, isCenter, progress);
 
         return (
           <button
@@ -565,8 +566,8 @@ export function ProjectScene({
               {isCenter ? <i style={{ height: `${progress}%` }} /> : null}
             </span>
             <span className="node-label">
-              <strong>{isCenter ? node.title : node.shortCode ?? node.title}</strong>
-              <em>{isCenter ? `${progress}%` : node.title}</em>
+              <strong>{label.primary}</strong>
+              <em>{label.secondary}</em>
             </span>
             {node.type === "document" && node.status === "comments" ? <span className="node-status-badge">Не принято</span> : null}
             {node.type !== "central" && node.type !== "document" ? (
@@ -1004,6 +1005,30 @@ function getNodeRadius(node: ProjectNode, centralNodeId?: string) {
   if (node.type === "section" || node.type === "ird") return 62;
   if (node.type === "package") return 54;
   return 56;
+}
+
+function getNodeDisplayLabel(node: ProjectNode, isCenter: boolean, progress?: number) {
+  if (isCenter) {
+    return {
+      primary: node.title,
+      secondary: `${progress ?? 0}%`,
+    };
+  }
+
+  const code = node.shortCode?.trim();
+  const isPlaceholderCode = Boolean(code && /^(б|b)\d+$/i.test(code));
+
+  if (isPlaceholderCode) {
+    return {
+      primary: node.title,
+      secondary: code,
+    };
+  }
+
+  return {
+    primary: code || node.title,
+    secondary: node.title,
+  };
 }
 
 function seededJitter(seed: string): Vec2 {

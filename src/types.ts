@@ -46,6 +46,13 @@ export type ProjectParticipant = {
 
 export type ProjectParticipantSeed = Omit<ProjectParticipant, "id" | "projectId" | "status" | "integrations">;
 
+export type NodeChecklistItem = {
+  id: string;
+  title: string;
+  done: boolean;
+  required?: boolean;
+};
+
 export type ProcessFieldKey = "documents" | "sender" | "approver" | "deadline" | "comment" | "result";
 
 export type ProcessFieldRequirement = {
@@ -72,6 +79,7 @@ export type ProjectNode = {
   updatedAt?: string;
   tags?: string[];
   deadlineAt?: string;
+  checklist?: NodeChecklistItem[];
   childrenLevelId?: string;
   documentOwnerNodeId?: string;
   fileType?: FileType;
@@ -185,7 +193,7 @@ export type DemoNotification = {
   unread?: boolean;
 };
 
-export type NodeEdit = Partial<Pick<ProjectNode, "title" | "shortCode" | "description" | "status" | "responsible" | "tags" | "deadlineAt">>;
+export type NodeEdit = Partial<Pick<ProjectNode, "title" | "shortCode" | "description" | "status" | "responsible" | "tags" | "deadlineAt" | "checklist">>;
 
 export type ProcessEdit = Partial<
   Pick<
