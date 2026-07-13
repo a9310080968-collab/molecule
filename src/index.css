@@ -475,7 +475,7 @@ button {
 
 .project-selector {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 8px;
   align-items: center;
   min-height: 54px;
@@ -511,7 +511,8 @@ button {
   color: #111a2d;
 }
 
-.project-selector .project-add-tab {
+.project-selector .project-add-tab,
+.project-selector .project-delete-tab {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -526,9 +527,26 @@ button {
   text-align: center;
 }
 
+.project-selector .project-delete-tab {
+  min-width: 42px;
+  color: #ffcbd3;
+  border-color: rgba(255, 101, 122, 0.22);
+  background: rgba(255, 101, 122, 0.08);
+}
+
 .project-selector .project-add-tab:hover {
   border-color: rgba(115, 226, 255, 0.42);
   background: rgba(31, 211, 255, 0.14);
+}
+
+.project-selector .project-delete-tab:hover:not(:disabled) {
+  border-color: rgba(255, 101, 122, 0.42);
+  background: rgba(255, 101, 122, 0.14);
+}
+
+.project-selector .project-delete-tab:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
 }
 
 .project-selector .project-add-tab span {
@@ -3576,6 +3594,7 @@ button {
   padding: 24px;
   background: rgba(1, 5, 14, 0.72);
   backdrop-filter: blur(8px);
+  overflow: auto;
 }
 
 .project-manager-backdrop {
@@ -3592,7 +3611,8 @@ button {
 
 .project-create-modal {
   width: min(720px, 100%);
-  max-height: min(760px, 92vh);
+  height: min(720px, calc(100dvh - 48px));
+  max-height: calc(100dvh - 48px);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
@@ -4756,6 +4776,125 @@ button {
   box-shadow: 0 0 0 3px rgba(31, 211, 255, 0.08);
 }
 
+.process-participants-manager {
+  display: grid;
+  gap: 10px;
+}
+
+.process-participants-selected,
+.process-participants-directory {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(171, 205, 255, 0.1);
+  border-radius: 13px;
+  background: rgba(145, 166, 207, 0.06);
+  padding: 10px;
+}
+
+.process-participants-selected strong {
+  color: #fff;
+  font-size: var(--fs-13);
+}
+
+.process-participants-selected button,
+.process-participants-directory div button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 36px;
+  border: 1px solid rgba(171, 205, 255, 0.11);
+  border-radius: 10px;
+  background: rgba(7, 14, 28, 0.46);
+  color: rgba(231, 240, 255, 0.84);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--fs-12);
+  padding: 7px 9px;
+  text-align: left;
+}
+
+.process-participants-selected button:hover,
+.process-participants-directory div button:hover:not(:disabled) {
+  border-color: rgba(115, 226, 255, 0.28);
+  background: rgba(31, 211, 255, 0.09);
+}
+
+.process-participants-selected button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.process-participants-selected button em,
+.process-participants-directory div button em {
+  flex: 0 0 auto;
+  color: rgba(255, 226, 164, 0.78);
+  font-size: var(--fs-11);
+  font-style: normal;
+  font-weight: 780;
+}
+
+.process-participants-selected p {
+  margin: 0;
+  color: rgba(211, 224, 248, 0.62);
+  font-size: var(--fs-12);
+  line-height: 1.4;
+}
+
+.process-participants-directory label {
+  display: grid;
+  gap: 6px;
+}
+
+.process-participants-directory label span {
+  color: rgba(220, 232, 255, 0.68);
+  font-size: var(--fs-12);
+  font-weight: 750;
+}
+
+.process-participants-directory input {
+  width: 100%;
+  border: 1px solid rgba(171, 205, 255, 0.15);
+  border-radius: 11px;
+  background: rgba(3, 9, 20, 0.72);
+  color: #f5fbff;
+  font: inherit;
+  font-size: var(--fs-13);
+  outline: none;
+  padding: 9px 10px;
+}
+
+.process-participants-directory div {
+  display: grid;
+  gap: 6px;
+  max-height: 216px;
+  overflow: auto;
+}
+
+.process-participants-directory div button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.process-participants-directory b,
+.process-participants-directory small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.process-participants-directory b {
+  color: #fff;
+  font-size: var(--fs-12);
+}
+
+.process-participants-directory small {
+  color: rgba(211, 224, 248, 0.6);
+  font-size: var(--fs-11);
+}
+
 .builder-document-summary {
   display: grid;
   grid-template-columns: auto 1fr auto 1fr;
@@ -5595,6 +5734,11 @@ button {
   .project-manager-modal {
     max-height: 94vh;
     border-radius: 15px;
+  }
+
+  .project-create-modal {
+    height: calc(100dvh - 20px);
+    max-height: calc(100dvh - 20px);
   }
 
   .project-manager-header {

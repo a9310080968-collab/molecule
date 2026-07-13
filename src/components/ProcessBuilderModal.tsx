@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { teamDirectory } from "./ProjectManagerModal";
 import {
   getDocumentFromNode,
   getFileLabel,
@@ -27,6 +28,7 @@ import type {
   ProcessEdit,
   ProcessFieldKey,
   ProcessFieldRequirement,
+  ProjectParticipantSeed,
 } from "../types";
 
 type BuilderMode = "draft" | "launch";
@@ -37,6 +39,7 @@ type ProcessBuilderModalProps = {
   onClose: () => void;
   onSave: (processId: string, edit: ProcessEdit, mode: BuilderMode) => void;
   onOpenDocument: (document: ProcessDocument) => void;
+  onAddParticipant: (participant: ProjectParticipantSeed) => void;
 };
 
 type DocumentChoice = {
@@ -54,7 +57,7 @@ const fieldDefaults: ProcessFieldRequirement[] = [
   { key: "result", label: "Результат проверки", required: false },
 ];
 
-export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenDocument }: ProcessBuilderModalProps) {
+export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenDocument, onAddParticipant }: ProcessBuilderModalProps) {
   const fromNode = getNodeById(project, process.from);
   const toNode = getNodeById(project, process.to);
   const documentChoices = useMemo(() => getDocumentChoices(project, process), [project, process]);
@@ -65,6 +68,10 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
   const [sender, setSender] = useState(process.sender);
   const [receiver, setReceiver] = useState(process.receiver);
   const [approver, setApprover] = useState(process.approver ?? process.receiver);
+  const [participantQuery, setParticipantQuery] = useState("");
+  const [selectedParticipantNames, setSelectedParticipantNames] = useState<string[]>(() =>
+    uniqueNames([process.sender, process.receiver, process.approver, ...(process.participantNames ?? [])]),
+  );
   const [dueAt, setDueAt] = useState(process.dueAt ?? "");
   const [fieldRequirements, setFieldRequirements] = useState<ProcessFieldRequirement[]>(() => buildFieldRequirements(process));
   const [documentRequirements, setDocumentRequirements] = useState<Record<string, { selected: boolean; required: boolean }>>(() =>
@@ -78,6 +85,7 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
     setSender(process.sender);
     setReceiver(process.receiver);
     setApprover(process.approver ?? process.receiver);
+    setSelectedParticipantNames(uniqueNames([process.sender, process.receiver, process.approver, ...(process.participantNames ?? [])]));
     setDueAt(process.dueAt ?? "");
     setFieldRequirements(buildFieldRequirements(process));
     setDocumentRequirements(buildDocumentRequirements(process, documentChoices));
@@ -87,6 +95,18 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
     .filter((choice) => documentRequirements[choice.document.id]?.selected)
     .map((choice) => choice.document);
   const selectedRequiredCount = selectedDocuments.filter((document) => documentRequirements[document.id]?.required).length;
+  const projectParticipantEmails = new Set(project.participants.map((participant) => participant.email));
+  const visibleDirectory = teamDirectory.filter((participant) => {
+    const query = participantQuery.trim().toLocaleLowerCase("ru-RU");
+    if (!query) {
+      return true;
+    }
+    return [participant.name, participant.position, participant.role, participant.email, participant.phone, participant.messenger]
+      .filter(Boolean)
+      .join(" ")
+      .toLocaleLowerCase("ru-RU")
+      .includes(query);
+  });
 
   function toggleField(key: ProcessFieldKey) {
     setFieldRequirements((current) =>
@@ -121,6 +141,7 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
   }
 
   function save(mode: BuilderMode) {
+    const participantNames = uniqueNames([sender, receiver, approver, ...selectedParticipantNames]);
     const documentRequirementList: ProcessDocumentRequirement[] = selectedDocuments.map((document) => ({
       documentId: document.id,
       required: documentRequirements[document.id]?.required ?? true,
@@ -139,6 +160,7 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
         direction,
         sender,
         receiver,
+        participantNames,
         approver,
         dueAt,
         requiredFields: fieldRequirements,
@@ -149,6 +171,11 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
       },
       mode,
     );
+  }
+
+  function addParticipant(participant: ProjectParticipantSeed) {
+    onAddParticipant(participant);
+    setSelectedParticipantNames((current) => uniqueNames([...current, participant.name]));
   }
 
   return (
@@ -244,6 +271,48 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
                 <option key={participant} value={participant} />
               ))}
             </datalist>
+
+            <div className="process-participants-manager">
+              <div className="process-participants-selected">
+                <strong>Участники процесса</strong>
+                {selectedParticipantNames.length ? (
+                  selectedParticipantNames.map((name) => (
+                    <button key={name} onClick={() => setSelectedParticipantNames((current) => current.filter((item) => item !== name))}>
+                      <span>{name}</span>
+                      <em>убрать</em>
+                    </button>
+                  ))
+                ) : (
+                  <p>Добавьте участников, которые должны видеть и исполнять этот бизнес-процесс.</p>
+                )}
+              </div>
+
+              <div className="process-participants-directory">
+                <label>
+                  <span>Добавить из команды</span>
+                  <input
+                    value={participantQuery}
+                    onChange={(event) => setParticipantQuery(event.currentTarget.value)}
+                    placeholder="Поиск по имени, роли, почте..."
+                  />
+                </label>
+                <div>
+                  {visibleDirectory.slice(0, 8).map((participant) => {
+                    const alreadyInProject = projectParticipantEmails.has(participant.email);
+                    const alreadySelected = selectedParticipantNames.includes(participant.name);
+                    return (
+                      <button key={participant.email} onClick={() => addParticipant(participant)} disabled={alreadySelected}>
+                        <span>
+                          <b>{participant.name}</b>
+                          <small>{participant.position}</small>
+                        </span>
+                        <em>{alreadySelected ? "в процессе" : alreadyInProject ? "добавить" : "добавить в проект"}</em>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
           </section>
 
           <section className="builder-section builder-documents-section">
@@ -396,10 +465,16 @@ function getParticipants(project: DemoProject, process: BusinessProcess) {
         process.sender,
         process.receiver,
         process.approver,
+        ...(process.participantNames ?? []),
         ...project.participants.map((participant) => participant.name),
+        ...teamDirectory.map((participant) => participant.name),
         ...project.nodes.map((node) => node.responsible),
         ...project.processes.flatMap((item) => [item.sender, item.receiver, item.approver]),
       ].filter(Boolean) as string[],
     ),
   );
+}
+
+function uniqueNames(values: Array<string | undefined>) {
+  return Array.from(new Set(values.map((value) => value?.trim()).filter(Boolean) as string[]));
 }

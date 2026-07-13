@@ -1,4 +1,4 @@
-import { Bell, Menu, Plus, Search, SlidersHorizontal, UserCog, X } from "lucide-react";
+import { Bell, Menu, Plus, Search, SlidersHorizontal, Trash2, UserCog, X } from "lucide-react";
 import { useState } from "react";
 import type { DemoNotification, DemoProject } from "../types";
 
@@ -11,6 +11,7 @@ type TopSearchProps = {
   projects: DemoProject[];
   activeProjectId: string;
   onProjectChange: (projectId: string) => void;
+  onProjectDelete: (projectId: string) => void;
   notifications: DemoNotification[];
   onNotificationClick: (notification: DemoNotification) => void;
   onOpenProjectManager: () => void;
@@ -26,6 +27,7 @@ export function TopSearch({
   projects,
   activeProjectId,
   onProjectChange,
+  onProjectDelete,
   notifications,
   onNotificationClick,
   onOpenProjectManager,
@@ -56,6 +58,14 @@ export function TopSearch({
         <button className="project-add-tab" onClick={onOpenProjectManager} title="Создать проект">
           <Plus size={18} />
           <span>Создать</span>
+        </button>
+        <button
+          className="project-delete-tab"
+          onClick={() => onProjectDelete(activeProjectId)}
+          disabled={projects.length <= 1}
+          title={projects.length <= 1 ? "Нельзя удалить последний проект" : "Удалить текущий проект"}
+        >
+          <Trash2 size={17} />
         </button>
       </div>
 

@@ -288,6 +288,7 @@ export default function App() {
     setActiveLevelId(getDefaultLevel(project).id);
     setSelectedNodeId(getDefaultLevel(project).centralNodeId);
     setSelectedProcessId(null);
+    setNotifications((current) => current.filter((notification) => notification.projectId !== projectId));
     setLinkingFromId(null);
     setProcessBuilderId(null);
     setProcessDetailId(null);
@@ -322,6 +323,36 @@ export default function App() {
     setConstructorHintDismissed(false);
     setProjectManagerOpen(false);
     showToast(`Проект «${project.title}» создан из шаблона «${template.title}».`);
+  }
+
+  function deleteProject(projectId: string) {
+    if (projects.length <= 1) {
+      showToast("Нельзя удалить последний проект.");
+      return;
+    }
+
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) {
+      return;
+    }
+
+    recordHistory();
+    const remaining = projects.filter((item) => item.id !== projectId);
+    const nextProject = remaining.find((item) => item.id !== projectId) ?? remaining[0];
+    const nextLevel = getDefaultLevel(nextProject);
+
+    setProjects(remaining);
+    setActiveProjectId(nextProject.id);
+    setActiveLevelId(nextLevel.id);
+    setSelectedNodeId(nextLevel.centralNodeId);
+    setSelectedProcessId(null);
+    setLinkingFromId(null);
+    setProcessBuilderId(null);
+    setProcessDetailId(null);
+    setProjectManagerOpen(false);
+    setPersonalSettingsOpen(false);
+    setActiveMenu("map");
+    showToast(`Проект «${project.title}» удален.`);
   }
 
   function createTemplate(title: string, description: string) {
@@ -536,6 +567,7 @@ export default function App() {
       direction: "forward",
       sender: from.responsible ?? from.title,
       receiver: to.responsible ?? to.title,
+      participantNames: [from.responsible ?? from.title, to.responsible ?? to.title],
       createdAt: "только что",
       dueAt: edit.dueAt,
       parallelIndex: pairCount ? pairCount - 0.5 : 0,
@@ -568,6 +600,27 @@ export default function App() {
       updatedAt: "только что",
     }));
     showToast(`Пользователь «${participant.name}» добавлен в проект.`);
+  }
+
+  function addParticipantFromDirectory(seed: ProjectParticipantSeed) {
+    if (activeProject.participants.some((participant) => participant.email === seed.email)) {
+      showToast(`Участник «${seed.name}» уже есть в команде проекта.`);
+      return;
+    }
+
+    const participant = {
+      ...seed,
+      id: `participant-${Date.now()}-${Math.round(Math.random() * 10000)}`,
+      projectId: activeProject.id,
+      status: "active" as const,
+    };
+
+    updateActiveProject((project) => ({
+      ...project,
+      participants: [participant, ...project.participants],
+      updatedAt: "только что",
+    }));
+    showToast(`Участник «${participant.name}» добавлен в проект и доступен в процессе.`);
   }
 
   function updateParticipant(participantId: string, edit: ParticipantEdit) {
@@ -772,6 +825,7 @@ export default function App() {
       direction: "forward",
       sender: from.responsible ?? from.title,
       receiver: to.responsible ?? to.title,
+      participantNames: [from.responsible ?? from.title, to.responsible ?? to.title],
       createdAt: "только что",
       parallelIndex: offset,
       source: "manual",
@@ -1192,6 +1246,7 @@ export default function App() {
         projects={projects}
         activeProjectId={activeProjectId}
         onProjectChange={selectProject}
+        onProjectDelete={deleteProject}
         notifications={notifications}
         onNotificationClick={handleNotificationClick}
         onOpenProjectManager={() => setProjectManagerOpen(true)}
@@ -1312,6 +1367,7 @@ export default function App() {
           onClose={() => setProcessBuilderId(null)}
           onSave={saveProcessBuilder}
           onOpenDocument={setModalDocument}
+          onAddParticipant={addParticipantFromDirectory}
         />
       ) : null}
       {detailProcess ? (

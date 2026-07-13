@@ -122,6 +122,7 @@ export type BusinessProcess = {
   direction: ProcessDirection;
   sender: string;
   receiver: string;
+  participantNames?: string[];
   createdAt: string;
   validationAt?: string;
   dueAt?: string;
@@ -204,6 +205,7 @@ export type ProcessEdit = Partial<
     | "direction"
     | "sender"
     | "receiver"
+    | "participantNames"
     | "validationAt"
     | "dueAt"
     | "approver"

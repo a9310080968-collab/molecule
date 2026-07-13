@@ -32,7 +32,7 @@ const generatedTeam: ProjectParticipantSeed[] = Array.from({ length: 36 }, (_, i
   );
 });
 
-const teamDirectory = [...baseTeam, ...generatedTeam];
+export const teamDirectory = [...baseTeam, ...generatedTeam];
 const lockedAdminEmail = baseTeam[0].email;
 
 export function ProjectManagerModal({
