@@ -123,8 +123,8 @@ export default function App() {
     createTemplateFromProject(demoProjects[0], "Жилой комплекс / полный комплект", "Структура разделов, внутренних уровней и контейнеров связи без рабочих документов."),
     createTemplateFromProject(demoProjects[1], "Компактный офисный проект", "Легкая структура для небольшого объекта с ИРД, АР, КР, ЭОМ и сметой."),
   ], []);
-  const initialProjects = persistedState?.projects?.length ? persistedState.projects : demoProjects;
-  const initialActiveProject = initialProjects.find((project) => project.id === persistedState?.activeProjectId) ?? initialProjects[0];
+  const initialProjects = persistedState?.projects ? persistedState.projects : demoProjects;
+  const initialActiveProject = initialProjects.find((project) => project.id === persistedState?.activeProjectId) ?? initialProjects[0] ?? demoProjects[0];
   const initialActiveLevel = initialActiveProject.levels.find((level) => level.id === persistedState?.activeLevelId) ?? getDefaultLevel(initialActiveProject);
   const initialSelectedNode = getNodeById(initialActiveProject, persistedState?.selectedNodeId) ?? getNodeById(initialActiveProject, initialActiveLevel.centralNodeId);
   const [projects, setProjects] = useState<DemoProject[]>(initialProjects);
@@ -153,7 +153,8 @@ export default function App() {
   const [redoStack, setRedoStack] = useState<HistorySnapshot[]>([]);
   const sceneRef = useRef<SceneHandle | null>(null);
 
-  const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0];
+  const hasProjects = projects.length > 0;
+  const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0] ?? demoProjects[0];
   const activeLevel = getLevelById(activeProject, activeLevelId);
   const levelNodes = useMemo(() => getLevelNodes(activeProject, activeLevel), [activeLevel, activeProject]);
   const levelProcesses = useMemo(() => getLevelProcesses(activeProject, activeLevel), [activeLevel, activeProject]);
@@ -167,6 +168,7 @@ export default function App() {
   const hasNoResults = isSearching && matches.nodeIds.size + matches.processIds.size === 0;
   const fontVars = useMemo(() => buildFontVars(fontScale), [fontScale]);
   const showConstructorHint =
+    hasProjects &&
     activeMenu === "map" &&
     guideDismissed &&
     !constructorHintDismissed &&
@@ -337,7 +339,23 @@ export default function App() {
 
   function deleteProject(projectId: string) {
     if (projects.length <= 1) {
-      showToast("Нельзя удалить последний проект.");
+      const project = projects.find((item) => item.id === projectId);
+      if (!project) {
+        return;
+      }
+      recordHistory();
+      setProjects([]);
+      setActiveProjectId("");
+      setActiveLevelId("");
+      setSelectedNodeId("");
+      setSelectedProcessId(null);
+      setLinkingFromId(null);
+      setProcessBuilderId(null);
+      setProcessDetailId(null);
+      setProjectManagerOpen(false);
+      setPersonalSettingsOpen(false);
+      setActiveMenu("map");
+      showToast(`Проект «${project.title}» удален.`);
       return;
     }
 
@@ -1218,6 +1236,28 @@ export default function App() {
     }
 
     void document.documentElement.requestFullscreen();
+  }
+
+  if (!hasProjects) {
+    return (
+      <div className="app-shell empty-project-shell" style={fontVars}>
+        <div className="cosmos-backdrop" />
+        <main className="empty-project-state glass-panel">
+          <span>Проекты не созданы</span>
+          <h1>Создайте первый проект</h1>
+          <p>После создания здесь появится рабочая карта проекта, ноды, документы, бизнес-процессы и мессенджер.</p>
+          <button onClick={() => setProjectManagerOpen(true)}>Создать новый проект</button>
+        </main>
+        {projectManagerOpen ? (
+          <ProjectManagerModal
+            templates={projectTemplates}
+            onClose={() => setProjectManagerOpen(false)}
+            onCreateProject={createProject}
+          />
+        ) : null}
+        {toast ? <div className="toast glass-panel">{toast}</div> : null}
+      </div>
+    );
   }
 
   return (

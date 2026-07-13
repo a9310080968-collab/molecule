@@ -62,8 +62,7 @@ export function TopSearch({
         <button
           className="project-delete-tab"
           onClick={() => onProjectDelete(activeProjectId)}
-          disabled={projects.length <= 1}
-          title={projects.length <= 1 ? "Нельзя удалить последний проект" : "Удалить текущий проект"}
+          title="Удалить текущий проект"
         >
           <Trash2 size={17} />
         </button>

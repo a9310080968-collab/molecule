@@ -1502,10 +1502,17 @@ button {
 }
 
 .project-chat-panel {
-  right: calc(var(--right-width) + 42px);
-  bottom: 92px;
-  width: min(300px, calc(100vw - var(--left-width) - var(--right-width) - 90px));
-  pointer-events: none;
+  position: fixed;
+  z-index: 26;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 300px;
+  min-height: 220px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 98px);
+  overflow: hidden;
+  resize: both;
+  pointer-events: auto;
 }
 
 .project-chat-panel header {
@@ -1513,6 +1520,8 @@ button {
   gap: 10px;
   margin-bottom: 9px;
   pointer-events: auto;
+  cursor: grab;
+  user-select: none;
 }
 
 .project-chat-panel header button {
@@ -1540,10 +1549,11 @@ button {
 
 .project-chat-feed {
   display: grid;
+  align-content: start;
   gap: 7px;
-  max-height: 112px;
-  overflow: hidden;
-  pointer-events: none;
+  overflow: auto;
+  pointer-events: auto;
+  padding-right: 2px;
 }
 
 .project-chat-feed article {
@@ -5558,6 +5568,58 @@ button {
 
 .drop-overlay span {
   color: rgba(220, 232, 252, 0.72);
+}
+
+.empty-project-shell {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.empty-project-state {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  justify-items: center;
+  width: min(560px, calc(100vw - 40px));
+  padding: 34px;
+  border-radius: 20px;
+  text-align: center;
+}
+
+.empty-project-state span {
+  color: #9ceeff;
+  font-size: var(--fs-12);
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.empty-project-state h1 {
+  margin: 10px 0 0;
+  color: #fff;
+  font-size: var(--fs-34);
+  line-height: 1.08;
+}
+
+.empty-project-state p {
+  max-width: 440px;
+  margin: 12px 0 22px;
+  color: rgba(220, 232, 252, 0.7);
+  font-size: var(--fs-14);
+  line-height: 1.5;
+}
+
+.empty-project-state button {
+  min-height: 58px;
+  border: 1px solid rgba(53, 217, 255, 0.38);
+  border-radius: 15px;
+  background: linear-gradient(135deg, rgba(53, 217, 255, 0.92), rgba(113, 91, 255, 0.88));
+  box-shadow: 0 18px 42px rgba(53, 217, 255, 0.16);
+  color: #fff;
+  cursor: pointer;
+  font-size: var(--fs-17);
+  font-weight: 850;
+  padding: 0 28px;
 }
 
 .toast {
