@@ -203,7 +203,7 @@ export function PersonalIntegrationsModal({
               <FolderOpen size={18} />
               <div>
                 <h3>Папки мессенджеров и файлов</h3>
-                <p>Выберите папку Telegram Desktop или любую рабочую папку. Браузер запросит разрешение на чтение файлов.</p>
+                <p>Выберите папку Telegram Desktop или рабочую папку. Файлы читаются с датой изменения и в реестре выводятся от новых к старым.</p>
               </div>
             </div>
             <div className="integration-cards folder-integration-cards">

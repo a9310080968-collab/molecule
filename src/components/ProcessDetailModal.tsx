@@ -1,4 +1,5 @@
-import { ArrowRight, FileText, Route, Settings2, UserRound, X } from "lucide-react";
+import { ArrowRight, FileText, Plus, Route, Settings2, Trash2, UserRound, X } from "lucide-react";
+import { useState } from "react";
 import {
   getFileLabel,
   getFileTypeColor,
@@ -16,6 +17,7 @@ type ProcessDetailModalProps = {
   onClose: () => void;
   onOpenDocument: (document: ProcessDocument) => void;
   onConfigure: (processId: string) => void;
+  onDelegationChange: (processId: string, delegates: string[]) => void;
 };
 
 export function ProcessDetailModal({
@@ -24,10 +26,28 @@ export function ProcessDetailModal({
   onClose,
   onOpenDocument,
   onConfigure,
+  onDelegationChange,
 }: ProcessDetailModalProps) {
   const fromNode = getNodeById(project, process.from);
   const toNode = getNodeById(project, process.to);
   const color = getProcessRuntimeColor(process);
+  const delegates = process.delegatedTo ?? [];
+  const delegateOptions = project.participants.filter(
+    (participant) => !delegates.includes(participant.name) && participant.name !== process.sender && participant.name !== process.receiver,
+  );
+  const [delegateCandidate, setDelegateCandidate] = useState(delegateOptions[0]?.name ?? "");
+  const selectedDelegateCandidate = delegateOptions.some((participant) => participant.name === delegateCandidate)
+    ? delegateCandidate
+    : delegateOptions[0]?.name ?? "";
+
+  function addDelegate() {
+    if (!selectedDelegateCandidate) {
+      return;
+    }
+    onDelegationChange(process.id, [...delegates, selectedDelegateCandidate]);
+    const nextCandidate = delegateOptions.find((participant) => participant.name !== selectedDelegateCandidate)?.name ?? "";
+    setDelegateCandidate(nextCandidate);
+  }
 
   return (
     <div className="modal-backdrop process-detail-backdrop" role="dialog" aria-modal="true">
@@ -114,6 +134,54 @@ export function ProcessDetailModal({
             ))
           ) : (
             <p>Список пуст. Этот процесс пока описывает маршрут, но не содержит переданных файлов.</p>
+          )}
+        </section>
+
+        <section className="process-delegation">
+          <header>
+            <div>
+              <h3>Делегирование внутри отдела</h3>
+              <p>Получатель может передать задание исполнителям, не меняя маршрут файла между основными нодами.</p>
+            </div>
+          </header>
+          <div className="process-delegation-chain">
+            <article>
+              <UserRound size={17} />
+              <div>
+                <span>Ответственный</span>
+                <strong>{process.receiver}</strong>
+              </div>
+            </article>
+            {delegates.map((delegate) => (
+              <article key={delegate}>
+                <ArrowRight size={15} />
+                <div>
+                  <span>Исполнитель</span>
+                  <strong>{delegate}</strong>
+                </div>
+                <button
+                  onClick={() => onDelegationChange(process.id, delegates.filter((name) => name !== delegate))}
+                  aria-label={`Убрать исполнителя ${delegate}`}
+                >
+                  <Trash2 size={15} />
+                </button>
+              </article>
+            ))}
+          </div>
+          {delegateOptions.length ? (
+            <div className="process-delegation-add">
+              <select value={selectedDelegateCandidate} onChange={(event) => setDelegateCandidate(event.currentTarget.value)}>
+                {delegateOptions.map((participant) => (
+                  <option key={participant.id} value={participant.name}>{participant.name} · {participant.position}</option>
+                ))}
+              </select>
+              <button onClick={addDelegate} disabled={!selectedDelegateCandidate}>
+                <Plus size={16} />
+                Передать исполнителю
+              </button>
+            </div>
+          ) : (
+            <p className="process-delegation-empty">Все доступные участники уже добавлены в цепочку исполнения.</p>
           )}
         </section>
 

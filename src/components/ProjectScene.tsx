@@ -10,7 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { ChevronUp, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronUp, ExternalLink, LockKeyhole, Pin, PinOff, Plus, Trash2, X } from "lucide-react";
 import {
   getFileLabel,
   getDocumentFromNode,
@@ -56,6 +56,8 @@ type ProjectSceneProps = {
   onAddSectionNode: () => void;
   onUpdateDocumentStatus: (documentId: string, status: NodeStatus) => void;
   onPositionsChange: (levelId: string, positions: Record<string, Vec2>, record?: boolean) => void;
+  onToggleNodePositionLock: (nodeId: string) => void;
+  onDeleteNode: (nodeId: string) => void;
   sceneRef: MutableRefObject<SceneHandle | null>;
 };
 
@@ -87,6 +89,11 @@ type NodeContextMenuState = {
   y: number;
 };
 
+type ProcessGroup = {
+  key: string;
+  processes: BusinessProcess[];
+};
+
 const INITIAL_VIEW: ViewState = { zoom: 1, panX: 0, panY: 42 };
 const MIN_ZOOM = 0.34;
 const MAX_ZOOM = 4.8;
@@ -116,6 +123,8 @@ export function ProjectScene({
   onAddSectionNode,
   onUpdateDocumentStatus,
   onPositionsChange,
+  onToggleNodePositionLock,
+  onDeleteNode,
   sceneRef,
 }: ProjectSceneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -124,6 +133,7 @@ export function ProjectScene({
   const clickRef = useRef<{ nodeId: string; time: number } | null>(null);
   const suppressClickRef = useRef(false);
   const panRef = useRef<{ pointerId: number; x: number; y: number; panX: number; panY: number } | null>(null);
+  const fittedLevelRef = useRef<string | null>(null);
   const centerNodeId = level.centralNodeId;
   const nodeIdsKey = useMemo(() => nodes.map((node) => node.id).join("|"), [nodes]);
   const savedPositions = project.nodePositions?.[level.id];
@@ -133,8 +143,11 @@ export function ProjectScene({
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [dragUi, setDragUi] = useState<DragUiState | null>(null);
   const [contextMenu, setContextMenu] = useState<NodeContextMenuState | null>(null);
+  const [openProcessGroupKey, setOpenProcessGroupKey] = useState<string | null>(null);
+  const [openProcessIndex, setOpenProcessIndex] = useState(0);
   const [levelMotion, setLevelMotion] = useState<"down" | "up" | null>(null);
   const nodeMap = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
+  const processGroups = useMemo(() => groupProcesses(processes), [processes]);
   const contextNode = contextMenu ? nodeMap.get(contextMenu.nodeId) : undefined;
   const projectProgress = getProjectProgress(project, level);
   const scale = getBaseScale(size) * view.zoom;
@@ -162,7 +175,17 @@ export function ProjectScene({
 
   useEffect(() => {
     setView(INITIAL_VIEW);
+    setOpenProcessGroupKey(null);
   }, [level.id]);
+
+  useEffect(() => {
+    if (!size.width || !size.height || fittedLevelRef.current === level.id) {
+      return;
+    }
+
+    fittedLevelRef.current = level.id;
+    setView(buildFittedView(positions, size));
+  }, [level.id, positions, size]);
 
   useEffect(() => {
     if (!levelTransition) {
@@ -184,6 +207,28 @@ export function ProjectScene({
       Object.entries(positions).map(([id, position]) => [id, worldToScreen(position, size, view)]),
     ) as Record<string, Vec2>;
   }, [positions, size, view]);
+  const openProcessGroup = openProcessGroupKey
+    ? processGroups.find((group) => group.key === openProcessGroupKey)
+    : undefined;
+  const boundedOpenProcessIndex = openProcessGroup
+    ? Math.min(openProcessIndex, openProcessGroup.processes.length - 1)
+    : 0;
+  const openProcess = openProcessGroup?.processes[boundedOpenProcessIndex];
+  const openProcessAnchor = openProcessGroup
+    ? getProcessGroupAnchor(openProcessGroup, screenPositions, nodeMap, centerNodeId)
+    : undefined;
+  const taskPopoverPosition = openProcessAnchor ? getTaskPopoverPosition(openProcessAnchor, size) : undefined;
+
+  useEffect(() => {
+    if (openProcessGroupKey && !openProcessGroup) {
+      setOpenProcessGroupKey(null);
+      return;
+    }
+    const selectedIndex = openProcessGroup?.processes.findIndex((process) => process.id === selectedProcessId) ?? -1;
+    if (selectedIndex >= 0 && selectedIndex !== openProcessIndex) {
+      setOpenProcessIndex(selectedIndex);
+    }
+  }, [openProcessGroup, openProcessGroupKey, openProcessIndex, selectedProcessId]);
 
   const focusNode = useCallback((nodeId: string) => {
     const position = positions[nodeId];
@@ -205,12 +250,13 @@ export function ProjectScene({
         const next = buildInitialPositions(nodes, level.id, centerNodeId);
         setPositions(next);
         onPositionsChange(level.id, next, true);
-        setView(INITIAL_VIEW);
+        setView(buildFittedView(next, size));
       },
       normalize: () => {
-        const next = buildNormalizedPositions(nodes, processes, level.id, centerNodeId);
+        const next = buildNormalizedPositions(nodes, processes, level.id, centerNodeId, positions);
         setPositions(next);
         onPositionsChange(level.id, next, true);
+        setView(buildFittedView(next, size));
       },
       focusNode,
       focusSelected: () => focusNode(selectedNodeId),
@@ -219,7 +265,7 @@ export function ProjectScene({
         return rect ? clientToWorld(clientX, clientY, rect, view) : null;
       },
     };
-  }, [centerNodeId, focusNode, level.id, nodes, onPositionsChange, processes, sceneRef, selectedNodeId, view]);
+  }, [centerNodeId, focusNode, level.id, nodes, onPositionsChange, positions, processes, sceneRef, selectedNodeId, size, view]);
 
   const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -283,6 +329,9 @@ export function ProjectScene({
       return;
     }
     if (node.id === centerNodeId || node.type === "central") {
+      return;
+    }
+    if (node.positionLocked) {
       return;
     }
 
@@ -432,7 +481,32 @@ export function ProjectScene({
     event.preventDefault();
     event.stopPropagation();
     onSelectNode(node.id);
-    setContextMenu({ nodeId: node.id, x: event.clientX, y: event.clientY });
+    setContextMenu({
+      nodeId: node.id,
+      x: Math.min(event.clientX, window.innerWidth - 236),
+      y: Math.min(event.clientY, window.innerHeight - 354),
+    });
+  };
+
+  const toggleProcessGroup = (group: ProcessGroup) => {
+    if (openProcessGroupKey === group.key) {
+      setOpenProcessGroupKey(null);
+      return;
+    }
+    const selectedIndex = group.processes.findIndex((process) => process.id === selectedProcessId);
+    const nextIndex = selectedIndex >= 0 ? selectedIndex : 0;
+    setOpenProcessIndex(nextIndex);
+    setOpenProcessGroupKey(group.key);
+    onSelectProcess(group.processes[nextIndex].id);
+  };
+
+  const shiftOpenProcess = (delta: number) => {
+    if (!openProcessGroup?.processes.length) {
+      return;
+    }
+    const nextIndex = (boundedOpenProcessIndex + delta + openProcessGroup.processes.length) % openProcessGroup.processes.length;
+    setOpenProcessIndex(nextIndex);
+    onSelectProcess(openProcessGroup.processes[nextIndex].id);
   };
 
   return (
@@ -504,23 +578,67 @@ export function ProjectScene({
             <path d="M 4.8 0.9 L 0 2.5 L 4.8 4.1 z" fill="context-stroke" />
           </marker>
         </defs>
-        {processes.map((process) => (
+        {processGroups.map((group) => (
           <ProcessPath
-            key={process.id}
-            process={process}
-            from={screenPositions[process.from]}
-            to={screenPositions[process.to]}
-            fromNode={nodeMap.get(process.from)}
-            toNode={nodeMap.get(process.to)}
+            key={group.key}
+            processes={group.processes}
+            selectedProcessId={selectedProcessId}
+            from={screenPositions[group.processes[0].from]}
+            to={screenPositions[group.processes[0].to]}
+            fromNode={nodeMap.get(group.processes[0].from)}
+            toNode={nodeMap.get(group.processes[0].to)}
             centralNodeId={centerNodeId}
-            selected={selectedProcessId === process.id}
-            matched={matchedProcessIds.has(process.id)}
-            dimmed={isSearching && !matchedProcessIds.has(process.id) && !matchedNodeIds.has(process.from) && !matchedNodeIds.has(process.to)}
-            onSelect={() => onSelectProcess(process.id)}
-            onOpenDetails={() => onOpenProcessDetails(process.id)}
+            selected={group.processes.some((process) => selectedProcessId === process.id)}
+            matched={group.processes.some((process) => matchedProcessIds.has(process.id))}
+            dimmed={isSearching && !group.processes.some((process) => matchedProcessIds.has(process.id)) && !matchedNodeIds.has(group.processes[0].from) && !matchedNodeIds.has(group.processes[0].to)}
+            onToggle={() => toggleProcessGroup(group)}
+            onOpenDetails={() => onOpenProcessDetails(group.processes.find((process) => process.id === selectedProcessId)?.id ?? group.processes[0].id)}
           />
         ))}
       </svg>
+
+      {openProcessGroup && openProcess && taskPopoverPosition ? (
+        <aside
+          className="process-task-popover glass-panel"
+          style={{ left: taskPopoverPosition.x, top: taskPopoverPosition.y }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <header>
+            <div>
+              <span>Задания на связи</span>
+              <strong>{getProcessRouteLabel(openProcessGroup, nodeMap)}</strong>
+            </div>
+            <button onClick={() => setOpenProcessGroupKey(null)} aria-label="Закрыть список заданий">
+              <X size={16} />
+            </button>
+          </header>
+          <div className="process-task-carousel">
+            <button onClick={() => shiftOpenProcess(-1)} disabled={openProcessGroup.processes.length <= 1} aria-label="Предыдущее задание">
+              <ChevronLeft size={17} />
+            </button>
+            <button
+              className="process-task-card"
+              onClick={() => onSelectProcess(openProcess.id)}
+              onDoubleClick={() => onOpenProcessDetails(openProcess.id)}
+              title="Двойной клик: открыть бизнес-процесс"
+            >
+              <span>{boundedOpenProcessIndex + 1} из {openProcessGroup.processes.length}</span>
+              <strong>{openProcess.title}</strong>
+              <small>{getProcessStatusText(openProcess.status)} · {getProcessDeadlineLabel(openProcess)}</small>
+            </button>
+            <button onClick={() => shiftOpenProcess(1)} disabled={openProcessGroup.processes.length <= 1} aria-label="Следующее задание">
+              <ChevronRight size={17} />
+            </button>
+          </div>
+          <footer>
+            <span>{openProcess.documents.length} файлов</span>
+            <button onClick={() => onOpenProcessDetails(openProcess.id)}>
+              <ExternalLink size={15} />
+              Открыть процесс
+            </button>
+          </footer>
+        </aside>
+      ) : null}
 
       {nodes.map((node, index) => {
         const position = screenPositions[node.id];
@@ -557,6 +675,7 @@ export function ProjectScene({
               canCompleteLink && "link-target",
               isDocumentDropTarget && "document-drop-target",
               isIncomingNew && "incoming-new",
+              node.positionLocked && "position-locked",
             )}
             style={{
               left: position.x,
@@ -584,6 +703,11 @@ export function ProjectScene({
               <em>{label.secondary}</em>
             </span>
             {node.type === "document" && node.status === "comments" ? <span className="node-status-badge">Не принято</span> : null}
+            {node.positionLocked ? (
+              <span className="node-lock-badge" title="Положение закреплено">
+                <LockKeyhole size={13} />
+              </span>
+            ) : null}
             {node.type !== "central" && node.type !== "document" ? (
               <span
                 className={clsx("node-plus", (hoveredNodeId === node.id || linkingFromId) && "visible")}
@@ -620,6 +744,17 @@ export function ProjectScene({
           >
             Выбрать
           </button>
+          {contextNode.type !== "central" ? (
+            <button
+              onClick={() => {
+                onToggleNodePositionLock(contextNode.id);
+                setContextMenu(null);
+              }}
+            >
+              {contextNode.positionLocked ? <PinOff size={15} /> : <Pin size={15} />}
+              {contextNode.positionLocked ? "Открепить положение" : "Закрепить положение"}
+            </button>
+          ) : null}
           {contextNode.type === "document" && contextNode.document ? (
             <>
               <button
@@ -697,6 +832,18 @@ export function ProjectScene({
               </button>
             </>
           ) : null}
+          {contextNode.type !== "central" ? (
+            <button
+              className="danger"
+              onClick={() => {
+                onDeleteNode(contextNode.id);
+                setContextMenu(null);
+              }}
+            >
+              <Trash2 size={15} />
+              {contextNode.type === "document" ? "Убрать во входящие" : "Удалить ноду"}
+            </button>
+          ) : null}
         </div>
       ) : null}
     </main>
@@ -704,7 +851,8 @@ export function ProjectScene({
 }
 
 function ProcessPath({
-  process,
+  processes,
+  selectedProcessId,
   from,
   to,
   fromNode,
@@ -713,10 +861,11 @@ function ProcessPath({
   selected,
   matched,
   dimmed,
-  onSelect,
+  onToggle,
   onOpenDetails,
 }: {
-  process: BusinessProcess;
+  processes: BusinessProcess[];
+  selectedProcessId: string | null;
   from?: Vec2;
   to?: Vec2;
   fromNode?: ProjectNode;
@@ -725,18 +874,20 @@ function ProcessPath({
   selected: boolean;
   matched: boolean;
   dimmed: boolean;
-  onSelect: () => void;
+  onToggle: () => void;
   onOpenDetails: () => void;
 }) {
-  if (!from || !to || !fromNode || !toNode) {
+  if (!from || !to || !fromNode || !toNode || !processes.length) {
     return null;
   }
 
   const radiusFrom = getNodeRadius(fromNode, centralNodeId);
   const radiusTo = getNodeRadius(toNode, centralNodeId);
-  const geometry = buildProcessGeometry(from, to, radiusFrom, radiusTo, (process.parallelIndex ?? 0) * 2.2);
-  const color = getProcessRuntimeColor(process);
-  const documentLabel = getProcessDeadlineLabel(process);
+  const geometry = buildProcessGeometry(from, to, radiusFrom, radiusTo, 0);
+  const color = getProcessGroupColor(processes, selectedProcessId);
+  const hasForward = processes.some((item) => item.direction === "forward" || item.direction === "both");
+  const hasBackward = processes.some((item) => item.direction === "backward" || item.direction === "both");
+  const activeCount = processes.filter((item) => item.status !== "accepted").length;
 
   return (
     <g className={clsx("process-group", selected && "selected", matched && "matched", dimmed && "dimmed")}>
@@ -745,19 +896,18 @@ function ProcessPath({
         className="process-line"
         d={geometry.path}
         style={{ stroke: color }}
-        markerEnd={process.direction === "forward" || process.direction === "both" ? "url(#arrow-end)" : undefined}
-        markerStart={process.direction === "backward" || process.direction === "both" ? "url(#arrow-start)" : undefined}
+        markerEnd={hasForward ? "url(#arrow-end)" : undefined}
+        markerStart={hasBackward ? "url(#arrow-start)" : undefined}
       />
       <path
         className="process-hit"
         d={geometry.path}
         onPointerDown={(event) => {
           event.stopPropagation();
-          onSelect();
         }}
         onClick={(event) => {
           event.stopPropagation();
-          onSelect();
+          onToggle();
         }}
         onDoubleClick={(event) => {
           event.stopPropagation();
@@ -766,14 +916,13 @@ function ProcessPath({
       />
       <foreignObject x={geometry.label.x - 116} y={geometry.label.y - 20} width="232" height="44">
         <button
-          className="process-label"
+          className="process-label process-group-label"
           onPointerDown={(event) => {
             event.stopPropagation();
-            onSelect();
           }}
           onClick={(event) => {
             event.stopPropagation();
-            onSelect();
+            onToggle();
           }}
           onDoubleClick={(event) => {
             event.stopPropagation();
@@ -782,12 +931,83 @@ function ProcessPath({
           title="Двойной клик: открыть бизнес-процесс"
         >
           <span style={{ background: color }} />
-          <b>{process.title}</b>
-          <em>{documentLabel}</em>
+          <b>{fromNode.shortCode ?? fromNode.title} ↔ {toNode.shortCode ?? toNode.title}</b>
+          <em>{activeCount || processes.length} {pluralizeTasks(activeCount || processes.length)}</em>
         </button>
       </foreignObject>
     </g>
   );
+}
+
+function groupProcesses(processes: BusinessProcess[]): ProcessGroup[] {
+  const groups = new Map<string, BusinessProcess[]>();
+  processes.forEach((process) => {
+    const key = [process.from, process.to].sort().join("::");
+    const group = groups.get(key) ?? [];
+    group.push(process);
+    groups.set(key, group);
+  });
+  return Array.from(groups, ([key, groupedProcesses]) => ({ key, processes: groupedProcesses }));
+}
+
+function getProcessGroupColor(processes: BusinessProcess[], selectedProcessId: string | null) {
+  const selected = processes.find((process) => process.id === selectedProcessId);
+  if (selected) {
+    return getProcessRuntimeColor(selected);
+  }
+  const priority = ["rejected", "in_work", "sent", "draft", "accepted"] as const;
+  const representative = priority
+    .map((status) => processes.find((process) => process.status === status))
+    .find(Boolean) ?? processes[0];
+  return getProcessRuntimeColor(representative);
+}
+
+function getProcessGroupAnchor(
+  group: ProcessGroup,
+  screenPositions: Record<string, Vec2>,
+  nodeMap: Map<string, ProjectNode>,
+  centralNodeId: string,
+) {
+  const process = group.processes[0];
+  const from = screenPositions[process.from];
+  const to = screenPositions[process.to];
+  const fromNode = nodeMap.get(process.from);
+  const toNode = nodeMap.get(process.to);
+  if (!from || !to || !fromNode || !toNode) {
+    return undefined;
+  }
+  return buildProcessGeometry(
+    from,
+    to,
+    getNodeRadius(fromNode, centralNodeId),
+    getNodeRadius(toNode, centralNodeId),
+    0,
+  ).label;
+}
+
+function getTaskPopoverPosition(anchor: Vec2, size: { width: number; height: number }) {
+  const desktop = size.width >= 1120;
+  const minX = desktop ? 340 : 12;
+  const maxX = Math.max(minX, size.width - (desktop ? 684 : 326));
+  return {
+    x: clamp(anchor.x + 22, minX, maxX),
+    y: clamp(anchor.y + 28, 130, Math.max(130, size.height - 300)),
+  };
+}
+
+function getProcessRouteLabel(group: ProcessGroup, nodeMap: Map<string, ProjectNode>) {
+  const process = group.processes[0];
+  const from = nodeMap.get(process.from);
+  const to = nodeMap.get(process.to);
+  return `${from?.shortCode ?? from?.title ?? "Источник"} ↔ ${to?.shortCode ?? to?.title ?? "Получатель"}`;
+}
+
+function pluralizeTasks(value: number) {
+  const mod10 = value % 10;
+  const mod100 = value % 100;
+  if (mod10 === 1 && mod100 !== 11) return "задание";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "задания";
+  return "заданий";
 }
 
 function buildInitialPositions(nodes: ProjectNode[], levelId: string, centralNodeId: string) {
@@ -850,10 +1070,24 @@ function buildLevelPositions(
   return result;
 }
 
-function buildNormalizedPositions(nodes: ProjectNode[], processes: BusinessProcess[], levelId: string, centralNodeId: string) {
+function buildNormalizedPositions(
+  nodes: ProjectNode[],
+  processes: BusinessProcess[],
+  levelId: string,
+  centralNodeId: string,
+  currentPositions: Record<string, Vec2>,
+) {
   const positions = buildInitialPositions(nodes, levelId, centralNodeId);
   const ids = nodes.map((node) => node.id);
-  const vectors = Object.fromEntries(ids.map((id) => [id, { ...(positions[id] ?? { x: 0, y: 0 }) }])) as Record<string, Vec2>;
+  const lockedIds = new Set(
+    nodes
+      .filter((node) => node.id === centralNodeId || node.type === "central" || node.positionLocked)
+      .map((node) => node.id),
+  );
+  const vectors = Object.fromEntries(ids.map((id) => [
+    id,
+    { ...((lockedIds.has(id) && currentPositions[id]) || positions[id] || { x: 0, y: 0 }) },
+  ])) as Record<string, Vec2>;
   const central = nodes.some((node) => node.id === centralNodeId) ? centralNodeId : nodes.find((node) => node.type === "central")?.id;
 
   for (let iteration = 0; iteration < 44; iteration += 1) {
@@ -869,12 +1103,12 @@ function buildNormalizedPositions(nodes: ProjectNode[], processes: BusinessProce
       const dx = to.x - from.x;
       const dy = to.y - from.y;
       const distance = Math.max(Math.hypot(dx, dy), 0.001);
-      const target = process.status === "accepted" ? 12.4 : 10.2;
+      const target = process.status === "accepted" ? 15.2 : 13.4;
       const force = (distance - target) * 0.018;
       const ux = dx / distance;
       const uy = dy / distance;
-      addDelta(deltas, process.from, ux * force, uy * force, central);
-      addDelta(deltas, process.to, -ux * force, -uy * force, central);
+      addDelta(deltas, process.from, ux * force, uy * force, lockedIds);
+      addDelta(deltas, process.to, -ux * force, -uy * force, lockedIds);
     });
 
     for (let i = 0; i < ids.length; i += 1) {
@@ -884,21 +1118,23 @@ function buildNormalizedPositions(nodes: ProjectNode[], processes: BusinessProce
         const dx = second.x - first.x;
         const dy = second.y - first.y;
         const distance = Math.max(Math.hypot(dx, dy), 0.001);
-        const min = ids[i] === central || ids[j] === central ? 8.8 : 5.4;
+        const firstNode = nodes.find((node) => node.id === ids[i]);
+        const secondNode = nodes.find((node) => node.id === ids[j]);
+        const min = getNormalizationSeparation(firstNode, secondNode, central);
         if (distance >= min) {
           continue;
         }
         const force = (min - distance) * 0.035;
         const ux = dx / distance;
         const uy = dy / distance;
-        addDelta(deltas, ids[i], -ux * force, -uy * force, central);
-        addDelta(deltas, ids[j], ux * force, uy * force, central);
+        addDelta(deltas, ids[i], -ux * force, -uy * force, lockedIds);
+        addDelta(deltas, ids[j], ux * force, uy * force, lockedIds);
       }
     }
 
     ids.forEach((id) => {
-      if (id === central) {
-        vectors[id] = { x: 0, y: 0 };
+      if (lockedIds.has(id)) {
+        vectors[id] = id === central ? { x: 0, y: 0 } : { ...(currentPositions[id] ?? vectors[id]) };
         return;
       }
       vectors[id].x = clamp(vectors[id].x + deltas[id].x, -42, 42);
@@ -909,12 +1145,28 @@ function buildNormalizedPositions(nodes: ProjectNode[], processes: BusinessProce
   return vectors;
 }
 
-function addDelta(deltas: Record<string, Vec2>, id: string, x: number, y: number, central?: string) {
-  if (id === central || !deltas[id]) {
+function addDelta(deltas: Record<string, Vec2>, id: string, x: number, y: number, lockedIds: Set<string>) {
+  if (lockedIds.has(id) || !deltas[id]) {
     return;
   }
   deltas[id].x += x;
   deltas[id].y += y;
+}
+
+function getNormalizationSeparation(first?: ProjectNode, second?: ProjectNode, central?: string) {
+  if (!first || !second) {
+    return 7.2;
+  }
+  if (first.id === central || second.id === central || first.type === "central" || second.type === "central") {
+    return 11.6;
+  }
+  if (first.type === "document" && second.type === "document") {
+    return 4.8;
+  }
+  if (first.type === "document" || second.type === "document") {
+    return 6.2;
+  }
+  return 8.2;
 }
 
 function findDocumentDropTarget(documentNode: ProjectNode, nodes: ProjectNode[], positions: Record<string, Vec2>, centralNodeId: string, scale: number) {
@@ -1027,6 +1279,43 @@ function clientToWorld(clientX: number, clientY: number, rect: DOMRect, view: Vi
   return {
     x: (clientX - rect.left - rect.width / 2 - view.panX) / scale,
     y: (clientY - rect.top - rect.height / 2 - view.panY) / scale,
+  };
+}
+
+function buildFittedView(positions: Record<string, Vec2>, size: { width: number; height: number }): ViewState {
+  const points = Object.values(positions).filter(isFinitePosition);
+  if (!points.length || !size.width || !size.height) {
+    return INITIAL_VIEW;
+  }
+
+  const minX = Math.min(...points.map((point) => point.x));
+  const maxX = Math.max(...points.map((point) => point.x));
+  const minY = Math.min(...points.map((point) => point.y));
+  const maxY = Math.max(...points.map((point) => point.y));
+  const desktop = size.width >= 1120;
+  const safeArea = desktop
+    ? { left: 352, right: 376, top: 128, bottom: 118 }
+    : { left: 28, right: 28, top: 126, bottom: 112 };
+  const safeWidth = Math.max(260, size.width - safeArea.left - safeArea.right);
+  const safeHeight = Math.max(240, size.height - safeArea.top - safeArea.bottom);
+  const baseScale = getBaseScale(size);
+  const worldWidth = Math.max(10, maxX - minX);
+  const worldHeight = Math.max(8, maxY - minY);
+  const zoom = clamp(
+    Math.min((safeWidth - 150) / (worldWidth * baseScale), (safeHeight - 150) / (worldHeight * baseScale)),
+    MIN_ZOOM,
+    1.28,
+  );
+  const worldCenter = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+  const screenCenter = {
+    x: safeArea.left + safeWidth / 2,
+    y: safeArea.top + safeHeight / 2,
+  };
+
+  return {
+    zoom,
+    panX: screenCenter.x - size.width / 2 - worldCenter.x * baseScale * zoom,
+    panY: screenCenter.y - size.height / 2 - worldCenter.y * baseScale * zoom,
   };
 }
 

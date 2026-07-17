@@ -80,6 +80,7 @@ export type ProjectNode = {
   tags?: string[];
   deadlineAt?: string;
   checklist?: NodeChecklistItem[];
+  positionLocked?: boolean;
   childrenLevelId?: string;
   documentOwnerNodeId?: string;
   fileType?: FileType;
@@ -123,6 +124,7 @@ export type BusinessProcess = {
   sender: string;
   receiver: string;
   participantNames?: string[];
+  delegatedTo?: string[];
   createdAt: string;
   validationAt?: string;
   dueAt?: string;
@@ -196,7 +198,7 @@ export type DemoNotification = {
   unread?: boolean;
 };
 
-export type NodeEdit = Partial<Pick<ProjectNode, "title" | "shortCode" | "description" | "status" | "responsible" | "tags" | "deadlineAt" | "checklist">>;
+export type NodeEdit = Partial<Pick<ProjectNode, "title" | "shortCode" | "description" | "status" | "responsible" | "tags" | "deadlineAt" | "checklist" | "positionLocked">>;
 
 export type ProcessEdit = Partial<
   Pick<
@@ -208,6 +210,7 @@ export type ProcessEdit = Partial<
     | "sender"
     | "receiver"
     | "participantNames"
+    | "delegatedTo"
     | "validationAt"
     | "dueAt"
     | "dueBackAt"

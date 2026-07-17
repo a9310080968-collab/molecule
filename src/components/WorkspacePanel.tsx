@@ -698,7 +698,7 @@ function DocumentsRegistry({
                   <b style={{ color: getFileTypeColor(item.document.fileType) }}>{getFileLabel(item.document.fileType)}</b>
                   <div>
                     <strong>{item.document.title}</strong>
-                    <span>{item.location}</span>
+                    <span>{item.location} · {getDocumentSourceLabel(item.document)} · изменён {item.document.updatedAt}</span>
                   </div>
                   <em>{item.document.version}</em>
                 </button>
@@ -815,7 +815,7 @@ function buildDocumentRegistry(project: DemoProject): DocumentGroup[] {
   return Array.from(groupsByKey.values())
     .map((group) => ({
       ...group,
-      documents: group.documents.sort((a, b) => b.document.updatedAt.localeCompare(a.document.updatedAt) || a.document.title.localeCompare(b.document.title, "ru")),
+      documents: group.documents.sort((a, b) => compareDocumentVersions(b.document, a.document) || a.document.title.localeCompare(b.document.title, "ru")),
     }))
     .sort((a, b) => {
       if (a.isOrphan !== b.isOrphan) {
@@ -883,6 +883,23 @@ function compareDocumentVersions(left: ProcessDocument, right: ProcessDocument) 
   const leftVersion = parseVersionScore(left.version) || parseVersionScore(left.title);
   const rightVersion = parseVersionScore(right.version) || parseVersionScore(right.title);
   return leftVersion - rightVersion;
+}
+
+function getDocumentSourceLabel(document: ProcessDocument) {
+  const source = document.integrationProvider ?? document.source;
+  const labels: Record<string, string> = {
+    outlook: "Outlook",
+    yandex: "Яндекс Почта",
+    gmail: "Gmail",
+    telegram: "Telegram",
+    folder: "Рабочая папка",
+    mail: "Почта",
+    chat: "Мессенджер",
+    drop: "Загрузка",
+    manual: "Создан вручную",
+    demo: "Демо-данные",
+  };
+  return source ? labels[source] ?? "Внешний источник" : "Источник не указан";
 }
 
 function parseVersionScore(value: string) {

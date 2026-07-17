@@ -27,6 +27,7 @@ type SidebarProps = {
   isOpen: boolean;
   activeMenu: SidebarMenuId;
   project: DemoProject;
+  chatUnreadCount: number;
   onMenuSelect: (menu: SidebarMenuId) => void;
   onClose: () => void;
 };
@@ -42,7 +43,7 @@ const navItems = [
   { id: "settings", label: "Настройки", icon: Settings },
 ] satisfies Array<{ id: SidebarMenuId; label: string; icon: LucideIcon }>;
 
-export function Sidebar({ isOpen, activeMenu, project, onMenuSelect, onClose }: SidebarProps) {
+export function Sidebar({ isOpen, activeMenu, project, chatUnreadCount, onMenuSelect, onClose }: SidebarProps) {
   const sent = project.processes.filter((process) => process.status === "sent").length;
   const rejected = project.processes.filter((process) => process.status === "rejected").length;
   const accepted = project.processes.filter((process) => process.status === "accepted").length;
@@ -73,6 +74,9 @@ export function Sidebar({ isOpen, activeMenu, project, onMenuSelect, onClose }: 
               >
                 <Icon size={19} />
                 <span>{item.label}</span>
+                {item.id === "chat" && chatUnreadCount > 0 ? (
+                  <b className="nav-unread-badge" aria-label={`Новых сообщений: ${chatUnreadCount}`}>{chatUnreadCount}</b>
+                ) : null}
               </button>
             );
           })}

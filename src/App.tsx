@@ -173,9 +173,11 @@ export default function App() {
   const [processBuilderId, setProcessBuilderId] = useState<string | null>(null);
   const [processDetailId, setProcessDetailId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [fontScale, setFontScale] = useState(persistedState?.fontScale ?? 1);
+  const [fontScale, setFontScale] = useState(persistedState?.fontScale ?? 0.94);
   const [guideDismissed, setGuideDismissed] = useState(Boolean(persistedState?.guideDismissed));
   const [constructorHintDismissed, setConstructorHintDismissed] = useState(false);
+  const [chatPanelOpen, setChatPanelOpen] = useState(false);
+  const [seenChatMessageIds, setSeenChatMessageIds] = useState<Set<string>>(() => new Set());
   const [isDropActive, setIsDropActive] = useState(false);
   const [levelTransition, setLevelTransition] = useState<LevelTransition | null>(null);
   const [undoStack, setUndoStack] = useState<HistorySnapshot[]>([]);
@@ -192,6 +194,9 @@ export default function App() {
   const builderProcess = getProcessById(activeProject, processBuilderId) ?? null;
   const detailProcess = getProcessById(activeProject, processDetailId) ?? null;
   const currentUser = activeProject.participants.find((participant) => participant.name === "Павел Андреев") ?? activeProject.participants.find((participant) => participant.role === "admin") ?? activeProject.participants[0];
+  const chatUnreadCount = activeProject.chatMessages.filter(
+    (message) => message.author !== currentUser?.name && !seenChatMessageIds.has(message.id),
+  ).length;
   const matches = useMemo(() => getSearchMatches(query, activeProject, activeLevel), [activeLevel, activeProject, query]);
   const isSearching = query.trim().length > 0;
   const hasNoResults = isSearching && matches.nodeIds.size + matches.processIds.size === 0;
@@ -344,6 +349,8 @@ export default function App() {
     setProcessBuilderId(null);
     setProcessDetailId(null);
     setPersonalSettingsOpen(false);
+    setChatPanelOpen(false);
+    setSeenChatMessageIds(new Set());
     setQuery("");
     setLevelTransition(null);
     setActiveMenu("map");
@@ -566,6 +573,63 @@ export default function App() {
     });
   }
 
+  function toggleNodePositionLock(nodeId: string) {
+    const node = getNodeById(activeProject, nodeId);
+    if (!node || node.type === "central") {
+      return;
+    }
+
+    updateNode(nodeId, { positionLocked: !node.positionLocked });
+    showToast(node.positionLocked ? "Положение ноды разблокировано." : "Положение ноды закреплено.");
+  }
+
+  function deleteNode(nodeId: string) {
+    const node = getNodeById(activeProject, nodeId);
+    if (!node || node.type === "central") {
+      return;
+    }
+
+    if (node.type === "document") {
+      moveDocumentNodeToInbox(node.id);
+      return;
+    }
+
+    if (!window.confirm(`Удалить ноду «${node.shortCode ?? node.title}» и связанные процессы? Документы будут сохранены во входящих.`)) {
+      return;
+    }
+
+    updateActiveProject((project) => removeProjectNodeTree(project, node.id));
+    setSelectedNodeId(activeLevel.centralNodeId);
+    setSelectedProcessId(null);
+    setLinkingFromId(null);
+    setProcessBuilderId(null);
+    setProcessDetailId(null);
+    showToast(`Нода «${node.shortCode ?? node.title}» удалена. Файлы перенесены во входящие.`);
+  }
+
+  function markProjectChatRead() {
+    setSeenChatMessageIds((current) => {
+      const next = new Set(current);
+      activeProject.chatMessages.forEach((message) => next.add(message.id));
+      return next;
+    });
+  }
+
+  function toggleChatPanel() {
+    if (!chatPanelOpen) {
+      markProjectChatRead();
+    }
+    setChatPanelOpen(!chatPanelOpen);
+  }
+
+  function selectSidebarMenu(menu: SidebarMenuId) {
+    setActiveMenu(menu);
+    if (menu === "chat") {
+      markProjectChatRead();
+      setChatPanelOpen(false);
+    }
+  }
+
   function updateProcess(processId: string, edit: ProcessEdit) {
     updateActiveProject((project) => ({
       ...project,
@@ -580,6 +644,21 @@ export default function App() {
       ),
       updatedAt: "только что",
     }));
+  }
+
+  function updateProcessDelegation(processId: string, delegatedTo: string[]) {
+    const process = getProcessById(activeProject, processId);
+    if (!process) {
+      return;
+    }
+    const participantNames = Array.from(new Set([
+      process.sender,
+      process.receiver,
+      process.approver ?? process.receiver,
+      ...delegatedTo,
+    ]));
+    updateProcess(processId, { delegatedTo, participantNames });
+    showToast(delegatedTo.length ? `Исполнители назначены: ${delegatedTo.join(", ")}.` : "Внутреннее делегирование очищено.");
   }
 
   function updateDocumentStatus(documentId: string, status: NodeStatus) {
@@ -824,8 +903,8 @@ export default function App() {
 
   async function importIntegrationFiles(provider: IntegrationProvider, participantId: string, files: File[]) {
     const documents = await Promise.all(
-      files.map(async (file) =>
-        createDocumentFromName(
+      files.map(async (file) => ({
+        ...createDocumentFromName(
           file.name,
           provider,
           URL.createObjectURL(file),
@@ -833,7 +912,9 @@ export default function App() {
           file.type,
           formatBytes(file.size),
         ),
-      ),
+        updatedAt: formatFileModifiedAt(file.lastModified),
+        originPath: (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name,
+      })),
     );
 
     markIntegrationSynced(participantId, provider);
@@ -1294,8 +1375,8 @@ export default function App() {
 
   async function createDocumentsFromDroppedFiles(files: File[]) {
     return Promise.all(
-      files.map(async (file) =>
-        createDocumentFromName(
+      files.map(async (file) => ({
+        ...createDocumentFromName(
           file.name,
           "drop",
           URL.createObjectURL(file),
@@ -1303,7 +1384,8 @@ export default function App() {
           file.type,
           formatBytes(file.size),
         ),
-      ),
+        updatedAt: formatFileModifiedAt(file.lastModified),
+      })),
     );
   }
 
@@ -1481,7 +1563,8 @@ export default function App() {
         isOpen={mobileMenuOpen}
         activeMenu={activeMenu}
         project={activeProject}
-        onMenuSelect={setActiveMenu}
+        chatUnreadCount={chatUnreadCount}
+        onMenuSelect={selectSidebarMenu}
         onClose={() => setMobileMenuOpen(false)}
       />
       <TopSearch
@@ -1524,6 +1607,8 @@ export default function App() {
         onAddSectionNode={addSectionNode}
         onUpdateDocumentStatus={updateDocumentStatus}
         onPositionsChange={saveLevelPositions}
+        onToggleNodePositionLock={toggleNodePositionLock}
+        onDeleteNode={deleteNode}
         sceneRef={sceneRef}
       />
       <OrphanFilesPanel
@@ -1538,8 +1623,15 @@ export default function App() {
       />
       <ProjectChatPanel
         messages={activeProject.chatMessages}
+        isOpen={chatPanelOpen}
+        unreadCount={chatUnreadCount}
         onSend={sendProjectChatMessage}
-        onOpenChat={() => setActiveMenu("chat")}
+        onToggle={toggleChatPanel}
+        onOpenChat={() => {
+          markProjectChatRead();
+          setChatPanelOpen(false);
+          setActiveMenu("chat");
+        }}
       />
       <WorkspacePanel
         activeMenu={activeMenu}
@@ -1629,6 +1721,7 @@ export default function App() {
           process={detailProcess}
           onClose={() => setProcessDetailId(null)}
           onOpenDocument={setModalDocument}
+          onDelegationChange={updateProcessDelegation}
           onConfigure={(processId) => {
             setProcessDetailId(null);
             setProcessBuilderId(processId);
@@ -1712,6 +1805,73 @@ function addDocumentToInbox(project: DemoProject, document: ProcessDocument): De
       document,
       ...project.inboxDocuments.filter((item) => item.id !== document.id),
     ],
+    updatedAt: "только что",
+  };
+}
+
+function removeProjectNodeTree(project: DemoProject, rootNodeId: string): DemoProject {
+  const removedNodeIds = new Set<string>([rootNodeId]);
+  const removedLevelIds = new Set<string>();
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+    project.levels.forEach((level) => {
+      if (removedLevelIds.has(level.id) || !level.parentNodeId || !removedNodeIds.has(level.parentNodeId)) {
+        return;
+      }
+      removedLevelIds.add(level.id);
+      level.nodeIds.forEach((nodeId) => removedNodeIds.add(nodeId));
+      changed = true;
+    });
+  }
+
+  project.nodes.forEach((node) => {
+    if (node.documentOwnerNodeId && removedNodeIds.has(node.documentOwnerNodeId)) {
+      removedNodeIds.add(node.id);
+    }
+  });
+
+  const removedProcesses = project.processes.filter(
+    (process) => removedLevelIds.has(process.levelId) || removedNodeIds.has(process.from) || removedNodeIds.has(process.to),
+  );
+  const preservedDocuments = [
+    ...project.nodes
+      .filter((node) => removedNodeIds.has(node.id) && node.type === "document" && node.document)
+      .map((node) => getDocumentFromNode(node)),
+    ...removedProcesses.flatMap((process) => process.documents),
+  ];
+  const inboxById = new Map(project.inboxDocuments.map((document) => [document.id, document]));
+  preservedDocuments.forEach((document) => {
+    inboxById.set(document.id, {
+      ...document,
+      status: document.status === "approved" ? document.status : "draft",
+      isNew: true,
+      updatedAt: "только что",
+    });
+  });
+
+  const nodePositions = Object.fromEntries(
+    Object.entries(project.nodePositions ?? {})
+      .filter(([levelId]) => !removedLevelIds.has(levelId))
+      .map(([levelId, positions]) => [
+        levelId,
+        Object.fromEntries(Object.entries(positions).filter(([nodeId]) => !removedNodeIds.has(nodeId))),
+      ]),
+  );
+
+  return {
+    ...project,
+    levels: project.levels
+      .filter((level) => !removedLevelIds.has(level.id))
+      .map((level) => ({
+        ...level,
+        nodeIds: level.nodeIds.filter((nodeId) => !removedNodeIds.has(nodeId)),
+      })),
+    nodes: project.nodes.filter((node) => !removedNodeIds.has(node.id)),
+    processes: project.processes.filter((process) => !removedProcesses.some((removed) => removed.id === process.id)),
+    inboxDocuments: Array.from(inboxById.values()),
+    nodePositions,
     updatedAt: "только что",
   };
 }
@@ -2037,7 +2197,16 @@ function formatAppDateTimeLocal(date: Date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-const fontSizes = [9, 10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 24, 28, 34, 42, 54];
+function formatFileModifiedAt(timestamp: number) {
+  if (!timestamp || !Number.isFinite(timestamp)) {
+    return "только что";
+  }
+  const date = new Date(timestamp);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+const fontSizes = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 26, 28, 30, 32, 34, 42, 54];
 
 function buildFontVars(scale: number) {
   return fontSizes.reduce(

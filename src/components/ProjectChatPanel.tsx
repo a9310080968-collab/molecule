@@ -1,10 +1,13 @@
-import { MessageCircle, Send } from "lucide-react";
+import { ChevronDown, MessageCircle, Send } from "lucide-react";
 import { type CSSProperties, type PointerEvent, useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "../types";
 
 type ProjectChatPanelProps = {
   messages: ChatMessage[];
+  isOpen: boolean;
+  unreadCount: number;
   onSend: (text: string) => void;
+  onToggle: () => void;
   onOpenChat: () => void;
 };
 
@@ -15,7 +18,7 @@ type ChatFrame = {
   height: number;
 };
 
-export function ProjectChatPanel({ messages, onSend, onOpenChat }: ProjectChatPanelProps) {
+export function ProjectChatPanel({ messages, isOpen, unreadCount, onSend, onToggle, onOpenChat }: ProjectChatPanelProps) {
   const [value, setValue] = useState("");
   const [frame, setFrame] = useState(() => getInitialChatFrame());
   const panelRef = useRef<HTMLElement | null>(null);
@@ -45,7 +48,7 @@ export function ProjectChatPanel({ messages, onSend, onOpenChat }: ProjectChatPa
 
     observer.observe(panel);
     return () => observer.disconnect();
-  }, []);
+  }, [isOpen]);
 
   function send() {
     const text = value.trim();
@@ -111,6 +114,15 @@ export function ProjectChatPanel({ messages, onSend, onOpenChat }: ProjectChatPa
     height: `${frame.height}px`,
   } satisfies CSSProperties;
 
+  if (!isOpen) {
+    return (
+      <button className="project-chat-launcher glass-panel" onClick={onToggle} aria-label="Открыть мессенджер проекта">
+        <MessageCircle size={19} />
+        {unreadCount > 0 ? <span>{unreadCount}</span> : null}
+      </button>
+    );
+  }
+
   return (
     <aside ref={panelRef} className="project-chat-panel glass-panel" style={panelStyle}>
       <header onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
@@ -118,7 +130,12 @@ export function ProjectChatPanel({ messages, onSend, onOpenChat }: ProjectChatPa
           <MessageCircle size={17} />
           Мессенджер
         </button>
-        <span>{messages.length}</span>
+        <div className="project-chat-actions">
+          <span>{unreadCount || messages.length}</span>
+          <button className="project-chat-collapse" onClick={onToggle} aria-label="Свернуть мессенджер">
+            <ChevronDown size={17} />
+          </button>
+        </div>
       </header>
 
       <div className="project-chat-feed">
