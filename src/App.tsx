@@ -195,7 +195,7 @@ export default function App() {
   const selectedProcess = getProcessById(activeProject, selectedProcessId) ?? null;
   const builderProcess = getProcessById(activeProject, processBuilderId) ?? null;
   const detailProcess = getProcessById(activeProject, processDetailId) ?? null;
-  const currentUser = activeProject.participants.find((participant) => participant.name === "Павел Андреев") ?? activeProject.participants.find((participant) => participant.role === "admin") ?? activeProject.participants[0];
+  const currentUser = activeProject.participants.find((participant) => participant.role === "admin") ?? activeProject.participants.find((participant) => participant.name === "Павел Андреев") ?? activeProject.participants[0];
   const chatUnreadCount = activeProject.chatMessages.filter(
     (message) => message.author !== currentUser?.name && !seenChatMessageIds.has(message.id),
   ).length;
@@ -699,6 +699,49 @@ export default function App() {
     ]));
     updateProcess(processId, { delegatedTo, participantNames });
     showToast(delegatedTo.length ? `Исполнители назначены: ${delegatedTo.join(", ")}.` : "Внутреннее делегирование очищено.");
+  }
+
+  function submitProcessClarification(processId: string, text: string, kind: "question" | "unclear") {
+    const process = getProcessById(activeProject, processId);
+    if (!process) {
+      return;
+    }
+
+    const normalizedText = text.trim() || "Задание непонятно. Нужны дополнительные пояснения.";
+    const author = currentUser?.name ?? process.receiver;
+    const entry = {
+      id: `process-message-${Date.now()}-${Math.round(Math.random() * 10000)}`,
+      author,
+      text: normalizedText,
+      createdAt: "только что",
+      kind,
+    } as const;
+    const chatMessage: ChatMessage = {
+      id: `chat-process-${Date.now()}-${Math.round(Math.random() * 10000)}`,
+      projectId: activeProject.id,
+      author,
+      role: currentUser?.position ?? "Исполнитель",
+      text: `${kind === "unclear" ? "Задание непонятно" : "Вопрос по заданию"} «${process.title}»: ${normalizedText}`,
+      time: "только что",
+      processId,
+    };
+
+    updateActiveProject((project) => ({
+      ...project,
+      processes: project.processes.map((current) =>
+        current.id === processId
+          ? { ...current, discussion: [...(current.discussion ?? []), entry] }
+          : current,
+      ),
+      chatMessages: [chatMessage, ...project.chatMessages],
+      updatedAt: "только что",
+    }));
+    pushNotification({
+      title: kind === "unclear" ? "Исполнителю непонятно задание" : "Вопрос по заданию",
+      description: `${process.sender}: ${author} просит уточнить «${process.title}». ${normalizedText}`,
+      targetProcessId: processId,
+    });
+    showToast(`Уведомление отправлено постановщику: ${process.sender}.`);
   }
 
   function updateDocumentStatus(documentId: string, status: NodeStatus) {
@@ -1429,6 +1472,37 @@ export default function App() {
     );
   }
 
+  function updateParticipantProfile(participantId: string, name: string, avatarUrl?: string) {
+    const participant = activeProject.participants.find((item) => item.id === participantId);
+    const normalizedName = name.trim();
+    if (!participant || !normalizedName) {
+      showToast("Укажите имя пользователя.");
+      return;
+    }
+
+    const previousName = participant.name;
+    const replaceName = (value: string | undefined) => value === previousName ? normalizedName : value;
+    updateActiveProject((project) => ({
+      ...project,
+      participants: project.participants.map((item) =>
+        item.id === participantId ? { ...item, name: normalizedName, avatarUrl } : item,
+      ),
+      nodes: project.nodes.map((node) => ({ ...node, responsible: replaceName(node.responsible) })),
+      processes: project.processes.map((process) => ({
+        ...process,
+        sender: replaceName(process.sender) ?? process.sender,
+        receiver: replaceName(process.receiver) ?? process.receiver,
+        approver: replaceName(process.approver),
+        participantNames: process.participantNames?.map((item) => replaceName(item) ?? item),
+        delegatedTo: process.delegatedTo?.map((item) => replaceName(item) ?? item),
+        discussion: process.discussion?.map((entry) => ({ ...entry, author: replaceName(entry.author) ?? entry.author })),
+      })),
+      chatMessages: project.chatMessages.map((message) => ({ ...message, author: replaceName(message.author) ?? message.author })),
+      updatedAt: "только что",
+    }));
+    showToast("Профиль пользователя обновлен.");
+  }
+
   async function importFilesToProjectPool(files: File[]) {
     if (!files.length) {
       return;
@@ -1584,9 +1658,7 @@ export default function App() {
       onDragOver={(event) => {
         event.preventDefault();
         const types = Array.from(event.dataTransfer.types);
-        if (!types.includes("application/x-molecule-document-node") && !types.includes("application/x-molecule-inbox-document")) {
-          setIsDropActive(true);
-        }
+        setIsDropActive(types.includes("Files"));
       }}
       onDragLeave={() => setIsDropActive(false)}
       onDrop={handleDrop}
@@ -1618,6 +1690,7 @@ export default function App() {
         onMenuClick={() => setMobileMenuOpen(true)}
         projects={projects}
         activeProjectId={activeProjectId}
+        user={currentUser}
         onProjectChange={selectProject}
         onProjectDelete={deleteProject}
         notifications={notifications}
@@ -1751,6 +1824,7 @@ export default function App() {
           user={currentUser}
           onClose={() => setPersonalSettingsOpen(false)}
           onSaveIntegrations={saveParticipantIntegrations}
+          onSaveProfile={updateParticipantProfile}
           onImportDemo={importDemoIntegration}
           onImportTestFile={importIntegrationTestFile}
           onImportFiles={(provider, participantId, files) => {
@@ -1775,6 +1849,8 @@ export default function App() {
           onClose={() => setProcessDetailId(null)}
           onOpenDocument={setModalDocument}
           onDelegationChange={updateProcessDelegation}
+          onTaskCommentChange={(processId, taskComment) => updateProcess(processId, { taskComment })}
+          onClarification={submitProcessClarification}
           onConfigure={(processId) => {
             setProcessDetailId(null);
             setProcessBuilderId(processId);

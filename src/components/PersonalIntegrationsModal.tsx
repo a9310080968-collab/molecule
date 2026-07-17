@@ -1,11 +1,12 @@
-import { FolderOpen, Mail, MessageCircle, RefreshCw, ShieldCheck, X } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { Camera, FolderOpen, Mail, MessageCircle, RefreshCw, Save, ShieldCheck, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { DemoProject, IntegrationProvider, UserIntegration, ProjectParticipant } from "../types";
 
 type PersonalIntegrationsModalProps = {
   project: DemoProject;
   user: ProjectParticipant;
   onClose: () => void;
+  onSaveProfile: (participantId: string, name: string, avatarUrl?: string) => void;
   onSaveIntegrations: (participantId: string, integrations: UserIntegration[]) => void;
   onImportDemo: (provider: IntegrationProvider, participantId: string) => void;
   onImportTestFile: (provider: IntegrationProvider, participantId: string, mode: "tagged" | "untagged", tag?: string) => void;
@@ -43,6 +44,7 @@ export function PersonalIntegrationsModal({
   project,
   user,
   onClose,
+  onSaveProfile,
   onSaveIntegrations,
   onImportDemo,
   onImportTestFile,
@@ -50,6 +52,9 @@ export function PersonalIntegrationsModal({
 }: PersonalIntegrationsModalProps) {
   const telegramInputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const [profileName, setProfileName] = useState(user.name);
+  const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl ?? "");
   const [integrations, setIntegrations] = useState<UserIntegration[]>(() => normalizeIntegrations(user.integrations));
   const [accounts, setAccounts] = useState<Record<string, string>>(() =>
     Object.fromEntries(normalizeIntegrations(user.integrations).map((integration) => [integration.provider, integration.account ?? user.email])),
@@ -58,6 +63,11 @@ export function PersonalIntegrationsModal({
   const isPrivileged = user.role === "admin" || user.role === "gip";
 
   const connectedCount = useMemo(() => integrations.filter((integration) => integration.status === "connected").length, [integrations]);
+
+  useEffect(() => {
+    setProfileName(user.name);
+    setAvatarUrl(user.avatarUrl ?? "");
+  }, [user.id, user.name, user.avatarUrl]);
 
   function save(next: UserIntegration[]) {
     setIntegrations(next);
@@ -108,6 +118,19 @@ export function PersonalIntegrationsModal({
     onImportFiles(provider, user.id, selectedFiles);
   }
 
+  function handleAvatarSelect(file: File | undefined) {
+    if (!file) {
+      return;
+    }
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      if (typeof reader.result === "string") {
+        setAvatarUrl(reader.result);
+      }
+    });
+    reader.readAsDataURL(file);
+  }
+
   return (
     <div className="modal-backdrop personal-settings-backdrop" role="dialog" aria-modal="true">
       <article className="personal-settings-modal glass-panel">
@@ -115,12 +138,11 @@ export function PersonalIntegrationsModal({
           <div>
             <span>
               <ShieldCheck size={18} />
-              Личные настройки
+              Личный кабинет
             </span>
-            <h2>Интеграции {user.name}</h2>
+            <h2>{user.name}</h2>
             <p>
-              Каждый участник подключает свою рабочую почту и папки. Файлы с именем формата <b>File_Tag</b> автоматически
-              попадают в проект: по известному тегу в раздел, по неизвестному тегу во входящие.
+              Профиль пользователя, рабочая почта и подключенные папки проекта.
             </p>
           </div>
           <button className="icon-button" onClick={onClose} aria-label="Закрыть настройки">
@@ -144,6 +166,40 @@ export function PersonalIntegrationsModal({
         </section>
 
         <div className="integration-modal-body">
+          <section className="personal-profile-settings">
+            <div className="personal-profile-avatar">
+              {avatarUrl ? <img src={avatarUrl} alt="Аватар пользователя" /> : <span>{getInitials(profileName)}</span>}
+              <button onClick={() => avatarInputRef.current?.click()}>
+                <Camera size={16} />
+                Выбрать фото
+              </button>
+              {avatarUrl ? (
+                <button className="danger" onClick={() => setAvatarUrl("")} aria-label="Удалить аватар">
+                  <Trash2 size={15} />
+                </button>
+              ) : null}
+              <input
+                ref={avatarInputRef}
+                className="hidden-file-input"
+                type="file"
+                accept="image/*"
+                onChange={(event) => handleAvatarSelect(event.currentTarget.files?.[0])}
+              />
+            </div>
+            <label>
+              <span>Имя пользователя</span>
+              <input value={profileName} onChange={(event) => setProfileName(event.currentTarget.value)} />
+            </label>
+            <button
+              className="personal-profile-save"
+              onClick={() => onSaveProfile(user.id, profileName, avatarUrl || undefined)}
+              disabled={!profileName.trim()}
+            >
+              <Save size={16} />
+              Сохранить профиль
+            </button>
+          </section>
+
           <section className="integration-section">
             <div className="section-title">
               <Mail size={18} />
@@ -305,4 +361,13 @@ function getStatusLabel(status: UserIntegration["status"]) {
     return "Нужно разрешение";
   }
   return "Не подключено";
+}
+
+function getInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
 }

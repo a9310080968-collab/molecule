@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import { type DragEvent, useEffect, useState } from "react";
-import { FilePlus2, FileText, LocateFixed, Maximize2, Trash2 } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ChevronDown, ChevronUp, FilePlus2, FileText, LocateFixed, Maximize2, Trash2 } from "lucide-react";
 import { getFileLabel, getFileTypeColor } from "../lib/graph";
 import type { DemoProject, ProcessDocument } from "../types";
 
@@ -25,6 +26,7 @@ export function OrphanFilesPanel({
 }: OrphanFilesPanelProps) {
   const [tag, setTag] = useState("");
   const [dropActive, setDropActive] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ documentId: string; x: number; y: number } | null>(null);
   const files = project.inboxDocuments;
   const contextDocument = contextMenu
@@ -71,7 +73,7 @@ export function OrphanFilesPanel({
 
   return (
     <aside
-      className={clsx("orphan-files-panel glass-panel", dropActive && "drop-active")}
+      className={clsx("orphan-files-panel glass-panel", dropActive && "drop-active", collapsed && "collapsed")}
       onDragOver={handleDragOver}
       onDragLeave={() => setDropActive(false)}
       onDrop={handleDrop}
@@ -79,23 +81,38 @@ export function OrphanFilesPanel({
       <header>
         <div>
           <span>Неразобранные</span>
-          <strong>Бесхозные файлы</strong>
+          <strong>Бесхозные файлы · {files.length}</strong>
         </div>
-        <div className="orphan-add-control">
-          <input
-            value={tag}
-            onChange={(event) => setTag(event.currentTarget.value)}
-            placeholder="Тег, например АР"
-            aria-label="Тег для случайного файла"
-          />
-          <button onClick={addFile}>
-            <FilePlus2 size={16} />
-            Добавить файл
+        <div className="orphan-header-actions">
+          {!collapsed ? (
+            <div className="orphan-add-control">
+              <input
+                value={tag}
+                onChange={(event) => setTag(event.currentTarget.value)}
+                placeholder="Тег, например АР"
+                aria-label="Тег для случайного файла"
+              />
+              <button onClick={addFile}>
+                <FilePlus2 size={16} />
+                Добавить файл
+              </button>
+            </div>
+          ) : null}
+          <button
+            className="orphan-collapse-button"
+            onClick={() => {
+              setCollapsed((current) => !current);
+              setContextMenu(null);
+            }}
+            aria-label={collapsed ? "Развернуть бесхозные файлы" : "Свернуть бесхозные файлы"}
+            title={collapsed ? "Развернуть" : "Свернуть"}
+          >
+            {collapsed ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
           </button>
         </div>
       </header>
 
-      {files.length ? (
+      {!collapsed && files.length ? (
         <div className="orphan-files-list">
           {files.slice(0, 8).map((document) => {
             const color = getFileTypeColor(document.fileType);
@@ -139,10 +156,10 @@ export function OrphanFilesPanel({
             );
           })}
         </div>
-      ) : (
+      ) : !collapsed ? (
         <p>Нет бесхозных файлов. Перетащите сюда файл с компьютера или отправьте тестовый файл из интеграций.</p>
-      )}
-      {contextMenu && contextDocument ? (
+      ) : null}
+      {contextMenu && contextDocument ? createPortal(
         <div
           className="document-context-menu context-menu glass-panel"
           style={{ left: contextMenu.x, top: contextMenu.y }}
@@ -177,7 +194,8 @@ export function OrphanFilesPanel({
             <Trash2 size={15} />
             Удалить файл
           </button>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </aside>
   );

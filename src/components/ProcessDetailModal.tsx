@@ -1,5 +1,5 @@
-import { ArrowRight, FileText, Plus, Route, Settings2, Trash2, UserRound, X } from "lucide-react";
-import { useState } from "react";
+import { ArrowRight, CircleHelp, FileText, MessageSquareText, Plus, Route, Send, Settings2, Trash2, UserRound, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import {
   getFileLabel,
   getFileTypeColor,
@@ -18,6 +18,8 @@ type ProcessDetailModalProps = {
   onOpenDocument: (document: ProcessDocument) => void;
   onConfigure: (processId: string) => void;
   onDelegationChange: (processId: string, delegates: string[]) => void;
+  onTaskCommentChange: (processId: string, comment: string) => void;
+  onClarification: (processId: string, text: string, kind: "question" | "unclear") => void;
 };
 
 export function ProcessDetailModal({
@@ -27,6 +29,8 @@ export function ProcessDetailModal({
   onOpenDocument,
   onConfigure,
   onDelegationChange,
+  onTaskCommentChange,
+  onClarification,
 }: ProcessDetailModalProps) {
   const fromNode = getNodeById(project, process.from);
   const toNode = getNodeById(project, process.to);
@@ -36,9 +40,17 @@ export function ProcessDetailModal({
     (participant) => !delegates.includes(participant.name) && participant.name !== process.sender && participant.name !== process.receiver,
   );
   const [delegateCandidate, setDelegateCandidate] = useState(delegateOptions[0]?.name ?? "");
+  const [taskComment, setTaskComment] = useState(process.taskComment ?? "");
+  const [question, setQuestion] = useState("");
   const selectedDelegateCandidate = delegateOptions.some((participant) => participant.name === delegateCandidate)
     ? delegateCandidate
     : delegateOptions[0]?.name ?? "";
+  const executorName = delegates[delegates.length - 1] ?? process.receiver;
+
+  useEffect(() => {
+    setTaskComment(process.taskComment ?? "");
+    setQuestion("");
+  }, [process.id, process.taskComment]);
 
   function addDelegate() {
     if (!selectedDelegateCandidate) {
@@ -47,6 +59,21 @@ export function ProcessDetailModal({
     onDelegationChange(process.id, [...delegates, selectedDelegateCandidate]);
     const nextCandidate = delegateOptions.find((participant) => participant.name !== selectedDelegateCandidate)?.name ?? "";
     setDelegateCandidate(nextCandidate);
+  }
+
+  function saveTaskComment() {
+    if (taskComment !== (process.taskComment ?? "")) {
+      onTaskCommentChange(process.id, taskComment.trim());
+    }
+  }
+
+  function sendQuestion() {
+    const text = question.trim();
+    if (!text) {
+      return;
+    }
+    onClarification(process.id, text, "question");
+    setQuestion("");
   }
 
   return (
@@ -92,26 +119,76 @@ export function ProcessDetailModal({
             <span>{fromNode?.title ?? "Нода-источник"}</span>
           </div>
 
-          <div className="process-documents-lane">
-            {process.documents.length ? (
-              process.documents.map((document, index) => (
-                <button
-                  key={document.id}
-                  className="process-document-node"
-                  style={{ "--doc-color": getFileTypeColor(document.fileType), "--doc-index": index } as React.CSSProperties}
-                  onClick={() => onOpenDocument(document)}
-                >
-                  <FileText size={18} />
-                  <strong>{document.title}</strong>
-                  <span>{getFileLabel(document.fileType)} · {getStatusText(document.status)} · {document.version}</span>
+          <div className="process-transfer-workspace">
+            <section className="process-task-comment">
+              <header>
+                <span><MessageSquareText size={15} /> Комментарий к заданию</span>
+                <small>Исполнитель: {executorName}</small>
+              </header>
+              <textarea
+                value={taskComment}
+                onChange={(event) => setTaskComment(event.currentTarget.value)}
+                onBlur={saveTaskComment}
+                placeholder="Передать нужный файл ответственному и сообщить результат..."
+              />
+              <button onClick={saveTaskComment} disabled={taskComment === (process.taskComment ?? "")}>Сохранить</button>
+            </section>
+
+            <div className="process-documents-lane">
+              {process.documents.length ? (
+                process.documents.map((document, index) => (
+                  <button
+                    key={document.id}
+                    className="process-document-node"
+                    style={{ "--doc-color": getFileTypeColor(document.fileType), "--doc-index": index } as React.CSSProperties}
+                    onClick={() => onOpenDocument(document)}
+                  >
+                    <FileText size={16} />
+                    <strong>{document.title}</strong>
+                    <span>{getFileLabel(document.fileType)} · {getStatusText(document.status)} · {document.version}</span>
+                  </button>
+                ))
+              ) : (
+                <div className="process-detail-empty">
+                  <strong>Документов в контейнере пока нет</strong>
+                  <span>Добавьте документы через конструктор бизнес-процесса.</span>
+                </div>
+              )}
+            </div>
+
+            <section className="process-clarification">
+              <div className="process-question-row">
+                <input
+                  value={question}
+                  onChange={(event) => setQuestion(event.currentTarget.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      sendQuestion();
+                    }
+                  }}
+                  placeholder="Задать вопрос постановщику..."
+                />
+                <button onClick={sendQuestion} disabled={!question.trim()} aria-label="Отправить вопрос">
+                  <Send size={15} />
                 </button>
-              ))
-            ) : (
-              <div className="process-detail-empty">
-                <strong>Документов в контейнере пока нет</strong>
-                <span>Добавьте документы через конструктор бизнес-процесса или прикрепите входящие вручную.</span>
+                <button className="unclear-action" onClick={() => onClarification(process.id, "Задание непонятно. Нужны дополнительные пояснения.", "unclear")}>
+                  <CircleHelp size={15} />
+                  Задание непонятно
+                </button>
               </div>
-            )}
+              {process.discussion?.length ? (
+                <div className="process-discussion-list">
+                  {process.discussion.slice(-3).reverse().map((entry) => (
+                    <article key={entry.id}>
+                      <strong>{entry.author}</strong>
+                      <span>{entry.text}</span>
+                      <small>{entry.createdAt}</small>
+                    </article>
+                  ))}
+                </div>
+              ) : null}
+            </section>
           </div>
 
           <div className="process-party">

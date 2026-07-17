@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   ChevronLeft,
   ChevronRight,
@@ -223,6 +224,19 @@ export function ProjectScene({
     setView(INITIAL_VIEW);
     setOpenProcessGroupKey(null);
   }, [level.id]);
+
+  useEffect(() => {
+    const closeContextMenus = (event: PointerEvent) => {
+      if ((event.target as HTMLElement).closest(".context-menu")) {
+        return;
+      }
+      setContextMenu(null);
+      setSceneContextMenu(null);
+      setProcessContextMenu(null);
+    };
+    window.addEventListener("pointerdown", closeContextMenus);
+    return () => window.removeEventListener("pointerdown", closeContextMenus);
+  }, []);
 
   useEffect(() => {
     const fitKey = `${level.id}:${interfaceScale}`;
@@ -873,7 +887,7 @@ export function ProjectScene({
           </button>
         );
       })}
-      {contextMenu && contextNode ? (
+      {contextMenu && contextNode ? createPortal(
         <div
           className="node-context-menu context-menu glass-panel"
           style={{ left: contextMenu.x, top: contextMenu.y }}
@@ -1012,9 +1026,10 @@ export function ProjectScene({
               Удалить проект
             </button>
           )}
-        </div>
+        </div>,
+        document.body,
       ) : null}
-      {processContextMenu && contextProcess ? (
+      {processContextMenu && contextProcess ? createPortal(
         <div
           className="process-context-menu context-menu glass-panel"
           style={{ left: processContextMenu.x, top: processContextMenu.y }}
@@ -1044,9 +1059,10 @@ export function ProjectScene({
             <Trash2 size={15} />
             Удалить процесс
           </button>
-        </div>
+        </div>,
+        document.body,
       ) : null}
-      {sceneContextMenu ? (
+      {sceneContextMenu ? createPortal(
         <div
           className="scene-context-menu context-menu glass-panel"
           style={{ left: sceneContextMenu.x, top: sceneContextMenu.y }}
@@ -1073,7 +1089,8 @@ export function ProjectScene({
             <Upload size={15} />
             Загрузить файл сюда
           </button>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </main>
   );

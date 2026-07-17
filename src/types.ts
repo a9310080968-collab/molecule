@@ -39,6 +39,7 @@ export type ProjectParticipant = {
   messenger?: string;
   otherContacts?: string;
   status: ProjectParticipantStatus;
+  avatarUrl?: string;
   integrations?: UserIntegration[];
   visibilityMode?: ProjectVisibilityMode;
   visibleNodeIds?: string[];
@@ -51,6 +52,7 @@ export type NodeChecklistItem = {
   title: string;
   done: boolean;
   required?: boolean;
+  documentId?: string;
 };
 
 export type ProcessFieldKey = "documents" | "sender" | "approver" | "deadline" | "comment" | "result";
@@ -119,6 +121,8 @@ export type BusinessProcess = {
   to: string;
   title: string;
   description: string;
+  taskComment?: string;
+  discussion?: ProcessDiscussionEntry[];
   status: ProcessStatus;
   direction: ProcessDirection;
   sender: string;
@@ -136,6 +140,14 @@ export type BusinessProcess = {
   documents: ProcessDocument[];
   requiredFields?: ProcessFieldRequirement[];
   documentRequirements?: ProcessDocumentRequirement[];
+};
+
+export type ProcessDiscussionEntry = {
+  id: string;
+  author: string;
+  text: string;
+  createdAt: string;
+  kind: "question" | "unclear";
 };
 
 export type MapLevel = {
@@ -205,6 +217,8 @@ export type ProcessEdit = Partial<
     BusinessProcess,
     | "title"
     | "description"
+    | "taskComment"
+    | "discussion"
     | "status"
     | "direction"
     | "sender"

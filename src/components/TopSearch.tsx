@@ -1,6 +1,6 @@
 import { Bell, Menu, Plus, Search, SlidersHorizontal, Trash2, UserCog, X } from "lucide-react";
 import { useState } from "react";
-import type { DemoNotification, DemoProject } from "../types";
+import type { DemoNotification, DemoProject, ProjectParticipant } from "../types";
 
 type TopSearchProps = {
   value: string;
@@ -10,6 +10,7 @@ type TopSearchProps = {
   onMenuClick: () => void;
   projects: DemoProject[];
   activeProjectId: string;
+  user?: ProjectParticipant;
   onProjectChange: (projectId: string) => void;
   onProjectDelete: (projectId: string) => void;
   notifications: DemoNotification[];
@@ -26,6 +27,7 @@ export function TopSearch({
   onMenuClick,
   projects,
   activeProjectId,
+  user,
   onProjectChange,
   onProjectDelete,
   notifications,
@@ -90,12 +92,14 @@ export function TopSearch({
       ) : null}
 
       <div className="user-chip">
-        <span>ПА</span>
+        <span className="user-chip-avatar">
+          {user?.avatarUrl ? <img src={user.avatarUrl} alt="" /> : getInitials(user?.name ?? "Павел Андреев")}
+        </span>
         <div>
-          <b>Павел Андреев</b>
+          <b>{user?.name ?? "Павел Андреев"}</b>
           <small>{activeProject.title}</small>
         </div>
-        <button className="icon-button" aria-label="Личные настройки интеграций" onClick={onOpenPersonalSettings}>
+        <button className="icon-button" aria-label="Личный кабинет" onClick={onOpenPersonalSettings}>
           <UserCog size={18} />
         </button>
         <button
@@ -135,4 +139,13 @@ export function TopSearch({
       </div>
     </header>
   );
+}
+
+function getInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
 }

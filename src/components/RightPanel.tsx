@@ -12,6 +12,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import clsx from "clsx";
 import {
   getFileLabel,
@@ -176,7 +177,14 @@ function NodeInfo({
 
       <TagsEditor node={node} onNodeUpdate={onNodeUpdate} />
 
-      {node.type !== "central" ? <NodeChecklistEditor node={node} onNodeUpdate={onNodeUpdate} /> : null}
+      {node.type !== "central" ? (
+        <NodeChecklistEditor
+          node={node}
+          documents={documents}
+          onNodeUpdate={onNodeUpdate}
+          onOpenDocument={onOpenDocument}
+        />
+      ) : null}
 
       <div className="info-grid">
         <Metric icon={<CheckCircle2 size={16} />} label="Готовность ноды" value={`${progress}%`} />
@@ -200,13 +208,18 @@ function NodeInfo({
 
 function NodeChecklistEditor({
   node,
+  documents,
   onNodeUpdate,
+  onOpenDocument,
 }: {
   node: ProjectNode;
+  documents: ProcessDocument[];
   onNodeUpdate: (nodeId: string, edit: NodeEdit) => void;
+  onOpenDocument: (document: ProcessDocument) => void;
 }) {
   const checklist = node.checklist ?? [];
   const [newTitle, setNewTitle] = useState("");
+  const [bindingItemId, setBindingItemId] = useState<string | null>(null);
 
   function updateChecklist(next: NodeChecklistItem[]) {
     onNodeUpdate(node.id, { checklist: next });
@@ -228,6 +241,28 @@ function NodeChecklistEditor({
       },
     ]);
     setNewTitle("");
+  }
+
+  function toggleItem(item: NodeChecklistItem, checked: boolean) {
+    if (!checked) {
+      updateChecklist(checklist.map((current) => current.id === item.id ? { ...current, done: false } : current));
+      setBindingItemId(null);
+      return;
+    }
+
+    const attachedDocument = documents.find((document) => document.id === item.documentId);
+    if (attachedDocument) {
+      updateChecklist(checklist.map((current) => current.id === item.id ? { ...current, done: true } : current));
+      return;
+    }
+    setBindingItemId(item.id);
+  }
+
+  function bindDocument(itemId: string, documentId: string) {
+    updateChecklist(checklist.map((current) =>
+      current.id === itemId ? { ...current, done: true, documentId } : current,
+    ));
+    setBindingItemId(null);
   }
 
   return (
@@ -256,27 +291,58 @@ function NodeChecklistEditor({
       </div>
 
       <div className="checklist-items">
-        {checklist.length ? checklist.map((item) => (
-          <article key={item.id} className={clsx(item.done && "done")}>
-            <label>
-              <input
-                type="checkbox"
-                checked={item.done}
-                onChange={(event) =>
-                  updateChecklist(checklist.map((current) => (current.id === item.id ? { ...current, done: event.currentTarget.checked } : current)))
-                }
-              />
-              <span />
-            </label>
-            <input
-              value={item.title}
-              onChange={(event) =>
-                updateChecklist(checklist.map((current) => (current.id === item.id ? { ...current, title: event.currentTarget.value } : current)))
-              }
-            />
-            <button onClick={() => updateChecklist(checklist.filter((current) => current.id !== item.id))}>Удалить</button>
-          </article>
-        )) : <p>Добавьте документы, которые должны быть получены и согласованы внутри этой ноды.</p>}
+        {checklist.length ? checklist.map((item) => {
+          const attachedDocument = documents.find((document) => document.id === item.documentId);
+          return (
+            <div className="checklist-item-group" key={item.id}>
+              <article className={clsx(item.done && "done")}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={item.done}
+                    onChange={(event) => toggleItem(item, event.currentTarget.checked)}
+                  />
+                  <span />
+                </label>
+                {attachedDocument ? (
+                  <div className="checklist-file-binding">
+                    <small>{item.title}</small>
+                    <button className="checklist-document-link" onClick={() => onOpenDocument(attachedDocument)}>
+                      <FileText size={15} />
+                      <span>{attachedDocument.title}</span>
+                    </button>
+                    <button className="checklist-rebind-button" onClick={() => setBindingItemId(item.id)}>Сменить</button>
+                  </div>
+                ) : (
+                  <input
+                    value={item.title}
+                    onChange={(event) =>
+                      updateChecklist(checklist.map((current) => (current.id === item.id ? { ...current, title: event.currentTarget.value } : current)))
+                    }
+                  />
+                )}
+                <button onClick={() => updateChecklist(checklist.filter((current) => current.id !== item.id))}>Удалить</button>
+              </article>
+              {bindingItemId === item.id ? (
+                <div className="checklist-document-picker" role="dialog" aria-label="Выбор документа для пункта">
+                  <strong>Укажите файл в ноде, соответствующий «{item.title}»</strong>
+                  {documents.length ? (
+                    <div>
+                      {documents.map((document) => (
+                        <button key={document.id} onClick={() => bindDocument(item.id, document.id)}>
+                          <FileText size={15} />
+                          <span>{document.title}</span>
+                          <small>{getFileLabel(document.fileType)} · {document.version}</small>
+                        </button>
+                      ))}
+                    </div>
+                  ) : <p>В этой ноде пока нет файлов. Сначала положите документ в ноду.</p>}
+                  <button className="checklist-picker-cancel" onClick={() => setBindingItemId(null)}>Отмена</button>
+                </div>
+              ) : null}
+            </div>
+          );
+        }) : <p>Добавьте документы, которые должны быть получены и согласованы внутри этой ноды.</p>}
       </div>
     </section>
   );
@@ -568,6 +634,16 @@ function DocumentList({
   const contextDocument = contextMenu ? documents.find((document) => document.id === contextMenu.documentId) : undefined;
   const contextDocumentNode = contextDocument ? documentNodeByDocumentId.get(contextDocument.id) : undefined;
 
+  useEffect(() => {
+    const closeContextMenu = (event: PointerEvent) => {
+      if (!(event.target as HTMLElement).closest(".document-context-menu")) {
+        setContextMenu(null);
+      }
+    };
+    window.addEventListener("pointerdown", closeContextMenu);
+    return () => window.removeEventListener("pointerdown", closeContextMenu);
+  }, []);
+
   if (!documents.length) {
     return (
       <section className="document-list">
@@ -595,7 +671,11 @@ function DocumentList({
           }}
           onContextMenu={(event) => {
             event.preventDefault();
-            setContextMenu({ documentId: document.id, x: event.clientX, y: event.clientY });
+            setContextMenu({
+              documentId: document.id,
+              x: Math.max(12, Math.min(event.clientX, window.innerWidth - 236)),
+              y: Math.max(12, Math.min(event.clientY, window.innerHeight - 236)),
+            });
           }}
         >
           <DocumentStatusControl
@@ -624,7 +704,7 @@ function DocumentList({
           </button>
         </article>
       ))}
-      {contextMenu && contextDocument ? (
+      {contextMenu && contextDocument ? createPortal(
         <div
           className="document-context-menu glass-panel"
           style={{ left: contextMenu.x, top: contextMenu.y }}
@@ -657,7 +737,8 @@ function DocumentList({
               <button className="danger" onClick={() => { onUpdateDocumentStatus(contextDocument.id, "comments"); setContextMenu(null); }}>Не принято</button>
             </>
           ) : null}
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </section>
   );

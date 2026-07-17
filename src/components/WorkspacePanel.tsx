@@ -1272,7 +1272,9 @@ function ParticipantsManager({
 
           return (
             <article key={participant.id} className="participant-card">
-              <div className="participant-avatar">{getInitials(participant.name)}</div>
+              <div className="participant-avatar">
+                {participant.avatarUrl ? <img src={participant.avatarUrl} alt="" /> : getInitials(participant.name)}
+              </div>
               <div className="participant-main">
                 <header>
                   <div>
