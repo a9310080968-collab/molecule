@@ -80,6 +80,7 @@ type PersistedAppState = {
   selectedNodeId: string;
   notifications: DemoNotification[];
   fontScale: number;
+  interfaceScale?: number;
   guideDismissed?: boolean;
 };
 
@@ -174,6 +175,7 @@ export default function App() {
   const [processDetailId, setProcessDetailId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [fontScale, setFontScale] = useState(persistedState?.fontScale ?? 0.94);
+  const [interfaceScale, setInterfaceScale] = useState(persistedState?.interfaceScale ?? 1);
   const [guideDismissed, setGuideDismissed] = useState(Boolean(persistedState?.guideDismissed));
   const [constructorHintDismissed, setConstructorHintDismissed] = useState(false);
   const [chatPanelOpen, setChatPanelOpen] = useState(false);
@@ -200,7 +202,7 @@ export default function App() {
   const matches = useMemo(() => getSearchMatches(query, activeProject, activeLevel), [activeLevel, activeProject, query]);
   const isSearching = query.trim().length > 0;
   const hasNoResults = isSearching && matches.nodeIds.size + matches.processIds.size === 0;
-  const fontVars = useMemo(() => buildFontVars(fontScale), [fontScale]);
+  const appVars = useMemo(() => buildAppVars(fontScale, interfaceScale), [fontScale, interfaceScale]);
   const showConstructorHint =
     hasProjects &&
     activeMenu === "map" &&
@@ -218,6 +220,7 @@ export default function App() {
       selectedNodeId,
       notifications,
       fontScale,
+      interfaceScale,
       guideDismissed,
     };
 
@@ -226,7 +229,7 @@ export default function App() {
     } catch {
       // Local storage can be unavailable in private browser modes. The demo still works in memory.
     }
-  }, [activeLevelId, activeProjectId, fontScale, guideDismissed, notifications, projectTemplates, projects, selectedNodeId]);
+  }, [activeLevelId, activeProjectId, fontScale, guideDismissed, interfaceScale, notifications, projectTemplates, projects, selectedNodeId]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -573,6 +576,21 @@ export default function App() {
         updatedAt: "только что",
       };
     });
+  }
+
+  function navigateToNode(nodeId: string) {
+    const node = getNodeById(activeProject, nodeId);
+    if (!node) {
+      return;
+    }
+
+    setLevelTransition(null);
+    setActiveLevelId(node.levelId);
+    setSelectedNodeId(node.id);
+    setSelectedProcessId(null);
+    setProcessBuilderId(null);
+    setActiveMenu("map");
+    window.setTimeout(() => sceneRef.current?.focusNode(node.id), 80);
   }
 
   function toggleNodePositionLock(nodeId: string) {
@@ -1539,7 +1557,7 @@ export default function App() {
 
   if (!hasProjects) {
     return (
-      <div className="app-shell empty-project-shell" style={fontVars}>
+      <div className="app-shell empty-project-shell" style={appVars}>
         <div className="cosmos-backdrop" />
         <main className="empty-project-state glass-panel">
           <span>Проекты не созданы</span>
@@ -1562,7 +1580,7 @@ export default function App() {
   return (
     <div
       className="app-shell"
-      style={fontVars}
+      style={appVars}
       onDragOver={(event) => {
         event.preventDefault();
         const types = Array.from(event.dataTransfer.types);
@@ -1587,6 +1605,9 @@ export default function App() {
         project={activeProject}
         chatUnreadCount={chatUnreadCount}
         onMenuSelect={selectSidebarMenu}
+        onSelectProcess={selectProcess}
+        onSelectNode={navigateToNode}
+        onOpenDocument={setModalDocument}
         onClose={() => setMobileMenuOpen(false)}
       />
       <TopSearch
@@ -1616,6 +1637,7 @@ export default function App() {
         matchedProcessIds={matches.processIds}
         isSearching={isSearching}
         levelTransition={levelTransition}
+        interfaceScale={interfaceScale}
         onSelectNode={selectNode}
         onOpenNodeLevel={openNodeLevel}
         onBackLevel={backLevel}
@@ -1679,6 +1701,10 @@ export default function App() {
         onAddParticipant={addParticipant}
         onUpdateParticipant={updateParticipant}
         onDeleteParticipant={deleteParticipant}
+        fontScale={fontScale}
+        interfaceScale={interfaceScale}
+        onFontScaleChange={setFontScale}
+        onInterfaceScaleChange={setInterfaceScale}
       />
       {selectedNode ? (
         <RightPanel
@@ -1706,8 +1732,6 @@ export default function App() {
         onReset={() => sceneRef.current?.reset()}
         onFocus={() => sceneRef.current?.focusSelected()}
         onFullscreen={toggleFullscreen}
-        fontScale={fontScale}
-        onFontScaleChange={setFontScale}
       />
       <DocumentModal
         document={modalDocument}
@@ -2279,12 +2303,20 @@ function formatFileModifiedAt(timestamp: number) {
 
 const fontSizes = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 26, 28, 30, 32, 34, 42, 54];
 
-function buildFontVars(scale: number) {
+function buildAppVars(fontScale: number, interfaceScale: number) {
   return fontSizes.reduce(
     (vars, size) => ({
       ...vars,
-      [`--fs-${size}`]: `${size * scale}px`,
+      [`--fs-${size}`]: `${size * fontScale}px`,
     }),
-    { "--font-scale": String(scale) } as CSSProperties & Record<string, string>,
+    {
+      "--font-scale": String(fontScale),
+      "--ui-scale": String(interfaceScale),
+      "--ui-left-adjustment": `${Math.round(316 * (interfaceScale - 1))}px`,
+      "--ui-right-adjustment": `${Math.round(330 * (interfaceScale - 1))}px`,
+      "--ui-control-size": `${Math.round(36 * interfaceScale)}px`,
+      "--ui-toolbar-height": `${Math.round(48 * interfaceScale)}px`,
+      "--ui-panel-padding": `${Math.round(14 * interfaceScale)}px`,
+    } as CSSProperties & Record<string, string>,
   );
 }

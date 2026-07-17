@@ -1,4 +1,4 @@
-import { Focus, Maximize2, Redo2, RotateCcw, Sparkles, Type, Undo2, Waypoints } from "lucide-react";
+import { Focus, Maximize2, Redo2, RotateCcw, Sparkles, Undo2, Waypoints } from "lucide-react";
 import { processStatusColors, processStatusLabels } from "../data/mockProject";
 import type { ProcessStatus } from "../types";
 
@@ -11,8 +11,6 @@ type BottomControlsProps = {
   onReset: () => void;
   onFocus: () => void;
   onFullscreen: () => void;
-  fontScale: number;
-  onFontScaleChange: (scale: number) => void;
 };
 
 const statusOrder: ProcessStatus[] = ["sent", "rejected", "accepted", "in_work", "draft"];
@@ -26,8 +24,6 @@ export function BottomControls({
   onReset,
   onFocus,
   onFullscreen,
-  fontScale,
-  onFontScaleChange,
 }: BottomControlsProps) {
   return (
     <footer className="bottom-controls">
@@ -44,40 +40,12 @@ export function BottomControls({
         <button title="Фокус на выбранной ноде" onClick={onFocus}>
           <Focus size={20} />
         </button>
-        <button title="Нормализовать структуру" onClick={onNormalize}>
+        <button title="Развести ноды и сократить пересечения процессов" onClick={onNormalize}>
           <Sparkles size={20} />
         </button>
         <button title="Сбросить вид" onClick={onReset}>
           <RotateCcw size={20} />
         </button>
-      </div>
-
-      <div className="font-control glass-panel" title="Общий размер шрифта">
-        <Type size={18} />
-        <button
-          type="button"
-          onClick={() => onFontScaleChange(Math.max(0.85, Number((fontScale - 0.05).toFixed(2))))}
-          aria-label="Уменьшить общий шрифт"
-        >
-          A-
-        </button>
-        <input
-          type="range"
-          min="0.85"
-          max="1.25"
-          step="0.05"
-          value={fontScale}
-          onChange={(event) => onFontScaleChange(Number(event.currentTarget.value))}
-          aria-label="Общий размер шрифта"
-        />
-        <button
-          type="button"
-          onClick={() => onFontScaleChange(Math.min(1.25, Number((fontScale + 0.05).toFixed(2))))}
-          aria-label="Увеличить общий шрифт"
-        >
-          A+
-        </button>
-        <b>{Math.round(fontScale * 100)}%</b>
       </div>
 
       <div className="status-legend glass-panel" title="Цвет линии показывает статус бизнес-процесса">

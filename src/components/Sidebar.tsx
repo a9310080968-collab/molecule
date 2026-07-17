@@ -1,7 +1,9 @@
 import {
   Archive,
   CheckCircle2,
+  ChevronDown,
   ClipboardCheck,
+  FileText,
   FileStack,
   GitBranch,
   LayoutDashboard,
@@ -11,7 +13,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import clsx from "clsx";
-import type { DemoProject } from "../types";
+import { useState } from "react";
+import { getNodeById } from "../lib/graph";
+import type { DemoProject, ProcessDocument, ProcessStatus } from "../types";
 
 export type SidebarMenuId =
   | "map"
@@ -29,6 +33,9 @@ type SidebarProps = {
   project: DemoProject;
   chatUnreadCount: number;
   onMenuSelect: (menu: SidebarMenuId) => void;
+  onSelectProcess: (processId: string) => void;
+  onSelectNode: (nodeId: string) => void;
+  onOpenDocument: (document: ProcessDocument) => void;
   onClose: () => void;
 };
 
@@ -43,11 +50,24 @@ const navItems = [
   { id: "settings", label: "Настройки", icon: Settings },
 ] satisfies Array<{ id: SidebarMenuId; label: string; icon: LucideIcon }>;
 
-export function Sidebar({ isOpen, activeMenu, project, chatUnreadCount, onMenuSelect, onClose }: SidebarProps) {
-  const sent = project.processes.filter((process) => process.status === "sent").length;
-  const rejected = project.processes.filter((process) => process.status === "rejected").length;
-  const accepted = project.processes.filter((process) => process.status === "accepted").length;
-  const storagePercent = Math.round((project.storageUsedGb / project.storageLimitGb) * 100);
+const connectionStatuses = [
+  { status: "sent", label: "Отправлено", tone: "sent" },
+  { status: "rejected", label: "Не принято", tone: "rejected" },
+  { status: "accepted", label: "Принято", tone: "accepted" },
+] satisfies Array<{ status: ProcessStatus; label: string; tone: "sent" | "rejected" | "accepted" }>;
+
+export function Sidebar({
+  isOpen,
+  activeMenu,
+  project,
+  chatUnreadCount,
+  onMenuSelect,
+  onSelectProcess,
+  onSelectNode,
+  onOpenDocument,
+  onClose,
+}: SidebarProps) {
+  const [expandedStatus, setExpandedStatus] = useState<ProcessStatus | null>(null);
 
   return (
     <>
@@ -82,21 +102,87 @@ export function Sidebar({ isOpen, activeMenu, project, chatUnreadCount, onMenuSe
           })}
         </nav>
 
-        <section className="storage-card">
-          <div className="card-row">
-            <span>Хранилище</span>
-            <b>{project.storageUsedGb} ГБ из {project.storageLimitGb} ГБ</b>
-          </div>
-          <div className="progress-track">
-            <i style={{ width: `${storagePercent}%` }} />
-          </div>
-        </section>
-
         <section className="review-card">
           <h2>Контейнеры связей</h2>
-          <StatusCounter label="Отправлено" value={String(sent)} tone="sent" />
-          <StatusCounter label="Не принято" value={String(rejected)} tone="rejected" />
-          <StatusCounter label="Принято" value={String(accepted)} tone="accepted" />
+          {connectionStatuses.map((item) => {
+            const matchingProcesses = project.processes.filter((process) => process.status === item.status);
+            const expanded = expandedStatus === item.status;
+            return (
+              <div className="connection-status-group" key={item.status}>
+                <button
+                  className={clsx("status-counter", expanded && "expanded")}
+                  onClick={() => setExpandedStatus(expanded ? null : item.status)}
+                  aria-expanded={expanded}
+                >
+                  <span className={item.tone} />
+                  <p>{item.label}</p>
+                  <b>{matchingProcesses.length}</b>
+                  <ChevronDown size={15} />
+                </button>
+                {expanded ? (
+                  <div className="connection-container-list">
+                    {matchingProcesses.length ? matchingProcesses.map((process) => {
+                      const fromNode = getNodeById(project, process.from);
+                      const toNode = getNodeById(project, process.to);
+                      return (
+                        <article key={process.id}>
+                          <button
+                            className="connection-process-link"
+                            onClick={() => {
+                              onSelectProcess(process.id);
+                              onClose();
+                            }}
+                          >
+                            <strong>{process.title}</strong>
+                            <small>{process.documents.length} файлов</small>
+                          </button>
+                          <div className="connection-object-links">
+                            {fromNode ? (
+                              <button
+                                onClick={() => {
+                                  onSelectNode(fromNode.id);
+                                  onClose();
+                                }}
+                                title="Перейти к исходной ноде"
+                              >
+                                <GitBranch size={13} />
+                                {fromNode.shortCode ?? fromNode.title}
+                              </button>
+                            ) : null}
+                            {toNode ? (
+                              <button
+                                onClick={() => {
+                                  onSelectNode(toNode.id);
+                                  onClose();
+                                }}
+                                title="Перейти к целевой ноде"
+                              >
+                                <GitBranch size={13} />
+                                {toNode.shortCode ?? toNode.title}
+                              </button>
+                            ) : null}
+                            {process.documents.map((document) => (
+                              <button
+                                key={document.id}
+                                onClick={() => {
+                                  onOpenDocument(document);
+                                  onClose();
+                                }}
+                                title={document.title}
+                              >
+                                <FileText size={13} />
+                                {document.title}
+                              </button>
+                            ))}
+                          </div>
+                        </article>
+                      );
+                    }) : <p className="connection-list-empty">Нет контейнеров с этим статусом.</p>}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
         </section>
 
         <p className="hint">
@@ -105,23 +191,5 @@ export function Sidebar({ isOpen, activeMenu, project, chatUnreadCount, onMenuSe
       </aside>
       {isOpen ? <button className="mobile-scrim" aria-label="Закрыть меню" onClick={onClose} /> : null}
     </>
-  );
-}
-
-function StatusCounter({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: "sent" | "rejected" | "accepted";
-}) {
-  return (
-    <div className="status-counter">
-      <span className={tone} />
-      <p>{label}</p>
-      <b>{value}</b>
-    </div>
   );
 }

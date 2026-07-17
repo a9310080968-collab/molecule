@@ -57,6 +57,7 @@ type ProjectSceneProps = {
   matchedProcessIds: Set<string>;
   isSearching: boolean;
   levelTransition: "down" | "up" | null;
+  interfaceScale: number;
   onSelectNode: (nodeId: string) => void;
   onOpenNodeLevel: (node: ProjectNode) => void;
   onBackLevel: () => void;
@@ -89,6 +90,7 @@ type DragState = {
   nodeId: string;
   pointerId: number;
   startPointer: Vec2;
+  originalPosition: Vec2;
   startPosition: Vec2;
   currentPosition: Vec2;
   moved: boolean;
@@ -141,6 +143,7 @@ export function ProjectScene({
   matchedProcessIds,
   isSearching,
   levelTransition,
+  interfaceScale,
   onSelectNode,
   onOpenNodeLevel,
   onBackLevel,
@@ -178,6 +181,7 @@ export function ProjectScene({
   const [view, setView] = useState<ViewState>(INITIAL_VIEW);
   const [positions, setPositions] = useState<Record<string, Vec2>>(() => buildLevelPositions(nodes, level.id, centerNodeId, savedPositions));
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
   const [dragUi, setDragUi] = useState<DragUiState | null>(null);
   const [contextMenu, setContextMenu] = useState<NodeContextMenuState | null>(null);
   const [sceneContextMenu, setSceneContextMenu] = useState<SceneContextMenuState | null>(null);
@@ -192,7 +196,7 @@ export function ProjectScene({
     ? processes.find((process) => process.id === processContextMenu.processId)
     : undefined;
   const projectProgress = getProjectProgress(project, level);
-  const scale = getBaseScale(size) * view.zoom;
+  const nodeVisualScale = getNodeVisualScale(view.zoom);
 
   useEffect(() => {
     const element = containerRef.current;
@@ -221,13 +225,14 @@ export function ProjectScene({
   }, [level.id]);
 
   useEffect(() => {
-    if (!size.width || !size.height || fittedLevelRef.current === level.id) {
+    const fitKey = `${level.id}:${interfaceScale}`;
+    if (!size.width || !size.height || fittedLevelRef.current === fitKey) {
       return;
     }
 
-    fittedLevelRef.current = level.id;
-    setView(buildFittedView(positions, size));
-  }, [level.id, positions, size]);
+    fittedLevelRef.current = fitKey;
+    setView(buildFittedView(positions, size, interfaceScale));
+  }, [interfaceScale, level.id, positions, size]);
 
   useEffect(() => {
     if (!levelTransition) {
@@ -244,11 +249,15 @@ export function ProjectScene({
     };
   }, [level.id, levelTransition]);
 
-  const screenPositions = useMemo(() => {
+  const rawScreenPositions = useMemo(() => {
     return Object.fromEntries(
       Object.entries(positions).map(([id, position]) => [id, worldToScreen(position, size, view)]),
     ) as Record<string, Vec2>;
   }, [positions, size, view]);
+  const screenPositions = useMemo(
+    () => resolveNodeScreenCollisions(rawScreenPositions, nodes, centerNodeId, nodeVisualScale, draggingNodeId),
+    [centerNodeId, draggingNodeId, nodeVisualScale, nodes, rawScreenPositions],
+  );
   const openProcessGroup = openProcessGroupKey
     ? processGroups.find((group) => group.key === openProcessGroupKey)
     : undefined;
@@ -257,7 +266,7 @@ export function ProjectScene({
     : 0;
   const openProcess = openProcessGroup?.processes[boundedOpenProcessIndex];
   const openProcessAnchor = openProcessGroup
-    ? getProcessGroupAnchor(openProcessGroup, screenPositions, nodeMap, centerNodeId)
+    ? getProcessGroupAnchor(openProcessGroup, screenPositions, nodeMap, centerNodeId, nodeVisualScale)
     : undefined;
   const taskPopoverPosition = openProcessAnchor ? getTaskPopoverPosition(openProcessAnchor, size) : undefined;
 
@@ -292,13 +301,13 @@ export function ProjectScene({
         const next = buildInitialPositions(nodes, level.id, centerNodeId);
         setPositions(next);
         onPositionsChange(level.id, next, true);
-        setView(buildFittedView(next, size));
+        setView(buildFittedView(next, size, interfaceScale));
       },
       normalize: () => {
         const next = buildNormalizedPositions(nodes, processes, level.id, centerNodeId, positions);
         setPositions(next);
         onPositionsChange(level.id, next, true);
-        setView(buildFittedView(next, size));
+        setView(buildFittedView(next, size, interfaceScale));
       },
       focusNode,
       focusSelected: () => focusNode(selectedNodeId),
@@ -307,7 +316,7 @@ export function ProjectScene({
         return rect ? clientToWorld(clientX, clientY, rect, view) : null;
       },
     };
-  }, [centerNodeId, focusNode, level.id, nodes, onPositionsChange, positions, processes, sceneRef, selectedNodeId, size, view]);
+  }, [centerNodeId, focusNode, interfaceScale, level.id, nodes, onPositionsChange, positions, processes, sceneRef, selectedNodeId, size, view]);
 
   const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -385,13 +394,21 @@ export function ProjectScene({
       return;
     }
 
+    const renderedPosition = screenPositions[node.id];
+    const displayedWorldPosition = renderedPosition
+      ? screenToWorld(renderedPosition, size, view)
+      : position;
+
     event.currentTarget.setPointerCapture(event.pointerId);
+    setDraggingNodeId(node.id);
+    setPositions((current) => ({ ...current, [node.id]: displayedWorldPosition }));
     dragRef.current = {
       nodeId: node.id,
       pointerId: event.pointerId,
       startPointer: clientToWorld(event.clientX, event.clientY, rect, view),
-      startPosition: position,
-      currentPosition: position,
+      originalPosition: position,
+      startPosition: displayedWorldPosition,
+      currentPosition: displayedWorldPosition,
       moved: false,
     };
     if (node.type === "document") {
@@ -423,8 +440,14 @@ export function ProjectScene({
     setPositions((current) => ({ ...current, [node.id]: next }));
 
     if (node.type === "document") {
-      const dropPositions = { ...positions, [node.id]: next };
-      const target = findDocumentDropTarget(node, nodes, dropPositions, centerNodeId, scale);
+      const target = findDocumentDropTargetAtScreen(
+        node,
+        nodes,
+        screenPositions,
+        { x: event.clientX - rect.left, y: event.clientY - rect.top },
+        centerNodeId,
+        nodeVisualScale,
+      );
       const overExit = Boolean(node.documentOwnerNodeId && isPointerInsideElement(event.clientX, event.clientY, exitZoneRef.current));
       const overInbox = isPointerInsideElement(
         event.clientX,
@@ -452,10 +475,21 @@ export function ProjectScene({
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     dragRef.current = null;
+    setDraggingNodeId(null);
 
     if (drag.moved && node.type === "document") {
       const dropPositions = { ...positions, [node.id]: drag.currentPosition };
-      const target = findDocumentDropTarget(node, nodes, dropPositions, centerNodeId, scale);
+      const rect = containerRef.current?.getBoundingClientRect();
+      const target = rect
+        ? findDocumentDropTargetAtScreen(
+            node,
+            nodes,
+            screenPositions,
+            { x: event.clientX - rect.left, y: event.clientY - rect.top },
+            centerNodeId,
+            nodeVisualScale,
+          )
+        : undefined;
       const overExit = Boolean(node.documentOwnerNodeId && isPointerInsideElement(event.clientX, event.clientY, exitZoneRef.current));
       const overInbox = isPointerInsideElement(
         event.clientX,
@@ -483,6 +517,8 @@ export function ProjectScene({
       const nextPositions = { ...positions, [node.id]: drag.currentPosition };
       setPositions(nextPositions);
       onPositionsChange(level.id, nextPositions, true);
+    } else {
+      setPositions((current) => ({ ...current, [node.id]: drag.originalPosition }));
     }
   };
 
@@ -603,8 +639,11 @@ export function ProjectScene({
       className={clsx(
         "scene-panel",
         linkingFromId && "is-linking",
+        draggingNodeId && "is-node-dragging",
         dragUi && "is-document-dragging",
         dragUi?.overInbox && "is-inbox-drop",
+        view.zoom < 0.78 && "zoom-overview",
+        view.zoom >= 1.35 && "zoom-detailed",
         levelMotion && `level-transition-${levelMotion}`,
       )}
       onWheel={handleWheel}
@@ -634,18 +673,8 @@ export function ProjectScene({
           <strong>{level.title}</strong>
           <small>{level.subtitle}</small>
         </div>
-        <div className="level-chip-actions">
-          <button
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              onAddSectionNode();
-            }}
-          >
-            <Plus size={16} />
-            Добавить блок
-          </button>
-          {level.parentLevelId ? (
+        {level.parentLevelId ? (
+          <div className="level-chip-actions">
             <button
               onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => {
@@ -656,8 +685,8 @@ export function ProjectScene({
               <ChevronUp size={17} />
               Уровень выше
             </button>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </div>
 
       {linkingFromId ? (
@@ -692,6 +721,7 @@ export function ProjectScene({
             fromNode={nodeMap.get(group.processes[0].from)}
             toNode={nodeMap.get(group.processes[0].to)}
             centralNodeId={centerNodeId}
+            zoom={view.zoom}
             selected={group.processes.some((process) => selectedProcessId === process.id)}
             matched={group.processes.some((process) => matchedProcessIds.has(process.id))}
             dimmed={isSearching && !group.processes.some((process) => matchedProcessIds.has(process.id)) && !matchedNodeIds.has(group.processes[0].from) && !matchedNodeIds.has(group.processes[0].to)}
@@ -798,10 +828,12 @@ export function ProjectScene({
               "--node-glow": tone.glow,
               "--node-index": index,
               "--node-delay": `${Math.min(index * 16, 140)}ms`,
+              "--node-visual-scale": nodeVisualScale,
             } as React.CSSProperties}
             onPointerDown={(event) => handleNodePointerDown(event, node)}
             onPointerMove={(event) => handleNodePointerMove(event, node)}
             onPointerUp={(event) => handleNodePointerUp(event, node)}
+            onPointerCancel={(event) => handleNodePointerUp(event, node)}
             onClick={(event) => handleNodeClick(event, node)}
             onDoubleClick={(event) => handleNodeDoubleClick(event, node)}
             onContextMenu={(event) => handleNodeContextMenu(event, node)}
@@ -1029,7 +1061,7 @@ export function ProjectScene({
             }}
           >
             <SquarePlus size={15} />
-            Создать ноду здесь
+            Создать ноду
           </button>
           <button
             onClick={() => {
@@ -1062,6 +1094,7 @@ function ProcessPath({
   fromNode,
   toNode,
   centralNodeId,
+  zoom,
   selected,
   matched,
   dimmed,
@@ -1076,6 +1109,7 @@ function ProcessPath({
   fromNode?: ProjectNode;
   toNode?: ProjectNode;
   centralNodeId: string;
+  zoom: number;
   selected: boolean;
   matched: boolean;
   dimmed: boolean;
@@ -1087,13 +1121,20 @@ function ProcessPath({
     return null;
   }
 
-  const radiusFrom = getNodeRadius(fromNode, centralNodeId);
-  const radiusTo = getNodeRadius(toNode, centralNodeId);
+  const visualScale = getNodeVisualScale(zoom);
+  const radiusFrom = getNodeRadius(fromNode, centralNodeId) * visualScale;
+  const radiusTo = getNodeRadius(toNode, centralNodeId) * visualScale;
   const geometry = buildProcessGeometry(from, to, radiusFrom, radiusTo, 0);
   const color = getProcessGroupColor(processes, selectedProcessId);
   const hasForward = processes.some((item) => item.direction === "forward" || item.direction === "both");
   const hasBackward = processes.some((item) => item.direction === "backward" || item.direction === "both");
   const activeCount = processes.filter((item) => item.status !== "accepted").length;
+  const taskCount = activeCount || processes.length;
+  const representative = processes.find((process) => process.id === selectedProcessId) ?? processes[0];
+  const overview = zoom < 0.78;
+  const detailed = zoom >= 1.35;
+  const labelWidth = detailed ? 310 : overview ? 126 : 232;
+  const labelHeight = detailed ? 62 : overview ? 32 : 44;
 
   return (
     <g className={clsx("process-group", selected && "selected", matched && "matched", dimmed && "dimmed")}>
@@ -1125,32 +1166,48 @@ function ProcessPath({
           onOpenContextMenu(event.clientX, event.clientY);
         }}
       />
-      <foreignObject x={geometry.label.x - 116} y={geometry.label.y - 20} width="232" height="44">
-        <button
-          className="process-label process-group-label"
-          onPointerDown={(event) => {
-            event.stopPropagation();
-          }}
-          onClick={(event) => {
-            event.stopPropagation();
-            onToggle();
-          }}
-          onDoubleClick={(event) => {
-            event.stopPropagation();
-            onOpenDetails();
-          }}
-          onContextMenu={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            onOpenContextMenu(event.clientX, event.clientY);
-          }}
-          title="Двойной клик: открыть бизнес-процесс"
+      {!overview || selected ? (
+        <foreignObject
+          x={geometry.label.x - labelWidth / 2}
+          y={geometry.label.y - labelHeight / 2}
+          width={labelWidth}
+          height={labelHeight}
         >
-          <span style={{ background: color }} />
-          <b>{fromNode.shortCode ?? fromNode.title} ↔ {toNode.shortCode ?? toNode.title}</b>
-          <em>{activeCount || processes.length} {pluralizeTasks(activeCount || processes.length)}</em>
-        </button>
-      </foreignObject>
+          <button
+            className={clsx("process-label process-group-label", overview && "overview", detailed && "detailed")}
+            onPointerDown={(event) => {
+              event.stopPropagation();
+            }}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggle();
+            }}
+            onDoubleClick={(event) => {
+              event.stopPropagation();
+              onOpenDetails();
+            }}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onOpenContextMenu(event.clientX, event.clientY);
+            }}
+            title="Двойной клик: открыть бизнес-процесс"
+          >
+            <span style={{ background: color }} />
+            <b>
+              {overview
+                ? `${taskCount} ${pluralizeTasks(taskCount)}`
+                : `${fromNode.shortCode ?? fromNode.title} ↔ ${toNode.shortCode ?? toNode.title}`}
+            </b>
+            {!overview ? <em>{taskCount} {pluralizeTasks(taskCount)}</em> : null}
+            {detailed ? (
+              <small>
+                {representative.title} · {representative.documents.length} файлов · {getProcessStatusText(representative.status)}
+              </small>
+            ) : null}
+          </button>
+        </foreignObject>
+      ) : null}
     </g>
   );
 }
@@ -1183,6 +1240,7 @@ function getProcessGroupAnchor(
   screenPositions: Record<string, Vec2>,
   nodeMap: Map<string, ProjectNode>,
   centralNodeId: string,
+  visualScale: number,
 ) {
   const process = group.processes[0];
   const from = screenPositions[process.from];
@@ -1195,8 +1253,8 @@ function getProcessGroupAnchor(
   return buildProcessGeometry(
     from,
     to,
-    getNodeRadius(fromNode, centralNodeId),
-    getNodeRadius(toNode, centralNodeId),
+    getNodeRadius(fromNode, centralNodeId) * visualScale,
+    getNodeRadius(toNode, centralNodeId) * visualScale,
     0,
   ).label;
 }
@@ -1306,7 +1364,7 @@ function buildNormalizedPositions(
   ])) as Record<string, Vec2>;
   const central = nodes.some((node) => node.id === centralNodeId) ? centralNodeId : nodes.find((node) => node.type === "central")?.id;
 
-  for (let iteration = 0; iteration < 44; iteration += 1) {
+  for (let iteration = 0; iteration < 88; iteration += 1) {
     const deltas = Object.fromEntries(ids.map((id) => [id, { x: 0, y: 0 }])) as Record<string, Vec2>;
 
     processes.forEach((process) => {
@@ -1319,8 +1377,8 @@ function buildNormalizedPositions(
       const dx = to.x - from.x;
       const dy = to.y - from.y;
       const distance = Math.max(Math.hypot(dx, dy), 0.001);
-      const target = process.status === "accepted" ? 15.2 : 13.4;
-      const force = (distance - target) * 0.018;
+      const target = process.status === "accepted" ? 19.5 : 17.5;
+      const force = (distance - target) * 0.012;
       const ux = dx / distance;
       const uy = dy / distance;
       addDelta(deltas, process.from, ux * force, uy * force, lockedIds);
@@ -1340,7 +1398,7 @@ function buildNormalizedPositions(
         if (distance >= min) {
           continue;
         }
-        const force = (min - distance) * 0.035;
+        const force = (min - distance) * 0.055;
         const ux = dx / distance;
         const uy = dy / distance;
         addDelta(deltas, ids[i], -ux * force, -uy * force, lockedIds);
@@ -1353,12 +1411,96 @@ function buildNormalizedPositions(
         vectors[id] = id === central ? { x: 0, y: 0 } : { ...(currentPositions[id] ?? vectors[id]) };
         return;
       }
-      vectors[id].x = clamp(vectors[id].x + deltas[id].x, -42, 42);
-      vectors[id].y = clamp(vectors[id].y + deltas[id].y, -26, 26);
+      vectors[id].x = clamp(vectors[id].x + deltas[id].x, -56, 56);
+      vectors[id].y = clamp(vectors[id].y + deltas[id].y, -34, 34);
     });
   }
 
+  minimizeProcessCrossings(vectors, nodes, processes, lockedIds);
   return vectors;
+}
+
+function minimizeProcessCrossings(
+  positions: Record<string, Vec2>,
+  nodes: ProjectNode[],
+  processes: BusinessProcess[],
+  lockedIds: Set<string>,
+) {
+  const candidates = nodes.filter((node) => !lockedIds.has(node.id) && node.type !== "document").map((node) => node.id);
+  let bestScore = getProcessLayoutScore(positions, processes);
+
+  for (let pass = 0; pass < 3; pass += 1) {
+    let improved = false;
+    for (let firstIndex = 0; firstIndex < candidates.length; firstIndex += 1) {
+      for (let secondIndex = firstIndex + 1; secondIndex < candidates.length; secondIndex += 1) {
+        const firstId = candidates[firstIndex];
+        const secondId = candidates[secondIndex];
+        const firstPosition = positions[firstId];
+        const secondPosition = positions[secondId];
+        if (!firstPosition || !secondPosition) {
+          continue;
+        }
+
+        positions[firstId] = secondPosition;
+        positions[secondId] = firstPosition;
+        const nextScore = getProcessLayoutScore(positions, processes);
+        if (nextScore + 0.01 < bestScore) {
+          bestScore = nextScore;
+          improved = true;
+        } else {
+          positions[firstId] = firstPosition;
+          positions[secondId] = secondPosition;
+        }
+      }
+    }
+    if (!improved) {
+      break;
+    }
+  }
+}
+
+function getProcessLayoutScore(positions: Record<string, Vec2>, processes: BusinessProcess[]) {
+  let crossings = 0;
+  let totalLength = 0;
+
+  processes.forEach((process) => {
+    const from = positions[process.from];
+    const to = positions[process.to];
+    if (from && to) {
+      totalLength += Math.hypot(to.x - from.x, to.y - from.y);
+    }
+  });
+
+  for (let firstIndex = 0; firstIndex < processes.length; firstIndex += 1) {
+    const first = processes[firstIndex];
+    const firstFrom = positions[first.from];
+    const firstTo = positions[first.to];
+    if (!firstFrom || !firstTo) {
+      continue;
+    }
+    for (let secondIndex = firstIndex + 1; secondIndex < processes.length; secondIndex += 1) {
+      const second = processes[secondIndex];
+      if ([first.from, first.to].some((nodeId) => nodeId === second.from || nodeId === second.to)) {
+        continue;
+      }
+      const secondFrom = positions[second.from];
+      const secondTo = positions[second.to];
+      if (secondFrom && secondTo && segmentsIntersect(firstFrom, firstTo, secondFrom, secondTo)) {
+        crossings += 1;
+      }
+    }
+  }
+
+  return crossings * 1000 + totalLength * 0.12;
+}
+
+function segmentsIntersect(firstStart: Vec2, firstEnd: Vec2, secondStart: Vec2, secondEnd: Vec2) {
+  const orientation = (a: Vec2, b: Vec2, c: Vec2) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  const firstSideA = orientation(firstStart, firstEnd, secondStart);
+  const firstSideB = orientation(firstStart, firstEnd, secondEnd);
+  const secondSideA = orientation(secondStart, secondEnd, firstStart);
+  const secondSideB = orientation(secondStart, secondEnd, firstEnd);
+  return firstSideA * firstSideB < 0 && secondSideA * secondSideB < 0;
 }
 
 function addDelta(deltas: Record<string, Vec2>, id: string, x: number, y: number, lockedIds: Set<string>) {
@@ -1371,39 +1513,41 @@ function addDelta(deltas: Record<string, Vec2>, id: string, x: number, y: number
 
 function getNormalizationSeparation(first?: ProjectNode, second?: ProjectNode, central?: string) {
   if (!first || !second) {
-    return 7.2;
+    return 10.5;
   }
   if (first.id === central || second.id === central || first.type === "central" || second.type === "central") {
-    return 11.6;
+    return 17.5;
   }
   if (first.type === "document" && second.type === "document") {
-    return 4.8;
-  }
-  if (first.type === "document" || second.type === "document") {
     return 6.2;
   }
-  return 8.2;
+  if (first.type === "document" || second.type === "document") {
+    return 8.8;
+  }
+  return 12.8;
 }
 
-function findDocumentDropTarget(documentNode: ProjectNode, nodes: ProjectNode[], positions: Record<string, Vec2>, centralNodeId: string, scale: number) {
-  const documentPosition = positions[documentNode.id];
-  if (!documentPosition) {
-    return undefined;
-  }
-
+function findDocumentDropTargetAtScreen(
+  documentNode: ProjectNode,
+  nodes: ProjectNode[],
+  screenPositions: Record<string, Vec2>,
+  pointer: Vec2,
+  centralNodeId: string,
+  visualScale: number,
+) {
   let best: { node: ProjectNode; distance: number } | undefined;
   nodes.forEach((node) => {
     if (node.id === documentNode.id || node.type === "document" || node.type === "central") {
       return;
     }
 
-    const position = positions[node.id];
+    const position = screenPositions[node.id];
     if (!position) {
       return;
     }
 
-    const distancePx = Math.hypot(documentPosition.x - position.x, documentPosition.y - position.y) * scale;
-    const hitRadiusPx = getNodeAbsorbRadius(node, centralNodeId);
+    const distancePx = Math.hypot(pointer.x - position.x, pointer.y - position.y);
+    const hitRadiusPx = getNodeAbsorbRadius(node, centralNodeId) * visualScale;
     if (distancePx <= hitRadiusPx && (!best || distancePx < best.distance)) {
       best = { node, distance: distancePx };
     }
@@ -1498,7 +1642,98 @@ function clientToWorld(clientX: number, clientY: number, rect: DOMRect, view: Vi
   };
 }
 
-function buildFittedView(positions: Record<string, Vec2>, size: { width: number; height: number }): ViewState {
+function screenToWorld(position: Vec2, size: { width: number; height: number }, view: ViewState): Vec2 {
+  const scale = getBaseScale(size) * view.zoom;
+  return {
+    x: (position.x - size.width / 2 - view.panX) / scale,
+    y: (position.y - size.height / 2 - view.panY) / scale,
+  };
+}
+
+function resolveNodeScreenCollisions(
+  source: Record<string, Vec2>,
+  nodes: ProjectNode[],
+  centralNodeId: string,
+  visualScale: number,
+  draggingNodeId: string | null,
+) {
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  const ids = Object.keys(source).filter((id) => nodeMap.has(id));
+  const result = Object.fromEntries(ids.map((id) => [id, { ...source[id] }])) as Record<string, Vec2>;
+  const fixedIds = new Set(
+    nodes
+      .filter((node) => node.id === centralNodeId || node.type === "central" || node.positionLocked || node.id === draggingNodeId)
+      .map((node) => node.id),
+  );
+
+  for (let iteration = 0; iteration < 42; iteration += 1) {
+    const deltas = Object.fromEntries(ids.map((id) => [id, { x: 0, y: 0 }])) as Record<string, Vec2>;
+
+    for (let firstIndex = 0; firstIndex < ids.length; firstIndex += 1) {
+      for (let secondIndex = firstIndex + 1; secondIndex < ids.length; secondIndex += 1) {
+        const firstId = ids[firstIndex];
+        const secondId = ids[secondIndex];
+        const first = result[firstId];
+        const second = result[secondId];
+        const firstNode = nodeMap.get(firstId);
+        const secondNode = nodeMap.get(secondId);
+        if (!firstNode || !secondNode) {
+          continue;
+        }
+
+        let dx = second.x - first.x;
+        let dy = second.y - first.y;
+        let distance = Math.hypot(dx, dy);
+        if (distance < 0.01) {
+          const jitter = seededJitter(`${firstId}:${secondId}`);
+          dx = jitter.x || 0.7;
+          dy = jitter.y || 0.4;
+          distance = Math.hypot(dx, dy);
+        }
+
+        const minimum = (getScreenCollisionRadius(firstNode, centralNodeId) + getScreenCollisionRadius(secondNode, centralNodeId)) * visualScale + 12;
+        if (distance >= minimum) {
+          continue;
+        }
+
+        const push = (minimum - distance) * 0.46;
+        const ux = dx / distance;
+        const uy = dy / distance;
+        const firstFixed = fixedIds.has(firstId);
+        const secondFixed = fixedIds.has(secondId);
+        if (!firstFixed) {
+          deltas[firstId].x -= ux * (secondFixed ? push : push / 2);
+          deltas[firstId].y -= uy * (secondFixed ? push : push / 2);
+        }
+        if (!secondFixed) {
+          deltas[secondId].x += ux * (firstFixed ? push : push / 2);
+          deltas[secondId].y += uy * (firstFixed ? push : push / 2);
+        }
+      }
+    }
+
+    ids.forEach((id) => {
+      if (fixedIds.has(id)) {
+        result[id] = { ...source[id] };
+        return;
+      }
+      const anchor = source[id];
+      result[id].x += deltas[id].x + (anchor.x - result[id].x) * 0.018;
+      result[id].y += deltas[id].y + (anchor.y - result[id].y) * 0.018;
+    });
+  }
+
+  return result;
+}
+
+function getScreenCollisionRadius(node: ProjectNode, centralNodeId: string) {
+  if (node.id === centralNodeId || node.type === "central") return 92;
+  if (node.type === "document") return 45;
+  if (node.type === "subsection" || node.type === "package") return 62;
+  return 70;
+}
+
+function buildFittedView(positions: Record<string, Vec2>, size: { width: number; height: number }, interfaceScale = 1): ViewState {
   const points = Object.values(positions).filter(isFinitePosition);
   if (!points.length || !size.width || !size.height) {
     return INITIAL_VIEW;
@@ -1510,7 +1745,12 @@ function buildFittedView(positions: Record<string, Vec2>, size: { width: number;
   const maxY = Math.max(...points.map((point) => point.y));
   const desktop = size.width >= 1120;
   const safeArea = desktop
-    ? { left: 352, right: 376, top: 128, bottom: 118 }
+    ? {
+        left: Math.round(352 * interfaceScale),
+        right: Math.round(376 * interfaceScale),
+        top: Math.round(128 * interfaceScale),
+        bottom: Math.round(118 * interfaceScale),
+      }
     : { left: 28, right: 28, top: 126, bottom: 112 };
   const safeWidth = Math.max(260, size.width - safeArea.left - safeArea.right);
   const safeHeight = Math.max(240, size.height - safeArea.top - safeArea.bottom);
@@ -1533,6 +1773,16 @@ function buildFittedView(positions: Record<string, Vec2>, size: { width: number;
     panX: screenCenter.x - size.width / 2 - worldCenter.x * baseScale * zoom,
     panY: screenCenter.y - size.height / 2 - worldCenter.y * baseScale * zoom,
   };
+}
+
+function getNodeVisualScale(zoom: number) {
+  if (zoom <= 0.5) {
+    return 0.68;
+  }
+  if (zoom < 1) {
+    return 0.68 + (zoom - 0.5) * 0.64;
+  }
+  return Math.min(1.12, 1 + (zoom - 1) * 0.045);
 }
 
 function getBaseScale(size: { width: number; height: number }) {

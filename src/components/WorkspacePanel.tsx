@@ -13,7 +13,9 @@ import {
   Send,
   ShieldCheck,
   Settings,
+  Scaling,
   Trash2,
+  Type,
   UserPlus,
   Users,
   X,
@@ -64,6 +66,10 @@ type WorkspacePanelProps = {
   onAddParticipant: (edit: ParticipantEdit) => void;
   onUpdateParticipant: (participantId: string, edit: ParticipantEdit) => void;
   onDeleteParticipant: (participantId: string) => void;
+  fontScale: number;
+  interfaceScale: number;
+  onFontScaleChange: (scale: number) => void;
+  onInterfaceScaleChange: (scale: number) => void;
 };
 
 export type WorkspaceTaskDraft = {
@@ -114,8 +120,8 @@ const menuMeta = {
   settings: {
     icon: Settings,
     title: "Настройки",
-    subtitle: "Цвет ноды больше не выбирается вручную. Визуал зависит от роли ноды и согласования.",
-    badge: "Правила",
+    subtitle: "Масштаб текста и интерфейса, шаблоны проекта и правила визуализации.",
+    badge: "Интерфейс",
   },
 } satisfies Record<
   Exclude<SidebarMenuId, "map">,
@@ -144,6 +150,10 @@ export function WorkspacePanel({
   onAddParticipant,
   onUpdateParticipant,
   onDeleteParticipant,
+  fontScale,
+  interfaceScale,
+  onFontScaleChange,
+  onInterfaceScaleChange,
 }: WorkspacePanelProps) {
   if (activeMenu === "map") {
     return null;
@@ -184,6 +194,10 @@ export function WorkspacePanel({
         onAddParticipant={onAddParticipant}
         onUpdateParticipant={onUpdateParticipant}
         onDeleteParticipant={onDeleteParticipant}
+        fontScale={fontScale}
+        interfaceScale={interfaceScale}
+        onFontScaleChange={onFontScaleChange}
+        onInterfaceScaleChange={onInterfaceScaleChange}
       />
     </section>
   );
@@ -205,6 +219,10 @@ function WorkspaceContent({
   onAddParticipant,
   onUpdateParticipant,
   onDeleteParticipant,
+  fontScale,
+  interfaceScale,
+  onFontScaleChange,
+  onInterfaceScaleChange,
 }: Omit<WorkspacePanelProps, "onClose">) {
   if (activeMenu === "documents") {
     return (
@@ -278,6 +296,10 @@ function WorkspaceContent({
       project={project}
       projectTemplates={projectTemplates}
       onCreateTemplate={onCreateTemplate}
+      fontScale={fontScale}
+      interfaceScale={interfaceScale}
+      onFontScaleChange={onFontScaleChange}
+      onInterfaceScaleChange={onInterfaceScaleChange}
     />
   );
 }
@@ -286,10 +308,18 @@ function SettingsWorkspace({
   project,
   projectTemplates,
   onCreateTemplate,
+  fontScale,
+  interfaceScale,
+  onFontScaleChange,
+  onInterfaceScaleChange,
 }: {
   project: DemoProject;
   projectTemplates: ProjectTemplate[];
   onCreateTemplate: (title: string, description: string) => ProjectTemplate;
+  fontScale: number;
+  interfaceScale: number;
+  onFontScaleChange: (scale: number) => void;
+  onInterfaceScaleChange: (scale: number) => void;
 }) {
   const [title, setTitle] = useState(`${project.title}: шаблон`);
   const [description, setDescription] = useState("Структура проекта без рабочих документов.");
@@ -302,6 +332,48 @@ function SettingsWorkspace({
 
   return (
     <div className="settings-workspace">
+      <section className="template-settings-card appearance-settings-card">
+        <div className="section-title">
+          <Scaling size={18} />
+          <div>
+            <h3>Масштаб интерфейса</h3>
+            <p>Размеры текста и рабочих панелей сохраняются для этого браузера.</p>
+          </div>
+        </div>
+        <label className="appearance-setting-row">
+          <Type size={18} />
+          <span>
+            <strong>Размер текста</strong>
+            <small>Подписи, поля и служебный текст</small>
+          </span>
+          <input
+            type="range"
+            min="0.85"
+            max="1.25"
+            step="0.05"
+            value={fontScale}
+            onChange={(event) => onFontScaleChange(Number(event.currentTarget.value))}
+          />
+          <b>{Math.round(fontScale * 100)}%</b>
+        </label>
+        <label className="appearance-setting-row">
+          <Scaling size={18} />
+          <span>
+            <strong>Размер интерфейса</strong>
+            <small>Ширина панелей и размер основных элементов управления</small>
+          </span>
+          <input
+            type="range"
+            min="0.85"
+            max="1.2"
+            step="0.05"
+            value={interfaceScale}
+            onChange={(event) => onInterfaceScaleChange(Number(event.currentTarget.value))}
+          />
+          <b>{Math.round(interfaceScale * 100)}%</b>
+        </label>
+      </section>
+
       <section className="template-settings-card">
         <div className="section-title">
           <FolderPlus size={18} />
