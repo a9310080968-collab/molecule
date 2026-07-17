@@ -10,7 +10,21 @@ import {
   useRef,
   useState,
 } from "react";
-import { ChevronLeft, ChevronRight, ChevronUp, ExternalLink, LockKeyhole, Pin, PinOff, Plus, Trash2, X } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  ExternalLink,
+  FolderInput,
+  LockKeyhole,
+  Pin,
+  PinOff,
+  Plus,
+  SquarePlus,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 import {
   getFileLabel,
   getDocumentFromNode,
@@ -52,12 +66,16 @@ type ProjectSceneProps = {
   onCompleteLink: (nodeId: string) => void;
   onOpenDocument: (document: ProcessDocument) => void;
   onMoveDocumentNode: (documentNodeId: string, targetNodeId: string | null) => void;
+  onMoveDocumentNodeToInbox: (documentNodeId: string) => void;
   onAddRandomFile: (targetNodeId?: string) => void;
-  onAddSectionNode: () => void;
+  onAddSectionNode: (position?: Vec2) => void;
+  onImportFilesAtPosition: (files: File[], position: Vec2) => void;
   onUpdateDocumentStatus: (documentId: string, status: NodeStatus) => void;
   onPositionsChange: (levelId: string, positions: Record<string, Vec2>, record?: boolean) => void;
   onToggleNodePositionLock: (nodeId: string) => void;
   onDeleteNode: (nodeId: string) => void;
+  onDeleteProcess: (processId: string) => void;
+  onDeleteProject: () => void;
   sceneRef: MutableRefObject<SceneHandle | null>;
 };
 
@@ -81,10 +99,23 @@ type DragUiState = {
   ownerNodeId?: string;
   targetNodeId?: string;
   overExit: boolean;
+  overInbox: boolean;
 };
 
 type NodeContextMenuState = {
   nodeId: string;
+  x: number;
+  y: number;
+};
+
+type SceneContextMenuState = {
+  x: number;
+  y: number;
+  position: Vec2;
+};
+
+type ProcessContextMenuState = {
+  processId: string;
   x: number;
   y: number;
 };
@@ -119,16 +150,22 @@ export function ProjectScene({
   onCompleteLink,
   onOpenDocument,
   onMoveDocumentNode,
+  onMoveDocumentNodeToInbox,
   onAddRandomFile,
   onAddSectionNode,
+  onImportFilesAtPosition,
   onUpdateDocumentStatus,
   onPositionsChange,
   onToggleNodePositionLock,
   onDeleteNode,
+  onDeleteProcess,
+  onDeleteProject,
   sceneRef,
 }: ProjectSceneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const exitZoneRef = useRef<HTMLDivElement | null>(null);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadPositionRef = useRef<Vec2 | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const clickRef = useRef<{ nodeId: string; time: number } | null>(null);
   const suppressClickRef = useRef(false);
@@ -143,12 +180,17 @@ export function ProjectScene({
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [dragUi, setDragUi] = useState<DragUiState | null>(null);
   const [contextMenu, setContextMenu] = useState<NodeContextMenuState | null>(null);
+  const [sceneContextMenu, setSceneContextMenu] = useState<SceneContextMenuState | null>(null);
+  const [processContextMenu, setProcessContextMenu] = useState<ProcessContextMenuState | null>(null);
   const [openProcessGroupKey, setOpenProcessGroupKey] = useState<string | null>(null);
   const [openProcessIndex, setOpenProcessIndex] = useState(0);
   const [levelMotion, setLevelMotion] = useState<"down" | "up" | null>(null);
   const nodeMap = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
   const processGroups = useMemo(() => groupProcesses(processes), [processes]);
   const contextNode = contextMenu ? nodeMap.get(contextMenu.nodeId) : undefined;
+  const contextProcess = processContextMenu
+    ? processes.find((process) => process.id === processContextMenu.processId)
+    : undefined;
   const projectProgress = getProjectProgress(project, level);
   const scale = getBaseScale(size) * view.zoom;
 
@@ -286,10 +328,12 @@ export function ProjectScene({
 
   const handleScenePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
-    if (target.closest(".node-context-menu")) {
+    if (target.closest(".context-menu")) {
       return;
     }
     setContextMenu(null);
+    setSceneContextMenu(null);
+    setProcessContextMenu(null);
     if (event.button !== 0 || target.closest(".map-node, .process-hit, .node-plus, .level-chip, .linking-hint")) {
       return;
     }
@@ -351,7 +395,7 @@ export function ProjectScene({
       moved: false,
     };
     if (node.type === "document") {
-      setDragUi({ nodeId: node.id, ownerNodeId: node.documentOwnerNodeId, overExit: false });
+      setDragUi({ nodeId: node.id, ownerNodeId: node.documentOwnerNodeId, overExit: false, overInbox: false });
     } else {
       setDragUi(null);
     }
@@ -382,11 +426,17 @@ export function ProjectScene({
       const dropPositions = { ...positions, [node.id]: next };
       const target = findDocumentDropTarget(node, nodes, dropPositions, centerNodeId, scale);
       const overExit = Boolean(node.documentOwnerNodeId && isPointerInsideElement(event.clientX, event.clientY, exitZoneRef.current));
+      const overInbox = isPointerInsideElement(
+        event.clientX,
+        event.clientY,
+        document.querySelector<HTMLElement>(".orphan-files-panel"),
+      );
       setDragUi({
         nodeId: node.id,
         ownerNodeId: node.documentOwnerNodeId,
         targetNodeId: target?.id,
         overExit,
+        overInbox,
       });
     }
   };
@@ -407,9 +457,16 @@ export function ProjectScene({
       const dropPositions = { ...positions, [node.id]: drag.currentPosition };
       const target = findDocumentDropTarget(node, nodes, dropPositions, centerNodeId, scale);
       const overExit = Boolean(node.documentOwnerNodeId && isPointerInsideElement(event.clientX, event.clientY, exitZoneRef.current));
+      const overInbox = isPointerInsideElement(
+        event.clientX,
+        event.clientY,
+        document.querySelector<HTMLElement>(".orphan-files-panel"),
+      );
       setDragUi(null);
       suppressClickRef.current = true;
-      if (overExit) {
+      if (overInbox) {
+        onMoveDocumentNodeToInbox(node.id);
+      } else if (overExit) {
         onMoveDocumentNode(node.id, null);
       } else if (target && target.id !== node.documentOwnerNodeId) {
         onMoveDocumentNode(node.id, target.id);
@@ -481,10 +538,41 @@ export function ProjectScene({
     event.preventDefault();
     event.stopPropagation();
     onSelectNode(node.id);
+    setSceneContextMenu(null);
+    setProcessContextMenu(null);
     setContextMenu({
       nodeId: node.id,
-      x: Math.min(event.clientX, window.innerWidth - 236),
-      y: Math.min(event.clientY, window.innerHeight - 354),
+      ...getContextMenuPosition(event.clientX, event.clientY, 236, 430),
+    });
+  };
+
+  const handleProcessContextMenu = (processId: string, clientX: number, clientY: number) => {
+    onSelectProcess(processId);
+    setContextMenu(null);
+    setSceneContextMenu(null);
+    setProcessContextMenu({
+      processId,
+      ...getContextMenuPosition(clientX, clientY, 236, 142),
+    });
+  };
+
+  const handleSceneContextMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const target = event.target as HTMLElement;
+    if (target.closest(".map-node, .process-hit, .process-label, .context-menu, .process-task-popover, .level-chip, .linking-hint, .document-exit-zone")) {
+      return;
+    }
+
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) {
+      return;
+    }
+
+    setContextMenu(null);
+    setProcessContextMenu(null);
+    setSceneContextMenu({
+      position: clientToWorld(event.clientX, event.clientY, rect, view),
+      ...getContextMenuPosition(event.clientX, event.clientY, 236, 106),
     });
   };
 
@@ -512,18 +600,34 @@ export function ProjectScene({
   return (
     <main
       ref={containerRef}
-      className={clsx("scene-panel", linkingFromId && "is-linking", levelMotion && `level-transition-${levelMotion}`)}
+      className={clsx(
+        "scene-panel",
+        linkingFromId && "is-linking",
+        dragUi && "is-document-dragging",
+        dragUi?.overInbox && "is-inbox-drop",
+        levelMotion && `level-transition-${levelMotion}`,
+      )}
       onWheel={handleWheel}
       onPointerDown={handleScenePointerDown}
       onPointerMove={handleScenePointerMove}
       onPointerUp={handleScenePointerUp}
-      onContextMenu={(event) => {
-        event.preventDefault();
-        if (!(event.target as HTMLElement).closest(".map-node, .node-context-menu")) {
-          setContextMenu(null);
-        }
-      }}
+      onContextMenu={handleSceneContextMenu}
     >
+      <input
+        ref={uploadInputRef}
+        className="scene-file-input"
+        type="file"
+        multiple
+        onChange={(event) => {
+          const files = Array.from(event.currentTarget.files ?? []);
+          const position = uploadPositionRef.current;
+          if (files.length && position) {
+            onImportFilesAtPosition(files, position);
+          }
+          event.currentTarget.value = "";
+          uploadPositionRef.current = null;
+        }}
+      />
       <div className="level-chip glass-panel">
         <div>
           <span>{project.title}</span>
@@ -593,6 +697,11 @@ export function ProjectScene({
             dimmed={isSearching && !group.processes.some((process) => matchedProcessIds.has(process.id)) && !matchedNodeIds.has(group.processes[0].from) && !matchedNodeIds.has(group.processes[0].to)}
             onToggle={() => toggleProcessGroup(group)}
             onOpenDetails={() => onOpenProcessDetails(group.processes.find((process) => process.id === selectedProcessId)?.id ?? group.processes[0].id)}
+            onOpenContextMenu={(clientX, clientY) => handleProcessContextMenu(
+              group.processes.find((process) => process.id === selectedProcessId)?.id ?? group.processes[0].id,
+              clientX,
+              clientY,
+            )}
           />
         ))}
       </svg>
@@ -620,6 +729,11 @@ export function ProjectScene({
               className="process-task-card"
               onClick={() => onSelectProcess(openProcess.id)}
               onDoubleClick={() => onOpenProcessDetails(openProcess.id)}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                handleProcessContextMenu(openProcess.id, event.clientX, event.clientY);
+              }}
               title="Двойной клик: открыть бизнес-процесс"
             >
               <span>{boundedOpenProcessIndex + 1} из {openProcessGroup.processes.length}</span>
@@ -729,7 +843,7 @@ export function ProjectScene({
       })}
       {contextMenu && contextNode ? (
         <div
-          className="node-context-menu glass-panel"
+          className="node-context-menu context-menu glass-panel"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => event.stopPropagation()}
@@ -800,6 +914,15 @@ export function ProjectScene({
                   Вынести из ноды
                 </button>
               ) : null}
+              <button
+                onClick={() => {
+                  onMoveDocumentNodeToInbox(contextNode.id);
+                  setContextMenu(null);
+                }}
+              >
+                <FolderInput size={15} />
+                В бесхозные
+              </button>
             </>
           ) : null}
           {contextNode.type !== "central" && contextNode.type !== "document" ? (
@@ -841,13 +964,94 @@ export function ProjectScene({
               }}
             >
               <Trash2 size={15} />
-              {contextNode.type === "document" ? "Убрать во входящие" : "Удалить ноду"}
+              {contextNode.type === "document" ? "Удалить файл" : "Удалить ноду"}
             </button>
-          ) : null}
+          ) : (
+            <button
+              className="danger"
+              onClick={() => {
+                if (window.confirm(`Удалить проект «${project.title}» целиком?`)) {
+                  onDeleteProject();
+                  setContextMenu(null);
+                }
+              }}
+            >
+              <Trash2 size={15} />
+              Удалить проект
+            </button>
+          )}
+        </div>
+      ) : null}
+      {processContextMenu && contextProcess ? (
+        <div
+          className="process-context-menu context-menu glass-panel"
+          style={{ left: processContextMenu.x, top: processContextMenu.y }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <strong>{contextProcess.title}</strong>
+          <button
+            onClick={() => {
+              onOpenProcessDetails(contextProcess.id);
+              setProcessContextMenu(null);
+            }}
+          >
+            <ExternalLink size={15} />
+            Открыть процесс
+          </button>
+          <button
+            className="danger"
+            onClick={() => {
+              if (window.confirm(`Удалить процесс «${contextProcess.title}»?`)) {
+                onDeleteProcess(contextProcess.id);
+                setProcessContextMenu(null);
+              }
+            }}
+          >
+            <Trash2 size={15} />
+            Удалить процесс
+          </button>
+        </div>
+      ) : null}
+      {sceneContextMenu ? (
+        <div
+          className="scene-context-menu context-menu glass-panel"
+          style={{ left: sceneContextMenu.x, top: sceneContextMenu.y }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <button
+            onClick={() => {
+              onAddSectionNode(sceneContextMenu.position);
+              setSceneContextMenu(null);
+            }}
+          >
+            <SquarePlus size={15} />
+            Создать ноду здесь
+          </button>
+          <button
+            onClick={() => {
+              uploadPositionRef.current = sceneContextMenu.position;
+              uploadInputRef.current?.click();
+              setSceneContextMenu(null);
+            }}
+          >
+            <Upload size={15} />
+            Загрузить файл сюда
+          </button>
         </div>
       ) : null}
     </main>
   );
+}
+
+function getContextMenuPosition(clientX: number, clientY: number, width: number, height: number) {
+  return {
+    x: Math.max(12, Math.min(clientX, window.innerWidth - width - 12)),
+    y: Math.max(12, Math.min(clientY, window.innerHeight - height - 12)),
+  };
 }
 
 function ProcessPath({
@@ -863,6 +1067,7 @@ function ProcessPath({
   dimmed,
   onToggle,
   onOpenDetails,
+  onOpenContextMenu,
 }: {
   processes: BusinessProcess[];
   selectedProcessId: string | null;
@@ -876,6 +1081,7 @@ function ProcessPath({
   dimmed: boolean;
   onToggle: () => void;
   onOpenDetails: () => void;
+  onOpenContextMenu: (clientX: number, clientY: number) => void;
 }) {
   if (!from || !to || !fromNode || !toNode || !processes.length) {
     return null;
@@ -913,6 +1119,11 @@ function ProcessPath({
           event.stopPropagation();
           onOpenDetails();
         }}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onOpenContextMenu(event.clientX, event.clientY);
+        }}
       />
       <foreignObject x={geometry.label.x - 116} y={geometry.label.y - 20} width="232" height="44">
         <button
@@ -927,6 +1138,11 @@ function ProcessPath({
           onDoubleClick={(event) => {
             event.stopPropagation();
             onOpenDetails();
+          }}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onOpenContextMenu(event.clientX, event.clientY);
           }}
           title="Двойной клик: открыть бизнес-процесс"
         >

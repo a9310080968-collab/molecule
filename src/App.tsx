@@ -429,7 +429,7 @@ export default function App() {
     showToast(`Проект «${project.title}» удален.`);
   }
 
-  function addSectionNode() {
+  function addSectionNode(position?: Vec2) {
     const sectionCount = levelNodes.filter((node) => node.type !== "central" && node.type !== "document").length + 1;
     const shortCode = `Б${sectionCount}`;
     const node: ProjectNode = {
@@ -446,7 +446,7 @@ export default function App() {
       tags: [shortCode],
     };
 
-    updateActiveProject((project) => ({
+    updateActiveProject((project) => withNodePosition({
       ...project,
       nodes: [node, ...project.nodes],
       levels: project.levels.map((level) =>
@@ -458,11 +458,13 @@ export default function App() {
           : level,
       ),
       updatedAt: "только что",
-    }));
+    }, activeLevel.id, node.id, position));
     setSelectedNodeId(node.id);
     setSelectedProcessId(null);
     setActiveMenu("map");
-    window.setTimeout(() => sceneRef.current?.focusNode(node.id), 80);
+    if (!position) {
+      window.setTimeout(() => sceneRef.current?.focusNode(node.id), 80);
+    }
     showToast(`Добавлен средний блок «${node.title}».`);
   }
 
@@ -590,7 +592,7 @@ export default function App() {
     }
 
     if (node.type === "document") {
-      moveDocumentNodeToInbox(node.id);
+      deleteDocument(getDocumentFromNode(node).id, node.title);
       return;
     }
 
@@ -605,6 +607,26 @@ export default function App() {
     setProcessBuilderId(null);
     setProcessDetailId(null);
     showToast(`Нода «${node.shortCode ?? node.title}» удалена. Файлы перенесены во входящие.`);
+  }
+
+  function deleteDocument(documentId: string, title: string) {
+    if (!window.confirm(`Удалить файл «${title}» безвозвратно? Он исчезнет с карты, из процессов и бесхозных файлов.`)) {
+      return;
+    }
+
+    updateActiveProject((project) => removeDocumentEverywhere(project, documentId));
+    setSelectedNodeId(activeLevel.centralNodeId);
+    setSelectedProcessId(null);
+    setProcessBuilderId(null);
+    setProcessDetailId(null);
+    showToast(`Файл «${title}» удален.`);
+  }
+
+  function deleteInboxDocument(documentId: string) {
+    const document = activeProject.inboxDocuments.find((item) => item.id === documentId);
+    if (document) {
+      deleteDocument(document.id, document.title);
+    }
   }
 
   function markProjectChatRead() {
@@ -1603,12 +1625,18 @@ export default function App() {
         onCompleteLink={completeLink}
         onOpenDocument={setModalDocument}
         onMoveDocumentNode={moveDocumentNode}
+        onMoveDocumentNodeToInbox={moveDocumentNodeToInbox}
         onAddRandomFile={addRandomFile}
         onAddSectionNode={addSectionNode}
+        onImportFilesAtPosition={(files, position) => {
+          void importFilesToWorkspace(files, position);
+        }}
         onUpdateDocumentStatus={updateDocumentStatus}
         onPositionsChange={saveLevelPositions}
         onToggleNodePositionLock={toggleNodePositionLock}
         onDeleteNode={deleteNode}
+        onDeleteProcess={deleteProcess}
+        onDeleteProject={() => deleteProject(activeProject.id)}
         sceneRef={sceneRef}
       />
       <OrphanFilesPanel
@@ -1616,6 +1644,7 @@ export default function App() {
         onAddRandomFile={(tag) => addRandomFile(undefined, tag)}
         onMaterializeInboxDocument={materializeInboxDocument}
         onMoveDocumentNodeToInbox={moveDocumentNodeToInbox}
+        onDeleteDocument={deleteInboxDocument}
         onImportFiles={(files) => {
           void importFilesToProjectPool(files);
         }}
@@ -1794,6 +1823,13 @@ function addDocumentToInbox(project: DemoProject, document: ProcessDocument): De
       .map((node) => node.id),
   );
 
+  const nodePositions = Object.fromEntries(
+    Object.entries(project.nodePositions ?? {}).map(([levelId, positions]) => [
+      levelId,
+      Object.fromEntries(Object.entries(positions).filter(([nodeId]) => !nodeIdsToRemove.has(nodeId))),
+    ]),
+  );
+
   return {
     ...project,
     nodes: project.nodes.filter((node) => !nodeIdsToRemove.has(node.id)),
@@ -1801,10 +1837,45 @@ function addDocumentToInbox(project: DemoProject, document: ProcessDocument): De
       ...level,
       nodeIds: level.nodeIds.filter((id) => !nodeIdsToRemove.has(id)),
     })),
+    processes: project.processes.map((process) => ({
+      ...process,
+      documents: process.documents.filter((item) => item.id !== document.id),
+    })),
     inboxDocuments: [
       document,
       ...project.inboxDocuments.filter((item) => item.id !== document.id),
     ],
+    nodePositions,
+    updatedAt: "только что",
+  };
+}
+
+function removeDocumentEverywhere(project: DemoProject, documentId: string): DemoProject {
+  const nodeIdsToRemove = new Set(
+    project.nodes
+      .filter((node) => node.type === "document" && node.document?.id === documentId)
+      .map((node) => node.id),
+  );
+  const nodePositions = Object.fromEntries(
+    Object.entries(project.nodePositions ?? {}).map(([levelId, positions]) => [
+      levelId,
+      Object.fromEntries(Object.entries(positions).filter(([nodeId]) => !nodeIdsToRemove.has(nodeId))),
+    ]),
+  );
+
+  return {
+    ...project,
+    nodes: project.nodes.filter((node) => !nodeIdsToRemove.has(node.id)),
+    levels: project.levels.map((level) => ({
+      ...level,
+      nodeIds: level.nodeIds.filter((nodeId) => !nodeIdsToRemove.has(nodeId)),
+    })),
+    processes: project.processes.map((process) => ({
+      ...process,
+      documents: process.documents.filter((document) => document.id !== documentId),
+    })),
+    inboxDocuments: project.inboxDocuments.filter((document) => document.id !== documentId),
+    nodePositions,
     updatedAt: "только что",
   };
 }

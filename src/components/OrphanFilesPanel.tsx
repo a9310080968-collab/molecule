@@ -1,6 +1,6 @@
 import clsx from "clsx";
-import { type DragEvent, useState } from "react";
-import { FilePlus2, FileText, LocateFixed, Maximize2 } from "lucide-react";
+import { type DragEvent, useEffect, useState } from "react";
+import { FilePlus2, FileText, LocateFixed, Maximize2, Trash2 } from "lucide-react";
 import { getFileLabel, getFileTypeColor } from "../lib/graph";
 import type { DemoProject, ProcessDocument } from "../types";
 
@@ -9,6 +9,7 @@ type OrphanFilesPanelProps = {
   onAddRandomFile: (tag?: string) => void;
   onMaterializeInboxDocument: (documentId: string) => void;
   onMoveDocumentNodeToInbox: (documentNodeId: string) => void;
+  onDeleteDocument: (documentId: string) => void;
   onImportFiles: (files: File[]) => void;
   onOpenDocument: (document: ProcessDocument) => void;
 };
@@ -18,12 +19,27 @@ export function OrphanFilesPanel({
   onAddRandomFile,
   onMaterializeInboxDocument,
   onMoveDocumentNodeToInbox,
+  onDeleteDocument,
   onImportFiles,
   onOpenDocument,
 }: OrphanFilesPanelProps) {
   const [tag, setTag] = useState("");
   const [dropActive, setDropActive] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ documentId: string; x: number; y: number } | null>(null);
   const files = project.inboxDocuments;
+  const contextDocument = contextMenu
+    ? files.find((document) => document.id === contextMenu.documentId)
+    : undefined;
+
+  useEffect(() => {
+    const closeContextMenu = (event: PointerEvent) => {
+      if (!(event.target as HTMLElement).closest(".document-context-menu")) {
+        setContextMenu(null);
+      }
+    };
+    window.addEventListener("pointerdown", closeContextMenu);
+    return () => window.removeEventListener("pointerdown", closeContextMenu);
+  }, []);
 
   function addFile() {
     onAddRandomFile(tag.trim() || undefined);
@@ -84,7 +100,19 @@ export function OrphanFilesPanel({
           {files.slice(0, 8).map((document) => {
             const color = getFileTypeColor(document.fileType);
             return (
-              <article key={document.id} className={clsx(document.isNew && "incoming-new")}>
+              <article
+                key={document.id}
+                className={clsx(document.isNew && "incoming-new")}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setContextMenu({
+                    documentId: document.id,
+                    x: Math.max(12, Math.min(event.clientX, window.innerWidth - 236)),
+                    y: Math.max(12, Math.min(event.clientY, window.innerHeight - 174)),
+                  });
+                }}
+              >
                 <button
                   className="orphan-main-action"
                   draggable
@@ -114,6 +142,43 @@ export function OrphanFilesPanel({
       ) : (
         <p>Нет бесхозных файлов. Перетащите сюда файл с компьютера или отправьте тестовый файл из интеграций.</p>
       )}
+      {contextMenu && contextDocument ? (
+        <div
+          className="document-context-menu context-menu glass-panel"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <strong>{contextDocument.title}</strong>
+          <button
+            onClick={() => {
+              onMaterializeInboxDocument(contextDocument.id);
+              setContextMenu(null);
+            }}
+          >
+            <LocateFixed size={15} />
+            Вынести на карту
+          </button>
+          <button
+            onClick={() => {
+              onOpenDocument(contextDocument);
+              setContextMenu(null);
+            }}
+          >
+            <Maximize2 size={15} />
+            Открыть файл
+          </button>
+          <button
+            className="danger"
+            onClick={() => {
+              onDeleteDocument(contextDocument.id);
+              setContextMenu(null);
+            }}
+          >
+            <Trash2 size={15} />
+            Удалить файл
+          </button>
+        </div>
+      ) : null}
     </aside>
   );
 }
