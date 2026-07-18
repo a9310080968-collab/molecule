@@ -1691,6 +1691,9 @@ function resolveNodeScreenCollisions(
   const nodeMap = new Map(nodes.map((node) => [node.id, node]));
   const ids = Object.keys(source).filter((id) => nodeMap.has(id));
   const result = Object.fromEntries(ids.map((id) => [id, { ...source[id] }])) as Record<string, Vec2>;
+  const draggedDocumentId = draggingNodeId && nodeMap.get(draggingNodeId)?.type === "document"
+    ? draggingNodeId
+    : null;
   const fixedIds = new Set(
     nodes
       .filter((node) => node.id === centralNodeId || node.type === "central" || node.positionLocked || node.id === draggingNodeId)
@@ -1704,6 +1707,9 @@ function resolveNodeScreenCollisions(
       for (let secondIndex = firstIndex + 1; secondIndex < ids.length; secondIndex += 1) {
         const firstId = ids[firstIndex];
         const secondId = ids[secondIndex];
+        if (draggedDocumentId && (firstId === draggedDocumentId || secondId === draggedDocumentId)) {
+          continue;
+        }
         const first = result[firstId];
         const second = result[secondId];
         const firstNode = nodeMap.get(firstId);
