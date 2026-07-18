@@ -159,13 +159,7 @@ export function getProcessRuntimeState(process: BusinessProcess): ProcessRuntime
 }
 
 export function getProcessRuntimeColor(process: BusinessProcess) {
-  const state = getProcessRuntimeState(process);
-  if (state === "done") return "#2ed8a3";
-  if (state === "rejected" || state === "overdue") return "#ff4c5f";
-  if (state === "urgent") return "#ff9a3d";
-  if (state === "due_soon") return "#ffe26d";
-  if (state === "active") return "#35d9ff";
-  return "#8b93a6";
+  return getProcessStatusColor(process.status);
 }
 
 export function getProcessDeadlineLabel(process: BusinessProcess) {

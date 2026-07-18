@@ -1,5 +1,5 @@
 import { Focus, Maximize2, Redo2, RotateCcw, Sparkles, Undo2, Waypoints } from "lucide-react";
-import { processStatusColors, processStatusLabels } from "../data/mockProject";
+import { processStatusColors } from "../data/mockProject";
 import type { ProcessStatus } from "../types";
 
 type BottomControlsProps = {
@@ -13,7 +13,14 @@ type BottomControlsProps = {
   onFullscreen: () => void;
 };
 
-const statusOrder: ProcessStatus[] = ["sent", "rejected", "accepted", "in_work", "draft"];
+const statusOrder: ProcessStatus[] = ["draft", "sent", "in_work", "rejected", "accepted"];
+const statusLegendLabels: Record<ProcessStatus, string> = {
+  draft: "Черновик",
+  sent: "Отправлено",
+  in_work: "В работе",
+  rejected: "Не принято",
+  accepted: "Принято",
+};
 
 export function BottomControls({
   onUndo,
@@ -52,9 +59,17 @@ export function BottomControls({
         {statusOrder.map((status) => (
           <span key={status}>
             <i style={{ borderColor: processStatusColors[status], background: processStatusColors[status] }} />
-            {processStatusLabels[status]}
+            {statusLegendLabels[status]}
           </span>
         ))}
+        <span>
+          <i className="legend-status-mix">
+            <b style={{ background: processStatusColors.sent }} />
+            <b style={{ background: processStatusColors.in_work }} />
+            <b style={{ background: processStatusColors.rejected }} />
+          </i>
+          Несколько статусов
+        </span>
       </div>
 
       <button className="fullscreen-button glass-panel" title="Полноэкранный вид" onClick={onFullscreen}>

@@ -32,7 +32,7 @@ export const processStatusLabels: Record<ProcessStatus, string> = {
 export const processStatusColors: Record<ProcessStatus, string> = {
   draft: "#8b93a6",
   sent: "#35d9ff",
-  in_work: "#8fa0be",
+  in_work: "#f6c85f",
   rejected: "#ff657a",
   accepted: "#2ed8a3",
 };

@@ -12,6 +12,7 @@ import { ProjectManagerModal } from "./components/ProjectManagerModal";
 import { ProcessBuilderModal } from "./components/ProcessBuilderModal";
 import { ProcessDetailModal } from "./components/ProcessDetailModal";
 import { PersonalIntegrationsModal } from "./components/PersonalIntegrationsModal";
+import { ConfirmDialog } from "./components/ConfirmDialog";
 import { MvpGuide } from "./components/MvpGuide";
 import { demoProjects, initialNotifications } from "./data/mockProject";
 import {
@@ -71,6 +72,14 @@ type HistorySnapshot = {
 const HISTORY_LIMIT = 60;
 const STORAGE_KEY = "molecule-mvp-state-v2";
 type LevelTransition = "down" | "up";
+
+type DeletionRequest = {
+  kind: "project" | "node" | "document" | "process";
+  id: string;
+  title: string;
+  description: string;
+  confirmLabel: string;
+};
 
 type PersistedAppState = {
   projects: DemoProject[];
@@ -173,6 +182,7 @@ export default function App() {
   const [personalSettingsOpen, setPersonalSettingsOpen] = useState(false);
   const [processBuilderId, setProcessBuilderId] = useState<string | null>(null);
   const [processDetailId, setProcessDetailId] = useState<string | null>(null);
+  const [deletionRequest, setDeletionRequest] = useState<DeletionRequest | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [fontScale, setFontScale] = useState(persistedState?.fontScale ?? 0.94);
   const [interfaceScale, setInterfaceScale] = useState(persistedState?.interfaceScale ?? 1);
@@ -387,6 +397,20 @@ export default function App() {
   }
 
   function deleteProject(projectId: string) {
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) {
+      return;
+    }
+    setDeletionRequest({
+      kind: "project",
+      id: project.id,
+      title: `Удалить проект «${project.title}»?`,
+      description: "Будут удалены все уровни, ноды, процессы, документы и история проекта. После подтверждения восстановить проект через интерфейс нельзя.",
+      confirmLabel: "Удалить проект",
+    });
+  }
+
+  function performDeleteProject(projectId: string) {
     if (projects.length <= 1) {
       const project = projects.find((item) => item.id === projectId);
       if (!project) {
@@ -505,17 +529,24 @@ export default function App() {
     sceneRef.current?.focusNode(process.from);
   }
 
+  function selectProcessOnMap(processId: string) {
+    const process = getProcessById(activeProject, processId);
+    if (!process) {
+      return;
+    }
+    setLevelTransition(null);
+    setSelectedProcessId(processId);
+    setSelectedNodeId("");
+    setActiveMenu("map");
+    setProcessBuilderId(null);
+  }
+
   function openProcessDetails(processId: string) {
-    selectProcess(processId);
+    selectProcessOnMap(processId);
     setProcessDetailId(processId);
   }
 
   function openNodeLevel(node: ProjectNode) {
-    if (activeLevel.parentLevelId) {
-      showToast("В MVP доступен один уровень детализации внутри ноды.");
-      return;
-    }
-
     if (!canOpenNodeLevel(node, activeLevel.id)) {
       return;
     }
@@ -614,10 +645,21 @@ export default function App() {
       return;
     }
 
-    if (!window.confirm(`Удалить ноду «${node.shortCode ?? node.title}» и связанные процессы? Документы будут сохранены во входящих.`)) {
+    const title = node.shortCode ?? node.title;
+    setDeletionRequest({
+      kind: "node",
+      id: node.id,
+      title: `Удалить ноду «${title}»?`,
+      description: "Связанные процессы и вложенные уровни будут удалены. Документы из ноды и процессов сохранятся в бесхозных файлах.",
+      confirmLabel: "Удалить ноду",
+    });
+  }
+
+  function performDeleteNode(nodeId: string) {
+    const node = getNodeById(activeProject, nodeId);
+    if (!node || node.type === "central" || node.type === "document") {
       return;
     }
-
     updateActiveProject((project) => removeProjectNodeTree(project, node.id));
     setSelectedNodeId(activeLevel.centralNodeId);
     setSelectedProcessId(null);
@@ -628,16 +670,25 @@ export default function App() {
   }
 
   function deleteDocument(documentId: string, title: string) {
-    if (!window.confirm(`Удалить файл «${title}» безвозвратно? Он исчезнет с карты, из процессов и бесхозных файлов.`)) {
-      return;
-    }
+    setDeletionRequest({
+      kind: "document",
+      id: documentId,
+      title: `Удалить файл «${title}»?`,
+      description: "Файл будет безвозвратно удалён с карты, из бизнес-процессов, нод и бесхозных файлов.",
+      confirmLabel: "Удалить файл",
+    });
+  }
 
+  function performDeleteDocument(documentId: string) {
+    const document = activeProject.inboxDocuments.find((item) => item.id === documentId)
+      ?? activeProject.nodes.find((node) => node.document?.id === documentId)?.document
+      ?? activeProject.processes.flatMap((process) => process.documents).find((item) => item.id === documentId);
     updateActiveProject((project) => removeDocumentEverywhere(project, documentId));
     setSelectedNodeId(activeLevel.centralNodeId);
     setSelectedProcessId(null);
     setProcessBuilderId(null);
     setProcessDetailId(null);
-    showToast(`Файл «${title}» удален.`);
+    showToast(`Файл «${document?.title ?? "Документ"}» удален.`);
   }
 
   function deleteInboxDocument(documentId: string) {
@@ -1143,15 +1194,57 @@ export default function App() {
   }
 
   function deleteProcess(processId: string) {
-    updateActiveProject((project) => ({
-      ...project,
-      processes: project.processes.filter((process) => process.id !== processId),
-      updatedAt: "только что",
-    }));
+    const process = getProcessById(activeProject, processId);
+    if (!process) {
+      return;
+    }
+    setDeletionRequest({
+      kind: "process",
+      id: process.id,
+      title: `Удалить процесс «${process.title}»?`,
+      description: "Маршрут и история задания будут удалены. Прикреплённые документы останутся в проекте.",
+      confirmLabel: "Удалить процесс",
+    });
+  }
+
+  function performDeleteProcess(processId: string) {
+    updateActiveProject((project) => {
+      const process = project.processes.find((item) => item.id === processId);
+      const inboxById = new Map(project.inboxDocuments.map((document) => [document.id, document]));
+      const nodeDocumentIds = new Set(project.nodes.flatMap((node) => node.document ? [node.document.id] : []));
+      process?.documents.forEach((document) => {
+        if (!nodeDocumentIds.has(document.id)) {
+          inboxById.set(document.id, { ...document, isNew: true, updatedAt: "только что" });
+        }
+      });
+      return {
+        ...project,
+        processes: project.processes.filter((item) => item.id !== processId),
+        inboxDocuments: Array.from(inboxById.values()),
+        updatedAt: "только что",
+      };
+    });
     setSelectedProcessId(null);
     setProcessBuilderId((current) => (current === processId ? null : current));
     setProcessDetailId((current) => (current === processId ? null : current));
-    showToast("Контейнер связи удален.");
+    showToast("Контейнер связи удален. Его документы сохранены в проекте.");
+  }
+
+  function confirmDeletion() {
+    const request = deletionRequest;
+    if (!request) {
+      return;
+    }
+    setDeletionRequest(null);
+    if (request.kind === "project") {
+      performDeleteProject(request.id);
+    } else if (request.kind === "node") {
+      performDeleteNode(request.id);
+    } else if (request.kind === "document") {
+      performDeleteDocument(request.id);
+    } else {
+      performDeleteProcess(request.id);
+    }
   }
 
   function saveProcessBuilder(processId: string, edit: ProcessEdit, mode: "draft" | "launch") {
@@ -1703,7 +1796,7 @@ export default function App() {
         level={activeLevel}
         nodes={levelNodes}
         processes={levelProcesses}
-        selectedNodeId={selectedNode?.id ?? activeLevel.centralNodeId}
+        selectedNodeId={selectedProcessId ? "" : selectedNode?.id ?? activeLevel.centralNodeId}
         selectedProcessId={selectedProcessId}
         linkingFromId={linkingFromId}
         matchedNodeIds={matches.nodeIds}
@@ -1714,7 +1807,7 @@ export default function App() {
         onSelectNode={selectNode}
         onOpenNodeLevel={openNodeLevel}
         onBackLevel={backLevel}
-        onSelectProcess={selectProcess}
+        onSelectProcess={selectProcessOnMap}
         onOpenProcessDetails={openProcessDetails}
         onStartLink={startLink}
         onCompleteLink={completeLink}
@@ -1855,6 +1948,15 @@ export default function App() {
             setProcessDetailId(null);
             setProcessBuilderId(processId);
           }}
+        />
+      ) : null}
+      {deletionRequest ? (
+        <ConfirmDialog
+          title={deletionRequest.title}
+          description={deletionRequest.description}
+          confirmLabel={deletionRequest.confirmLabel}
+          onConfirm={confirmDeletion}
+          onCancel={() => setDeletionRequest(null)}
         />
       ) : null}
       {isDropActive ? (

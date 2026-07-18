@@ -17,6 +17,7 @@ import {
   ChevronUp,
   ExternalLink,
   FolderInput,
+  Layers3,
   LockKeyhole,
   Pin,
   PinOff,
@@ -361,6 +362,8 @@ export function ProjectScene({
       return;
     }
 
+    event.preventDefault();
+    setOpenProcessGroupKey(null);
     panRef.current = {
       pointerId: event.pointerId,
       x: event.clientX,
@@ -377,6 +380,7 @@ export function ProjectScene({
       return;
     }
 
+    event.preventDefault();
     setView((current) => ({
       ...current,
       panX: pan.panX + event.clientX - pan.x,
@@ -896,14 +900,6 @@ export function ProjectScene({
           onContextMenu={(event) => event.preventDefault()}
         >
           <strong>{contextNode.shortCode ?? contextNode.title}</strong>
-          <button
-            onClick={() => {
-              onSelectNode(contextNode.id);
-              setContextMenu(null);
-            }}
-          >
-            Выбрать
-          </button>
           {contextNode.type !== "central" ? (
             <button
               onClick={() => {
@@ -980,7 +976,8 @@ export function ProjectScene({
                     setContextMenu(null);
                   }}
                 >
-                  Открыть уровень ноды
+                  <Layers3 size={15} />
+                  {contextNode.childrenLevelId ? "Открыть уровень ноды" : "Добавить уровень"}
                 </button>
               ) : null}
               <button
@@ -1016,10 +1013,8 @@ export function ProjectScene({
             <button
               className="danger"
               onClick={() => {
-                if (window.confirm(`Удалить проект «${project.title}» целиком?`)) {
-                  onDeleteProject();
-                  setContextMenu(null);
-                }
+                onDeleteProject();
+                setContextMenu(null);
               }}
             >
               <Trash2 size={15} />
@@ -1050,10 +1045,8 @@ export function ProjectScene({
           <button
             className="danger"
             onClick={() => {
-              if (window.confirm(`Удалить процесс «${contextProcess.title}»?`)) {
-                onDeleteProcess(contextProcess.id);
-                setProcessContextMenu(null);
-              }
+              onDeleteProcess(contextProcess.id);
+              setProcessContextMenu(null);
             }}
           >
             <Trash2 size={15} />
@@ -1143,6 +1136,9 @@ function ProcessPath({
   const radiusTo = getNodeRadius(toNode, centralNodeId) * visualScale;
   const geometry = buildProcessGeometry(from, to, radiusFrom, radiusTo, 0);
   const color = getProcessGroupColor(processes, selectedProcessId);
+  const statuses = Array.from(new Set(processes.map((process) => process.status)));
+  const statusColors = statuses.map((status) => getProcessStatusColor(status));
+  const hasMixedStatuses = statuses.length > 1;
   const hasForward = processes.some((item) => item.direction === "forward" || item.direction === "both");
   const hasBackward = processes.some((item) => item.direction === "backward" || item.direction === "both");
   const activeCount = processes.filter((item) => item.status !== "accepted").length;
@@ -1157,12 +1153,28 @@ function ProcessPath({
     <g className={clsx("process-group", selected && "selected", matched && "matched", dimmed && "dimmed")}>
       <path className="process-glow" d={geometry.path} style={{ stroke: color }} />
       <path
-        className="process-line"
+        className={clsx("process-line", hasMixedStatuses && "mixed")}
         d={geometry.path}
         style={{ stroke: color }}
         markerEnd={hasForward ? "url(#arrow-end)" : undefined}
         markerStart={hasBackward ? "url(#arrow-start)" : undefined}
       />
+      {hasMixedStatuses ? statusColors.map((statusColor, index) => {
+        const segmentLength = 9;
+        const cycleLength = segmentLength * statusColors.length;
+        return (
+          <path
+            key={statusColor}
+            className="process-status-line"
+            d={geometry.path}
+            style={{
+              stroke: statusColor,
+              strokeDasharray: `${segmentLength} ${cycleLength - segmentLength}`,
+              strokeDashoffset: -segmentLength * index,
+            }}
+          />
+        );
+      }) : null}
       <path
         className="process-hit"
         d={geometry.path}
@@ -1210,7 +1222,9 @@ function ProcessPath({
             }}
             title="Двойной клик: открыть бизнес-процесс"
           >
-            <span style={{ background: color }} />
+            <span className="process-status-dots" title={statuses.map((status) => getProcessStatusText(status)).join(", ")}>
+              {statusColors.map((statusColor) => <i key={statusColor} style={{ background: statusColor }} />)}
+            </span>
             <b>
               {overview
                 ? `${taskCount} ${pluralizeTasks(taskCount)}`
@@ -1574,7 +1588,7 @@ function findDocumentDropTargetAtScreen(
 }
 
 function canDrillIntoNode(node: ProjectNode, currentLevel: MapLevel) {
-  return !currentLevel.parentLevelId && node.type !== "document" && node.type !== "central" && node.childrenLevelId !== currentLevel.id;
+  return node.type !== "document" && node.type !== "central" && node.childrenLevelId !== currentLevel.id;
 }
 
 function getNodeAbsorbRadius(node: ProjectNode, centralNodeId: string) {

@@ -848,6 +848,8 @@ button {
   inset: 0;
   z-index: 1;
   cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .scene-panel.is-linking {
@@ -1101,6 +1103,19 @@ button {
   animation: process-flow 6s linear infinite;
 }
 
+.process-line.mixed {
+  stroke-dasharray: none;
+  animation: none;
+  opacity: 0.34;
+}
+
+.process-status-line {
+  fill: none;
+  stroke-width: 2.15;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
 .process-group.inactive .process-line {
   stroke-dasharray: none;
   animation: none;
@@ -1108,7 +1123,17 @@ button {
 
 .process-group.selected .process-line,
 .process-group.matched .process-line {
-  stroke-width: 2.55;
+  stroke-width: 3.1;
+}
+
+.process-group.selected .process-status-line,
+.process-group.matched .process-status-line {
+  stroke-width: 3.25;
+}
+
+.process-group.selected .process-glow {
+  stroke-width: 8;
+  opacity: 0.24;
 }
 
 .process-hit {
@@ -1227,7 +1252,7 @@ button {
 
 .process-label {
   display: grid;
-  grid-template-columns: 9px minmax(0, 1fr) auto;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   width: 232px;
@@ -1251,12 +1276,25 @@ button {
   background: rgba(7, 13, 27, 0.58);
 }
 
-.process-label span {
+.process-status-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  align-content: center;
+  width: 12px;
+  min-height: 9px;
+}
+
+.process-status-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.process-status-dots i:only-child {
   width: 9px;
   height: 9px;
-  border-radius: 50%;
-  box-shadow: 0 0 12px currentColor;
-  flex: 0 0 auto;
 }
 
 .process-label b {
@@ -1282,7 +1320,7 @@ button {
 }
 
 .process-group-label.overview {
-  grid-template-columns: 8px minmax(0, 1fr);
+  grid-template-columns: 12px minmax(0, 1fr);
   width: 126px;
   min-height: 28px;
   padding: 4px 8px;
@@ -1293,7 +1331,7 @@ button {
 }
 
 .process-group-label.detailed {
-  grid-template-columns: 9px minmax(0, 1fr) auto;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
   grid-template-rows: auto auto;
   width: 310px;
   min-height: 56px;
@@ -4211,6 +4249,20 @@ button {
   box-shadow: 0 0 14px currentColor;
 }
 
+.status-legend i.legend-status-mix {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid rgba(230, 240, 255, 0.28);
+  background: transparent;
+  box-shadow: none;
+}
+
+.legend-status-mix b {
+  height: 100%;
+}
+
 .fullscreen-button {
   width: var(--ui-toolbar-height, 48px);
   height: var(--ui-toolbar-height, 48px);
@@ -4227,6 +4279,86 @@ button {
   background: rgba(1, 5, 14, 0.72);
   backdrop-filter: blur(8px);
   overflow: auto;
+}
+
+.confirm-dialog-backdrop {
+  z-index: 230;
+}
+
+.confirm-dialog {
+  width: min(500px, 100%);
+  overflow: hidden;
+  border-color: rgba(255, 101, 122, 0.24);
+  border-radius: 8px;
+  animation: panel-in 180ms ease both;
+}
+
+.confirm-dialog header {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 34px;
+  gap: 12px;
+  align-items: start;
+  padding: 16px;
+}
+
+.confirm-dialog header > span {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(255, 101, 122, 0.24);
+  border-radius: 8px;
+  background: rgba(255, 101, 122, 0.1);
+  color: #ff8c9c;
+}
+
+.confirm-dialog h2,
+.confirm-dialog p {
+  margin: 0;
+}
+
+.confirm-dialog h2 {
+  color: #fff;
+  font-size: var(--fs-18);
+}
+
+.confirm-dialog p {
+  margin-top: 7px;
+  color: rgba(220, 232, 252, 0.68);
+  font-size: var(--fs-13);
+  line-height: 1.5;
+}
+
+.confirm-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid rgba(171, 205, 255, 0.1);
+  background: rgba(4, 10, 22, 0.36);
+}
+
+.confirm-dialog footer button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  border: 1px solid rgba(171, 205, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(145, 166, 207, 0.08);
+  color: #eff7ff;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--fs-12);
+  font-weight: 750;
+  padding: 0 13px;
+}
+
+.confirm-dialog footer .danger-action {
+  border-color: rgba(255, 101, 122, 0.32);
+  background: rgba(255, 101, 122, 0.12);
+  color: #ffd8de;
 }
 
 .project-manager-backdrop {
