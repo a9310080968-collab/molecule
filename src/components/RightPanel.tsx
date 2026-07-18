@@ -138,9 +138,8 @@ function NodeInfo({
   const tone = getNodeVisualTone(node);
   const ownedDocumentNodes = getOwnedDocumentNodes(project, node.id);
   const documents = ownedDocumentNodes.map((documentNode) => getDocumentFromNode(documentNode));
-  const nodeCompletion = getNodeCompletion(node);
-  const progress = node.id === level.centralNodeId ? getProjectProgress(project, level) : nodeCompletion;
   const isLevelCenter = node.id === level.centralNodeId;
+  const levelProgress = isLevelCenter ? getProjectProgress(project, level) : null;
   const responsibleOptions = project.participants;
 
   return (
@@ -148,23 +147,10 @@ function NodeInfo({
       <PanelHeader eyebrow={node.shortCode ?? "Нода"} title={node.title} status={getStatusText(node.status)} statusColor={tone.glow} />
 
       <section className="node-editor">
-        <div className="inline-form-grid">
-          <label>
-            <span>Код на сфере</span>
-            <input value={node.shortCode ?? ""} onChange={(event) => onNodeUpdate(node.id, { shortCode: event.currentTarget.value })} placeholder="АР / Б1 / ИРД" />
-          </label>
-          <label>
-            <span>Ответственный</span>
-            <select value={node.responsible ?? ""} onChange={(event) => onNodeUpdate(node.id, { responsible: event.currentTarget.value })}>
-              <option value="">Не назначен</option>
-              {responsibleOptions.map((participant) => (
-                <option key={participant.id} value={participant.name}>
-                  {participant.name} · {participant.position}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+        <label>
+          <span>Код на сфере</span>
+          <input value={node.shortCode ?? ""} onChange={(event) => onNodeUpdate(node.id, { shortCode: event.currentTarget.value })} placeholder="АР / Б1 / ИРД" />
+        </label>
         <label>
           <span>Название ноды</span>
           <input value={node.title} onChange={(event) => onNodeUpdate(node.id, { title: event.currentTarget.value })} />
@@ -187,11 +173,13 @@ function NodeInfo({
       ) : null}
 
       <div className="info-grid">
-        <Metric icon={<CheckCircle2 size={16} />} label="Готовность ноды" value={`${progress}%`} />
-        <Metric icon={<FileText size={16} />} label="Файлов внутри" value={String(documents.length)} />
-        <Metric icon={<UserRound size={16} />} label="Ответственный" value={node.responsible ?? "Не назначен"} wide />
-        <Metric icon={<Clock3 size={16} />} label="Обновлено" value={node.updatedAt ?? "сегодня"} />
-        {isLevelCenter ? <Metric icon={<CheckCircle2 size={16} />} label="Готовность уровня" value={`${progress}%`} /> : null}
+        <ResponsibleMetric
+          participants={responsibleOptions}
+          value={node.responsible}
+          onChange={(responsible) => onNodeUpdate(node.id, { responsible })}
+        />
+        <Metric icon={<Clock3 size={16} />} label="Обновлено" value={node.updatedAt ?? "сегодня"} wide={!isLevelCenter} />
+        {isLevelCenter && levelProgress !== null ? <Metric icon={<CheckCircle2 size={16} />} label="Готовность уровня" value={`${levelProgress}%`} /> : null}
       </div>
 
       <DocumentList
@@ -826,5 +814,30 @@ function Metric({ icon, label, value, wide }: { icon: React.ReactNode; label: st
       <span>{label}</span>
       <b>{value}</b>
     </div>
+  );
+}
+
+function ResponsibleMetric({
+  participants,
+  value,
+  onChange,
+}: {
+  participants: DemoProject["participants"];
+  value?: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="metric metric-select wide">
+      <UserRound size={16} />
+      <span>Ответственный</span>
+      <select aria-label="Ответственный" value={value ?? ""} onChange={(event) => onChange(event.currentTarget.value)}>
+        <option value="">Не назначен</option>
+        {participants.map((participant) => (
+          <option key={participant.id} value={participant.name}>
+            {participant.name} · {participant.position}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
