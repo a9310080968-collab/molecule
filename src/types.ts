@@ -79,6 +79,7 @@ export type ProjectNode = {
   status?: NodeStatus;
   responsible?: string;
   updatedAt?: string;
+  updatedBy?: string;
   tags?: string[];
   deadlineAt?: string;
   checklist?: NodeChecklistItem[];

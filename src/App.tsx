@@ -588,6 +588,7 @@ export default function App() {
           ...edit,
           status: checklistStatus ?? edit.status ?? node.status,
           updatedAt: "только что",
+          updatedBy: currentUser?.name ?? "Система",
         };
       });
       const renamedNode = nodes.find((node) => node.id === nodeId);
@@ -1580,7 +1581,11 @@ export default function App() {
       participants: project.participants.map((item) =>
         item.id === participantId ? { ...item, name: normalizedName, avatarUrl } : item,
       ),
-      nodes: project.nodes.map((node) => ({ ...node, responsible: replaceName(node.responsible) })),
+      nodes: project.nodes.map((node) => ({
+        ...node,
+        responsible: replaceName(node.responsible),
+        updatedBy: replaceName(node.updatedBy),
+      })),
       processes: project.processes.map((process) => ({
         ...process,
         sender: replaceName(process.sender) ?? process.sender,

@@ -141,6 +141,7 @@ function NodeInfo({
   const isLevelCenter = node.id === level.centralNodeId;
   const levelProgress = isLevelCenter ? getProjectProgress(project, level) : null;
   const responsibleOptions = project.participants;
+  const updatedBy = node.updatedBy ?? (node.responsible && node.responsible !== "Не назначен" ? node.responsible : "Система");
 
   return (
     <>
@@ -178,7 +179,7 @@ function NodeInfo({
           value={node.responsible}
           onChange={(responsible) => onNodeUpdate(node.id, { responsible })}
         />
-        <Metric icon={<Clock3 size={16} />} label="Обновлено" value={node.updatedAt ?? "сегодня"} wide={!isLevelCenter} />
+        <Metric icon={<Clock3 size={16} />} label="Обновлено" value={`${node.updatedAt ?? "сегодня"} · ${updatedBy}`} wide={!isLevelCenter} />
         {isLevelCenter && levelProgress !== null ? <Metric icon={<CheckCircle2 size={16} />} label="Готовность уровня" value={`${levelProgress}%`} /> : null}
       </div>
 
