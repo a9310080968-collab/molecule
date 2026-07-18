@@ -4140,7 +4140,7 @@ button {
   bottom: 20px;
   left: calc(var(--left-width) + 34px);
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 14px;
   align-items: end;
   pointer-events: none;
@@ -4148,7 +4148,6 @@ button {
 
 .view-tools,
 .font-control,
-.status-legend,
 .fullscreen-button {
   pointer-events: auto;
 }
@@ -4223,50 +4222,11 @@ button {
   text-align: right;
 }
 
-.status-legend {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px 18px;
-  min-height: var(--ui-toolbar-height, 48px);
-  padding: 10px 16px;
-  border-radius: 14px;
-}
-
-.status-legend span {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: rgba(228, 238, 255, 0.78);
-  font-size: var(--fs-12);
-  white-space: nowrap;
-}
-
-.status-legend i {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  box-shadow: 0 0 14px currentColor;
-}
-
-.status-legend i.legend-status-mix {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1px;
-  overflow: hidden;
-  border: 1px solid rgba(230, 240, 255, 0.28);
-  background: transparent;
-  box-shadow: none;
-}
-
-.legend-status-mix b {
-  height: 100%;
-}
-
 .fullscreen-button {
   width: var(--ui-toolbar-height, 48px);
   height: var(--ui-toolbar-height, 48px);
   border-radius: 14px;
+  justify-self: end;
 }
 
 .modal-backdrop {
@@ -7243,10 +7203,6 @@ button {
     bottom: calc(38vh + 22px);
     left: 10px;
     grid-template-columns: auto 1fr;
-  }
-
-  .status-legend {
-    display: none;
   }
 
   .fullscreen-button {

@@ -1,6 +1,4 @@
 import { Focus, Maximize2, Redo2, RotateCcw, Sparkles, Undo2, Waypoints } from "lucide-react";
-import { processStatusColors } from "../data/mockProject";
-import type { ProcessStatus } from "../types";
 
 type BottomControlsProps = {
   onUndo: () => void;
@@ -11,15 +9,6 @@ type BottomControlsProps = {
   onReset: () => void;
   onFocus: () => void;
   onFullscreen: () => void;
-};
-
-const statusOrder: ProcessStatus[] = ["draft", "sent", "in_work", "rejected", "accepted"];
-const statusLegendLabels: Record<ProcessStatus, string> = {
-  draft: "Черновик",
-  sent: "Отправлено",
-  in_work: "В работе",
-  rejected: "Не принято",
-  accepted: "Принято",
 };
 
 export function BottomControls({
@@ -53,23 +42,6 @@ export function BottomControls({
         <button title="Сбросить вид" onClick={onReset}>
           <RotateCcw size={20} />
         </button>
-      </div>
-
-      <div className="status-legend glass-panel" title="Цвет линии показывает статус бизнес-процесса">
-        {statusOrder.map((status) => (
-          <span key={status}>
-            <i style={{ borderColor: processStatusColors[status], background: processStatusColors[status] }} />
-            {statusLegendLabels[status]}
-          </span>
-        ))}
-        <span>
-          <i className="legend-status-mix">
-            <b style={{ background: processStatusColors.sent }} />
-            <b style={{ background: processStatusColors.in_work }} />
-            <b style={{ background: processStatusColors.rejected }} />
-          </i>
-          Несколько статусов
-        </span>
       </div>
 
       <button className="fullscreen-button glass-panel" title="Полноэкранный вид" onClick={onFullscreen}>
