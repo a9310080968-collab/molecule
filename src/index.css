@@ -6115,6 +6115,227 @@ button {
   opacity: 0.42;
 }
 
+.demo-login-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  min-width: 320px;
+  padding: 24px;
+  overflow: auto;
+  background: #050816;
+}
+
+.demo-login-panel {
+  position: relative;
+  z-index: 1;
+  width: min(760px, 100%);
+  padding: 26px;
+  border-radius: 8px;
+}
+
+.demo-login-panel > header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(171, 205, 255, 0.11);
+}
+
+.demo-login-panel h1 {
+  margin: 0;
+  color: #fff;
+  font-size: var(--fs-24);
+  font-weight: 650;
+}
+
+.demo-login-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.demo-login-brand > span {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(53, 217, 255, 0.24);
+  border-radius: 8px;
+  background: rgba(53, 217, 255, 0.09);
+  color: #35d9ff;
+}
+
+.demo-login-brand div,
+.demo-login-account div {
+  display: grid;
+  gap: 2px;
+}
+
+.demo-login-brand b,
+.demo-login-account strong {
+  color: #fff;
+  font-size: var(--fs-14);
+}
+
+.demo-login-brand small,
+.demo-login-account small {
+  color: rgba(211, 224, 248, 0.62);
+  font-size: var(--fs-11);
+}
+
+.demo-role-selector {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.demo-role-selector button {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 3px 9px;
+  min-height: 68px;
+  padding: 11px;
+  border: 1px solid rgba(171, 205, 255, 0.11);
+  border-radius: 8px;
+  background: rgba(145, 166, 207, 0.06);
+  color: rgba(226, 237, 255, 0.72);
+  text-align: left;
+}
+
+.demo-role-selector button:hover {
+  border-color: rgba(171, 205, 255, 0.23);
+  background: rgba(145, 166, 207, 0.1);
+}
+
+.demo-role-selector button.active {
+  border-color: rgba(53, 217, 255, 0.38);
+  background: rgba(53, 217, 255, 0.09);
+  color: #fff;
+  box-shadow: inset 3px 0 0 #35d9ff;
+}
+
+.demo-role-selector button svg {
+  grid-row: span 2;
+  color: #35d9ff;
+}
+
+.demo-role-selector button span {
+  font-size: var(--fs-13);
+  font-weight: 700;
+}
+
+.demo-role-selector button small {
+  overflow: hidden;
+  color: rgba(211, 224, 248, 0.58);
+  font-size: var(--fs-11);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.demo-login-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.demo-login-account,
+.demo-login-submit {
+  grid-column: span 2;
+}
+
+.demo-login-account {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 56px;
+  padding: 9px 11px;
+  border: 1px solid rgba(171, 205, 255, 0.09);
+  border-radius: 8px;
+  background: rgba(6, 14, 30, 0.48);
+}
+
+.demo-login-account > span {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: rgba(255, 226, 109, 0.13);
+  color: #ffe26d;
+  font-size: var(--fs-12);
+  font-weight: 750;
+}
+
+.demo-login-account img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.demo-login-form label {
+  display: grid;
+  gap: 7px;
+}
+
+.demo-login-form label > span {
+  color: rgba(211, 224, 248, 0.66);
+  font-size: var(--fs-12);
+}
+
+.demo-login-form input {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  border: 1px solid rgba(171, 205, 255, 0.14);
+  border-radius: 8px;
+  outline: 0;
+  background: rgba(5, 12, 26, 0.68);
+  color: #fff;
+  padding: 0 11px;
+}
+
+.demo-login-form input:focus {
+  border-color: rgba(53, 217, 255, 0.46);
+}
+
+.demo-password-field {
+  position: relative;
+}
+
+.demo-password-field svg {
+  position: absolute;
+  top: 13px;
+  left: 11px;
+  color: rgba(211, 224, 248, 0.54);
+}
+
+.demo-password-field input {
+  padding-left: 36px;
+}
+
+.demo-login-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  border-radius: 8px;
+  background: #dce9ff;
+  color: #07101f;
+  font-weight: 750;
+}
+
+.demo-login-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
 .personal-settings-backdrop {
   z-index: 98;
 }
@@ -6193,6 +6414,58 @@ button {
   padding: 16px;
 }
 
+.demo-session-settings {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(300px, auto) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid rgba(171, 205, 255, 0.13);
+  border-radius: 8px;
+  background: rgba(145, 166, 207, 0.055);
+}
+
+.personal-role-switch {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(88px, 1fr));
+  gap: 5px;
+  padding: 4px;
+  border: 1px solid rgba(171, 205, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(4, 10, 22, 0.62);
+}
+
+.personal-role-switch button,
+.personal-logout,
+.personal-security-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(226, 237, 255, 0.68);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--fs-12);
+  font-weight: 760;
+  padding: 0 10px;
+}
+
+.personal-role-switch button.active {
+  border-color: rgba(115, 226, 255, 0.25);
+  background: rgba(31, 211, 255, 0.11);
+  color: #e6fcff;
+}
+
+.personal-logout {
+  border-color: rgba(255, 101, 122, 0.2);
+  background: rgba(255, 101, 122, 0.07);
+  color: #ffd3da;
+}
+
 .personal-profile-settings {
   display: grid;
   grid-template-columns: minmax(250px, auto) minmax(220px, 1fr) auto;
@@ -6202,6 +6475,12 @@ button {
   border: 1px solid rgba(115, 226, 255, 0.16);
   border-radius: 8px;
   background: rgba(31, 211, 255, 0.045);
+}
+
+.personal-profile-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
 }
 
 .personal-profile-avatar {
@@ -6253,18 +6532,22 @@ button {
   color: #ffcbd3;
 }
 
-.personal-profile-settings > label {
+.personal-profile-fields label,
+.personal-password-fields label {
   display: grid;
   gap: 6px;
 }
 
-.personal-profile-settings > label span {
+.personal-profile-fields label span,
+.personal-password-fields label span {
   color: rgba(220, 232, 252, 0.64);
   font-size: var(--fs-11);
   font-weight: 720;
 }
 
-.personal-profile-settings > label input {
+.personal-profile-fields label input,
+.personal-password-fields label input {
+  width: 100%;
   min-width: 0;
   height: 38px;
   border: 1px solid rgba(171, 205, 255, 0.14);
@@ -6279,6 +6562,50 @@ button {
 .personal-profile-save:disabled {
   cursor: default;
   opacity: 0.42;
+}
+
+.personal-security-settings {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.65fr) minmax(380px, 1.35fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid rgba(171, 205, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(7, 14, 28, 0.48);
+}
+
+.personal-password-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.personal-security-actions {
+  display: grid;
+  gap: 7px;
+  justify-items: stretch;
+}
+
+.personal-security-actions span {
+  max-width: 230px;
+  color: rgba(255, 203, 211, 0.76);
+  font-size: var(--fs-11);
+  line-height: 1.3;
+}
+
+.personal-security-actions button {
+  border-color: rgba(115, 226, 255, 0.2);
+  background: rgba(31, 211, 255, 0.09);
+  color: #dbfbff;
+}
+
+.right-panel input:disabled,
+.right-panel textarea:disabled,
+.right-panel select:disabled,
+.right-panel button:disabled {
+  cursor: default;
+  opacity: 0.68;
 }
 
 .integration-section {
@@ -6923,6 +7250,47 @@ button {
 }
 
 @media (max-width: 720px) {
+  .demo-login-shell {
+    padding: 12px;
+  }
+
+  .demo-login-panel {
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+    padding: 16px;
+  }
+
+  .demo-login-panel > header,
+  .demo-session-settings {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .demo-login-panel > header {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .demo-role-selector,
+  .demo-login-form,
+  .personal-profile-fields,
+  .personal-password-fields,
+  .personal-security-settings {
+    grid-template-columns: 1fr;
+  }
+
+  .demo-login-account,
+  .demo-login-submit {
+    grid-column: auto;
+  }
+
+  .personal-role-switch {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .personal-security-actions span {
+    max-width: none;
+  }
   .app-shell {
     min-height: 100vh;
   }
@@ -7139,7 +7507,7 @@ button {
 
   .topbar {
     top: 12px;
-    grid-template-columns: 42px 1fr;
+    grid-template-columns: 42px minmax(0, 1fr) auto;
     gap: 10px;
   }
 
@@ -7150,6 +7518,17 @@ button {
   }
 
   .user-chip {
+    display: grid;
+    grid-template-columns: 34px 34px;
+    gap: 4px;
+    min-width: 0;
+    min-height: 48px;
+    padding: 6px;
+    border-radius: 8px;
+  }
+
+  .user-chip > span,
+  .user-chip > div {
     display: none;
   }
 

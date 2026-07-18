@@ -14,6 +14,8 @@ import type { BusinessProcess, DemoProject, ProcessDocument } from "../types";
 type ProcessDetailModalProps = {
   project: DemoProject;
   process: BusinessProcess;
+  canEdit: boolean;
+  canConfigure: boolean;
   onClose: () => void;
   onOpenDocument: (document: ProcessDocument) => void;
   onConfigure: (processId: string) => void;
@@ -25,6 +27,8 @@ type ProcessDetailModalProps = {
 export function ProcessDetailModal({
   project,
   process,
+  canEdit,
+  canConfigure,
   onClose,
   onOpenDocument,
   onConfigure,
@@ -126,12 +130,13 @@ export function ProcessDetailModal({
                 <small>Исполнитель: {executorName}</small>
               </header>
               <textarea
+                disabled={!canEdit}
                 value={taskComment}
                 onChange={(event) => setTaskComment(event.currentTarget.value)}
                 onBlur={saveTaskComment}
                 placeholder="Передать нужный файл ответственному и сообщить результат..."
               />
-              <button onClick={saveTaskComment} disabled={taskComment === (process.taskComment ?? "")}>Сохранить</button>
+              {canEdit ? <button onClick={saveTaskComment} disabled={taskComment === (process.taskComment ?? "")}>Сохранить</button> : null}
             </section>
 
             <div className="process-documents-lane">
@@ -157,7 +162,7 @@ export function ProcessDetailModal({
             </div>
 
             <section className="process-clarification">
-              <div className="process-question-row">
+              {canEdit ? <div className="process-question-row">
                 <input
                   value={question}
                   onChange={(event) => setQuestion(event.currentTarget.value)}
@@ -176,7 +181,7 @@ export function ProcessDetailModal({
                   <CircleHelp size={15} />
                   Задание непонятно
                 </button>
-              </div>
+              </div> : null}
               {process.discussion?.length ? (
                 <div className="process-discussion-list">
                   {process.discussion.slice(-3).reverse().map((entry) => (
@@ -236,16 +241,18 @@ export function ProcessDetailModal({
                   <span>Исполнитель</span>
                   <strong>{delegate}</strong>
                 </div>
-                <button
-                  onClick={() => onDelegationChange(process.id, delegates.filter((name) => name !== delegate))}
-                  aria-label={`Убрать исполнителя ${delegate}`}
-                >
-                  <Trash2 size={15} />
-                </button>
+                {canEdit ? (
+                  <button
+                    onClick={() => onDelegationChange(process.id, delegates.filter((name) => name !== delegate))}
+                    aria-label={`Убрать исполнителя ${delegate}`}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                ) : null}
               </article>
             ))}
           </div>
-          {delegateOptions.length ? (
+          {delegateOptions.length && canEdit ? (
             <div className="process-delegation-add">
               <select value={selectedDelegateCandidate} onChange={(event) => setDelegateCandidate(event.currentTarget.value)}>
                 {delegateOptions.map((participant) => (
@@ -257,19 +264,21 @@ export function ProcessDetailModal({
                 Передать исполнителю
               </button>
             </div>
-          ) : (
+          ) : canEdit ? (
             <p className="process-delegation-empty">Все доступные участники уже добавлены в цепочку исполнения.</p>
-          )}
+          ) : null}
         </section>
 
         <footer className="process-detail-footer">
           <span>
             Двойной клик по линии открывает этот контейнер. На верхнем уровне остается одна линия, даже если внутри много документов.
           </span>
-          <button className="primary-action" onClick={() => onConfigure(process.id)}>
-            <Settings2 size={17} />
-            Настроить бизнес-процесс
-          </button>
+          {canConfigure ? (
+            <button className="primary-action" onClick={() => onConfigure(process.id)}>
+              <Settings2 size={17} />
+              Настроить бизнес-процесс
+            </button>
+          ) : null}
           <button onClick={onClose}>
             <ArrowRight size={17} />
             Вернуться к карте

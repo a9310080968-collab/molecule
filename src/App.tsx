@@ -12,6 +12,7 @@ import { ProjectManagerModal } from "./components/ProjectManagerModal";
 import { ProcessBuilderModal } from "./components/ProcessBuilderModal";
 import { ProcessDetailModal } from "./components/ProcessDetailModal";
 import { PersonalIntegrationsModal } from "./components/PersonalIntegrationsModal";
+import { DemoLogin } from "./components/DemoLogin";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { MvpGuide } from "./components/MvpGuide";
 import { demoProjects, initialNotifications } from "./data/mockProject";
@@ -41,11 +42,13 @@ import {
   removeDocumentFromNode,
 } from "./lib/projectMutations";
 import { createBlankProjectTemplate, createDefaultProjectTemplate, createProjectFromTemplate, createTemplateFromProject } from "./lib/projectTemplates";
+import { buildRoleProject, canEditNode, canEditProcess, demoAccessByRole, resolveDemoUser } from "./lib/demoAccess";
 import type {
   BusinessProcess,
   ChatMessage,
   DemoNotification,
   DemoProject,
+  DemoUserRole,
   IntegrationProvider,
   NodeChecklistItem,
   NodeEdit,
@@ -91,6 +94,8 @@ type PersistedAppState = {
   fontScale: number;
   interfaceScale?: number;
   guideDismissed?: boolean;
+  demoRole?: DemoUserRole;
+  demoAuthenticated?: boolean;
 };
 
 let cachedPersistedState: PersistedAppState | null | undefined;
@@ -187,6 +192,8 @@ export default function App() {
   const [fontScale, setFontScale] = useState(persistedState?.fontScale ?? 0.94);
   const [interfaceScale, setInterfaceScale] = useState(persistedState?.interfaceScale ?? 1);
   const [guideDismissed, setGuideDismissed] = useState(Boolean(persistedState?.guideDismissed));
+  const [demoRole, setDemoRole] = useState<DemoUserRole>(persistedState?.demoRole ?? "gip");
+  const [demoAuthenticated, setDemoAuthenticated] = useState(Boolean(persistedState?.demoAuthenticated));
   const [constructorHintDismissed, setConstructorHintDismissed] = useState(false);
   const [chatPanelOpen, setChatPanelOpen] = useState(false);
   const [seenChatMessageIds, setSeenChatMessageIds] = useState<Set<string>>(() => new Set());
@@ -198,18 +205,25 @@ export default function App() {
 
   const hasProjects = projects.length > 0;
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0] ?? demoProjects[0];
-  const activeLevel = getLevelById(activeProject, activeLevelId);
-  const levelNodes = useMemo(() => getLevelNodes(activeProject, activeLevel), [activeLevel, activeProject]);
-  const levelProcesses = useMemo(() => getLevelProcesses(activeProject, activeLevel), [activeLevel, activeProject]);
-  const selectedNode = getNodeById(activeProject, selectedNodeId) ?? getNodeById(activeProject, activeLevel.centralNodeId) ?? levelNodes[0];
-  const selectedProcess = getProcessById(activeProject, selectedProcessId) ?? null;
-  const builderProcess = getProcessById(activeProject, processBuilderId) ?? null;
-  const detailProcess = getProcessById(activeProject, processDetailId) ?? null;
-  const currentUser = activeProject.participants.find((participant) => participant.role === "admin") ?? activeProject.participants.find((participant) => participant.name === "Павел Андреев") ?? activeProject.participants[0];
-  const chatUnreadCount = activeProject.chatMessages.filter(
+  const access = demoAccessByRole[demoRole];
+  const currentUser = resolveDemoUser(activeProject, demoRole);
+  const visibleProject = useMemo(() => buildRoleProject(activeProject, currentUser, access), [access, activeProject, currentUser]);
+  const activeLevel = getLevelById(visibleProject, activeLevelId);
+  const levelNodes = useMemo(() => getLevelNodes(visibleProject, activeLevel), [activeLevel, visibleProject]);
+  const levelProcesses = useMemo(() => getLevelProcesses(visibleProject, activeLevel), [activeLevel, visibleProject]);
+  const selectedNode = getNodeById(visibleProject, selectedNodeId) ?? getNodeById(visibleProject, activeLevel.centralNodeId) ?? levelNodes[0];
+  const selectedProcess = getProcessById(visibleProject, selectedProcessId) ?? null;
+  const builderProcess = getProcessById(visibleProject, processBuilderId) ?? null;
+  const detailProcess = getProcessById(visibleProject, processDetailId) ?? null;
+  const demoAccounts = useMemo(() => ({
+    employee: resolveDemoUser(activeProject, "employee"),
+    gip: resolveDemoUser(activeProject, "gip"),
+    director: resolveDemoUser(activeProject, "director"),
+  }), [activeProject]);
+  const chatUnreadCount = visibleProject.chatMessages.filter(
     (message) => message.author !== currentUser?.name && !seenChatMessageIds.has(message.id),
   ).length;
-  const matches = useMemo(() => getSearchMatches(query, activeProject, activeLevel), [activeLevel, activeProject, query]);
+  const matches = useMemo(() => getSearchMatches(query, visibleProject, activeLevel), [activeLevel, query, visibleProject]);
   const isSearching = query.trim().length > 0;
   const hasNoResults = isSearching && matches.nodeIds.size + matches.processIds.size === 0;
   const appVars = useMemo(() => buildAppVars(fontScale, interfaceScale), [fontScale, interfaceScale]);
@@ -217,8 +231,9 @@ export default function App() {
     hasProjects &&
     activeMenu === "map" &&
     guideDismissed &&
+    access.canEditStructure &&
     !constructorHintDismissed &&
-    activeProject.processes.length === 0 &&
+    visibleProject.processes.length === 0 &&
     levelNodes.filter((node) => node.type !== "central" && node.type !== "document").length <= 4;
 
   useEffect(() => {
@@ -232,6 +247,8 @@ export default function App() {
       fontScale,
       interfaceScale,
       guideDismissed,
+      demoRole,
+      demoAuthenticated,
     };
 
     try {
@@ -239,7 +256,7 @@ export default function App() {
     } catch {
       // Local storage can be unavailable in private browser modes. The demo still works in memory.
     }
-  }, [activeLevelId, activeProjectId, fontScale, guideDismissed, interfaceScale, notifications, projectTemplates, projects, selectedNodeId]);
+  }, [activeLevelId, activeProjectId, demoAuthenticated, demoRole, fontScale, guideDismissed, interfaceScale, notifications, projectTemplates, projects, selectedNodeId]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -339,6 +356,9 @@ export default function App() {
   }
 
   function saveLevelPositions(levelId: string, positions: Record<string, Vec2>, record = true) {
+    if (!access.canEditStructure) {
+      return;
+    }
     updateActiveProject((project) => ({
       ...project,
       nodePositions: {
@@ -370,6 +390,9 @@ export default function App() {
   }
 
   function createProject(title: string, address: string, templateId: string, teamMembers: ProjectParticipantSeed[] = []) {
+    if (!requireAccess(access.canManageProjects)) {
+      return;
+    }
     const template = projectTemplates.find((item) => item.id === templateId) ?? projectTemplates[0];
     if (!template) {
       return;
@@ -397,6 +420,9 @@ export default function App() {
   }
 
   function deleteProject(projectId: string) {
+    if (!requireAccess(access.canManageProjects)) {
+      return;
+    }
     const project = projects.find((item) => item.id === projectId);
     if (!project) {
       return;
@@ -411,6 +437,9 @@ export default function App() {
   }
 
   function performDeleteProject(projectId: string) {
+    if (!requireAccess(access.canManageProjects)) {
+      return;
+    }
     if (projects.length <= 1) {
       const project = projects.find((item) => item.id === projectId);
       if (!project) {
@@ -457,6 +486,9 @@ export default function App() {
   }
 
   function addSectionNode(position?: Vec2) {
+    if (!requireAccess(access.canEditStructure)) {
+      return;
+    }
     const sectionCount = levelNodes.filter((node) => node.type !== "central" && node.type !== "document").length + 1;
     const shortCode = `Б${sectionCount}`;
     const node: ProjectNode = {
@@ -496,6 +528,9 @@ export default function App() {
   }
 
   function createTemplate(title: string, description: string) {
+    if (!requireAccess(access.canManageProjects)) {
+      return;
+    }
     const template = createTemplateFromProject(
       activeProject,
       title || `${activeProject.title}: шаблон`,
@@ -576,6 +611,10 @@ export default function App() {
   }
 
   function updateNode(nodeId: string, edit: NodeEdit) {
+    const node = getNodeById(activeProject, nodeId);
+    if (!node || !requireAccess(canEditNode(access, currentUser, node))) {
+      return;
+    }
     updateActiveProject((project) => {
       const nodes = project.nodes.map((node) => {
         if (node.id !== nodeId) {
@@ -626,6 +665,9 @@ export default function App() {
   }
 
   function toggleNodePositionLock(nodeId: string) {
+    if (!requireAccess(access.canEditStructure)) {
+      return;
+    }
     const node = getNodeById(activeProject, nodeId);
     if (!node || node.type === "central") {
       return;
@@ -636,6 +678,9 @@ export default function App() {
   }
 
   function deleteNode(nodeId: string) {
+    if (!requireAccess(access.canEditStructure)) {
+      return;
+    }
     const node = getNodeById(activeProject, nodeId);
     if (!node || node.type === "central") {
       return;
@@ -657,6 +702,9 @@ export default function App() {
   }
 
   function performDeleteNode(nodeId: string) {
+    if (!requireAccess(access.canEditStructure)) {
+      return;
+    }
     const node = getNodeById(activeProject, nodeId);
     if (!node || node.type === "central" || node.type === "document") {
       return;
@@ -671,6 +719,9 @@ export default function App() {
   }
 
   function deleteDocument(documentId: string, title: string) {
+    if (!requireAccess(access.canEditStructure)) {
+      return;
+    }
     setDeletionRequest({
       kind: "document",
       id: documentId,
@@ -681,6 +732,9 @@ export default function App() {
   }
 
   function performDeleteDocument(documentId: string) {
+    if (!requireAccess(access.canEditStructure)) {
+      return;
+    }
     const document = activeProject.inboxDocuments.find((item) => item.id === documentId)
       ?? activeProject.nodes.find((node) => node.document?.id === documentId)?.document
       ?? activeProject.processes.flatMap((process) => process.documents).find((item) => item.id === documentId);
@@ -723,6 +777,11 @@ export default function App() {
   }
 
   function updateProcess(processId: string, edit: ProcessEdit) {
+    const process = getProcessById(activeProject, processId);
+    const approvalChange = edit.status === "accepted" || edit.status === "rejected";
+    if (!process || !requireAccess(canEditProcess(access, currentUser, process)) || (approvalChange && !requireAccess(access.canApprove))) {
+      return;
+    }
     updateActiveProject((project) => ({
       ...project,
       processes: project.processes.map((process) =>
@@ -755,7 +814,7 @@ export default function App() {
 
   function submitProcessClarification(processId: string, text: string, kind: "question" | "unclear") {
     const process = getProcessById(activeProject, processId);
-    if (!process) {
+    if (!process || !requireAccess(canEditProcess(access, currentUser, process))) {
       return;
     }
 
@@ -797,6 +856,9 @@ export default function App() {
   }
 
   function updateDocumentStatus(documentId: string, status: NodeStatus) {
+    if (!requireAccess(access.canApprove)) {
+      return;
+    }
     updateActiveProject((project) => ({
       ...project,
       nodes: project.nodes.map((node) =>
@@ -828,6 +890,9 @@ export default function App() {
   }
 
   function createTaggedDocument(title: string, tag: string) {
+    if (!requireAccess(access.canUploadFiles)) {
+      return;
+    }
     const normalizedTitle = title.trim() || "Новый_документ.pdf";
     const normalizedTag = normalizeFileTag(tag);
     const taggedTitle = appendTagToFileName(normalizedTitle, normalizedTag);
@@ -860,6 +925,9 @@ export default function App() {
   }
 
   function createTaskDraft(edit: WorkspaceTaskDraft) {
+    if (!requireAccess(access.canCreateTasks)) {
+      return;
+    }
     const from = getNodeById(activeProject, edit.fromNodeId);
     const to = getNodeById(activeProject, edit.toNodeId);
     if (!from || !to || from.id === to.id) {
@@ -906,6 +974,9 @@ export default function App() {
   }
 
   function addParticipant(edit: ParticipantEdit) {
+    if (!requireAccess(access.canManageUsers)) {
+      return;
+    }
     const participant = {
       ...edit,
       id: `participant-${Date.now()}`,
@@ -921,6 +992,9 @@ export default function App() {
   }
 
   function addParticipantFromDirectory(seed: ProjectParticipantSeed) {
+    if (!requireAccess(access.canManageUsers)) {
+      return;
+    }
     if (activeProject.participants.some((participant) => participant.email === seed.email)) {
       showToast(`Участник «${seed.name}» уже есть в команде проекта.`);
       return;
@@ -942,6 +1016,9 @@ export default function App() {
   }
 
   function updateParticipant(participantId: string, edit: ParticipantEdit) {
+    if (!requireAccess(access.canManageUsers)) {
+      return;
+    }
     updateActiveProject((project) => ({
       ...project,
       participants: project.participants.map((participant) =>
@@ -958,6 +1035,9 @@ export default function App() {
   }
 
   function deleteParticipant(participantId: string) {
+    if (!requireAccess(access.canManageUsers)) {
+      return;
+    }
     const participant = activeProject.participants.find((item) => item.id === participantId);
     if (!participant) {
       return;
@@ -978,6 +1058,9 @@ export default function App() {
   }
 
   function saveParticipantIntegrations(participantId: string, integrations: UserIntegration[]) {
+    if (!requireAccess(access.canManageUsers || participantId === currentUser?.id)) {
+      return;
+    }
     updateActiveProject(
       (project) => ({
         ...project,
@@ -1017,12 +1100,18 @@ export default function App() {
   }
 
   function importDemoIntegration(provider: IntegrationProvider, participantId: string) {
+    if (!requireAccess(access.canUploadFiles && participantId === currentUser?.id)) {
+      return;
+    }
     const documents = getDemoIntegrationFiles(provider).map((name) => createDocumentFromName(name, provider));
     markIntegrationSynced(participantId, provider);
     ingestIncomingDocuments(documents, provider, participantId);
   }
 
   function importIntegrationTestFile(provider: IntegrationProvider, participantId: string, mode: "tagged" | "untagged", customTag?: string) {
+    if (!requireAccess(access.canUploadFiles && participantId === currentUser?.id)) {
+      return;
+    }
     const tag = mode === "tagged" ? normalizeFileTag(customTag) || getRandomProjectTag(activeProject) : undefined;
     const fileName = tag ? appendTagToFileName("Входящий файл.pdf", tag) : "Входящий файл без тега.pdf";
     const document = {
@@ -1037,6 +1126,9 @@ export default function App() {
   }
 
   async function importIntegrationFiles(provider: IntegrationProvider, participantId: string, files: File[]) {
+    if (!requireAccess(access.canUploadFiles && participantId === currentUser?.id)) {
+      return;
+    }
     const documents = await Promise.all(
       files.map(async (file) => ({
         ...createDocumentFromName(
@@ -1137,6 +1229,9 @@ export default function App() {
   }
 
   function startLink(nodeId: string) {
+    if (!requireAccess(access.canEditStructure)) {
+      return;
+    }
     setLinkingFromId(nodeId);
     setSelectedNodeId(nodeId);
     setSelectedProcessId(null);
@@ -1145,6 +1240,10 @@ export default function App() {
   }
 
   function completeLink(targetNodeId: string) {
+    if (!requireAccess(access.canEditStructure)) {
+      setLinkingFromId(null);
+      return;
+    }
     if (!linkingFromId || linkingFromId === targetNodeId) {
       setLinkingFromId(null);
       return;
@@ -1195,6 +1294,9 @@ export default function App() {
   }
 
   function deleteProcess(processId: string) {
+    if (!requireAccess(access.canEditStructure)) {
+      return;
+    }
     const process = getProcessById(activeProject, processId);
     if (!process) {
       return;
@@ -1209,6 +1311,9 @@ export default function App() {
   }
 
   function performDeleteProcess(processId: string) {
+    if (!requireAccess(access.canEditStructure)) {
+      return;
+    }
     updateActiveProject((project) => {
       const process = project.processes.find((item) => item.id === processId);
       const inboxById = new Map(project.inboxDocuments.map((document) => [document.id, document]));
@@ -1249,6 +1354,9 @@ export default function App() {
   }
 
   function saveProcessBuilder(processId: string, edit: ProcessEdit, mode: "draft" | "launch") {
+    if (!requireAccess(access.canEditStructure)) {
+      return;
+    }
     const currentProcess = getProcessById(activeProject, processId);
     updateProcess(processId, edit);
 
@@ -1267,6 +1375,10 @@ export default function App() {
   }
 
   function attachInboxDocument(processId: string, documentId: string) {
+    const process = getProcessById(activeProject, processId);
+    if (!process || !requireAccess(access.canUploadFiles && canEditProcess(access, currentUser, process))) {
+      return;
+    }
     updateActiveProject((project) => {
       const document = project.inboxDocuments.find((item) => item.id === documentId);
       if (!document) {
@@ -1291,6 +1403,9 @@ export default function App() {
   }
 
   function rejectProcessDocument(processId: string, documentId: string) {
+    if (!requireAccess(access.canApprove)) {
+      return;
+    }
     const process = getProcessById(activeProject, processId);
     const document = process?.documents.find((item) => item.id === documentId);
     if (!process || !document) {
@@ -1447,6 +1562,9 @@ export default function App() {
   }
 
   function addRandomFile(targetNodeId?: string, customTag?: string) {
+    if (!requireAccess(access.canUploadFiles)) {
+      return;
+    }
     const document = createDocumentFromName(appendTagToFileName(getRandomFileName(), customTag), "manual", undefined, undefined, undefined, getRandomFileSize());
     if (!targetNodeId) {
       const result = routeDocumentToNodeOrInbox(activeProject, activeLevel.id, document);
@@ -1478,6 +1596,9 @@ export default function App() {
   }
 
   function moveDocumentNode(documentNodeId: string, targetNodeId: string | null, position?: Vec2) {
+    if (!requireAccess(access.canUploadFiles)) {
+      return;
+    }
     if (targetNodeId) {
       const result = putDocumentIntoNode(activeProject, documentNodeId, targetNodeId);
       const targetLabel = result.targetNode?.shortCode ?? result.targetNode?.title ?? "";
@@ -1497,6 +1618,9 @@ export default function App() {
   }
 
   function materializeInboxDocument(documentId: string, position?: Vec2) {
+    if (!requireAccess(access.canUploadFiles)) {
+      return;
+    }
     const document = activeProject.inboxDocuments.find((item) => item.id === documentId);
     if (!document) {
       return;
@@ -1515,6 +1639,9 @@ export default function App() {
   }
 
   function moveDocumentNodeToInbox(documentNodeId: string) {
+    if (!requireAccess(access.canUploadFiles)) {
+      return;
+    }
     const node = getNodeById(activeProject, documentNodeId);
     if (!node || node.type !== "document") {
       return;
@@ -1566,11 +1693,15 @@ export default function App() {
     );
   }
 
-  function updateParticipantProfile(participantId: string, name: string, avatarUrl?: string) {
+  function updateParticipantProfile(participantId: string, name: string, avatarUrl: string | undefined, email: string, phone: string) {
     const participant = activeProject.participants.find((item) => item.id === participantId);
     const normalizedName = name.trim();
-    if (!participant || !normalizedName) {
-      showToast("Укажите имя пользователя.");
+    const normalizedEmail = email.trim();
+    if (!participant || !requireAccess(access.canManageUsers || participantId === currentUser?.id)) {
+      return;
+    }
+    if (!normalizedName || !normalizedEmail) {
+      showToast("Укажите имя и рабочую почту пользователя.");
       return;
     }
 
@@ -1579,7 +1710,9 @@ export default function App() {
     updateActiveProject((project) => ({
       ...project,
       participants: project.participants.map((item) =>
-        item.id === participantId ? { ...item, name: normalizedName, avatarUrl } : item,
+        item.id === participantId
+          ? { ...item, name: normalizedName, avatarUrl, email: normalizedEmail, phone: phone.trim() }
+          : item,
       ),
       nodes: project.nodes.map((node) => ({
         ...node,
@@ -1602,7 +1735,7 @@ export default function App() {
   }
 
   async function importFilesToProjectPool(files: File[]) {
-    if (!files.length) {
+    if (!files.length || !requireAccess(access.canUploadFiles)) {
       return;
     }
 
@@ -1634,7 +1767,7 @@ export default function App() {
   }
 
   async function importFilesToWorkspace(files: File[], position?: Vec2 | null) {
-    if (!files.length) {
+    if (!files.length || !requireAccess(access.canUploadFiles)) {
       return;
     }
 
@@ -1666,6 +1799,9 @@ export default function App() {
   async function handleDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
     setIsDropActive(false);
+    if (!requireAccess(access.canUploadFiles)) {
+      return;
+    }
     const dropPosition = sceneRef.current?.clientToWorld(event.clientX, event.clientY);
 
     const documentNodeId = event.dataTransfer.getData("application/x-molecule-document-node");
@@ -1718,6 +1854,33 @@ export default function App() {
     window.setTimeout(() => setToast(null), 2600);
   }
 
+  function requireAccess(allowed: boolean) {
+    if (allowed) {
+      return true;
+    }
+    showToast(`Роль «${access.label}» не может выполнить это действие.`);
+    return false;
+  }
+
+  function changeDemoRole(role: DemoUserRole) {
+    setDemoRole(role);
+    setActiveMenu("map");
+    setSelectedProcessId(null);
+    setProcessBuilderId(null);
+    setProcessDetailId(null);
+    setLinkingFromId(null);
+  }
+
+  function loginDemo(role: DemoUserRole) {
+    changeDemoRole(role);
+    setDemoAuthenticated(true);
+  }
+
+  function logoutDemo() {
+    setPersonalSettingsOpen(false);
+    setDemoAuthenticated(false);
+  }
+
   function toggleFullscreen() {
     if (document.fullscreenElement) {
       void document.exitFullscreen();
@@ -1727,6 +1890,10 @@ export default function App() {
     void document.documentElement.requestFullscreen();
   }
 
+  if (!demoAuthenticated) {
+    return <DemoLogin accounts={demoAccounts} initialRole={demoRole} onLogin={loginDemo} />;
+  }
+
   if (!hasProjects) {
     return (
       <div className="app-shell empty-project-shell" style={appVars}>
@@ -1734,8 +1901,8 @@ export default function App() {
         <main className="empty-project-state glass-panel">
           <span>Проекты не созданы</span>
           <h1>Создайте первый проект</h1>
-          <p>После создания здесь появится рабочая карта проекта, ноды, документы, бизнес-процессы и мессенджер.</p>
-          <button onClick={() => setProjectManagerOpen(true)}>Создать новый проект</button>
+          <p>{access.canManageProjects ? "После создания здесь появится рабочая карта проекта, ноды, документы, бизнес-процессы и мессенджер." : "Обратитесь к директору, чтобы получить доступ к проекту."}</p>
+          {access.canManageProjects ? <button onClick={() => setProjectManagerOpen(true)}>Создать новый проект</button> : null}
         </main>
         {projectManagerOpen ? (
           <ProjectManagerModal
@@ -1755,14 +1922,24 @@ export default function App() {
       style={appVars}
       onDragOver={(event) => {
         event.preventDefault();
+        if (!access.canUploadFiles) {
+          return;
+        }
         const types = Array.from(event.dataTransfer.types);
         setIsDropActive(types.includes("Files"));
       }}
       onDragLeave={() => setIsDropActive(false)}
-      onDrop={handleDrop}
+      onDrop={(event) => {
+        if (!access.canUploadFiles) {
+          event.preventDefault();
+          setIsDropActive(false);
+          return;
+        }
+        void handleDrop(event);
+      }}
     >
       <div className="cosmos-backdrop" />
-      {!guideDismissed ? (
+      {!guideDismissed && access.canManageProjects ? (
         <MvpGuide
           onCreateProject={() => setProjectManagerOpen(true)}
           onClose={() => setGuideDismissed(true)}
@@ -1772,8 +1949,9 @@ export default function App() {
       <Sidebar
         isOpen={mobileMenuOpen}
         activeMenu={activeMenu}
-        project={activeProject}
+        project={visibleProject}
         chatUnreadCount={chatUnreadCount}
+        access={access}
         onMenuSelect={selectSidebarMenu}
         onSelectProcess={selectProcess}
         onSelectNode={navigateToNode}
@@ -1789,6 +1967,7 @@ export default function App() {
         projects={projects}
         activeProjectId={activeProjectId}
         user={currentUser}
+        access={access}
         onProjectChange={selectProject}
         onProjectDelete={deleteProject}
         notifications={notifications}
@@ -1797,7 +1976,7 @@ export default function App() {
         onOpenPersonalSettings={() => setPersonalSettingsOpen(true)}
       />
       <ProjectScene
-        project={activeProject}
+        project={visibleProject}
         level={activeLevel}
         nodes={levelNodes}
         processes={levelProcesses}
@@ -1809,6 +1988,7 @@ export default function App() {
         isSearching={isSearching}
         levelTransition={levelTransition}
         interfaceScale={interfaceScale}
+        access={access}
         onSelectNode={selectNode}
         onOpenNodeLevel={openNodeLevel}
         onBackLevel={backLevel}
@@ -1833,7 +2013,9 @@ export default function App() {
         sceneRef={sceneRef}
       />
       <OrphanFilesPanel
-        project={activeProject}
+        project={visibleProject}
+        canUploadFiles={access.canUploadFiles}
+        canDeleteDocuments={access.canEditStructure}
         onAddRandomFile={(tag) => addRandomFile(undefined, tag)}
         onMaterializeInboxDocument={materializeInboxDocument}
         onMoveDocumentNodeToInbox={moveDocumentNodeToInbox}
@@ -1844,7 +2026,7 @@ export default function App() {
         onOpenDocument={(document) => setModalDocument(document)}
       />
       <ProjectChatPanel
-        messages={activeProject.chatMessages}
+        messages={visibleProject.chatMessages}
         isOpen={chatPanelOpen}
         unreadCount={chatUnreadCount}
         onSend={sendProjectChatMessage}
@@ -1857,7 +2039,9 @@ export default function App() {
       />
       <WorkspacePanel
         activeMenu={activeMenu}
-        project={activeProject}
+        project={visibleProject}
+        user={currentUser}
+        access={access}
         onClose={() => setActiveMenu("map")}
         onSelectProcess={selectProcess}
         onOpenDocument={setModalDocument}
@@ -1879,7 +2063,9 @@ export default function App() {
       />
       {selectedNode ? (
         <RightPanel
-          project={activeProject}
+          project={visibleProject}
+          user={currentUser}
+          access={access}
           level={activeLevel}
           node={selectedNode}
           process={selectedProcess}
@@ -1897,8 +2083,8 @@ export default function App() {
       <BottomControls
         onUndo={undo}
         onRedo={redo}
-        canUndo={undoStack.length > 0}
-        canRedo={redoStack.length > 0}
+        canUndo={access.canEditAssignedWork && undoStack.length > 0}
+        canRedo={access.canEditAssignedWork && redoStack.length > 0}
         onNormalize={() => sceneRef.current?.normalize()}
         onReset={() => sceneRef.current?.reset()}
         onFocus={() => sceneRef.current?.focusSelected()}
@@ -1918,11 +2104,16 @@ export default function App() {
       ) : null}
       {personalSettingsOpen && currentUser ? (
         <PersonalIntegrationsModal
-          project={activeProject}
+          project={visibleProject}
           user={currentUser}
+          role={demoRole}
+          access={access}
           onClose={() => setPersonalSettingsOpen(false)}
+          onRoleChange={changeDemoRole}
+          onLogout={logoutDemo}
           onSaveIntegrations={saveParticipantIntegrations}
           onSaveProfile={updateParticipantProfile}
+          onChangePassword={() => showToast("Демо-пароль обновлен для текущей сессии.")}
           onImportDemo={importDemoIntegration}
           onImportTestFile={importIntegrationTestFile}
           onImportFiles={(provider, participantId, files) => {
@@ -1932,7 +2123,7 @@ export default function App() {
       ) : null}
       {builderProcess ? (
         <ProcessBuilderModal
-          project={activeProject}
+          project={visibleProject}
           process={builderProcess}
           onClose={() => setProcessBuilderId(null)}
           onSave={saveProcessBuilder}
@@ -1942,8 +2133,10 @@ export default function App() {
       ) : null}
       {detailProcess ? (
         <ProcessDetailModal
-          project={activeProject}
+          project={visibleProject}
           process={detailProcess}
+          canEdit={canEditProcess(access, currentUser, detailProcess)}
+          canConfigure={access.canEditStructure}
           onClose={() => setProcessDetailId(null)}
           onOpenDocument={setModalDocument}
           onDelegationChange={updateProcessDelegation}

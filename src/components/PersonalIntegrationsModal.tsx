@@ -1,12 +1,18 @@
-import { Camera, FolderOpen, Mail, MessageCircle, RefreshCw, Save, ShieldCheck, Trash2, X } from "lucide-react";
+import { Camera, FolderOpen, KeyRound, LogOut, Mail, MessageCircle, RefreshCw, Save, ShieldCheck, Trash2, UserRoundCog, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { DemoProject, IntegrationProvider, UserIntegration, ProjectParticipant } from "../types";
+import type { DemoAccess } from "../lib/demoAccess";
+import type { DemoProject, DemoUserRole, IntegrationProvider, UserIntegration, ProjectParticipant } from "../types";
 
 type PersonalIntegrationsModalProps = {
   project: DemoProject;
   user: ProjectParticipant;
+  role: DemoUserRole;
+  access: DemoAccess;
   onClose: () => void;
-  onSaveProfile: (participantId: string, name: string, avatarUrl?: string) => void;
+  onRoleChange: (role: DemoUserRole) => void;
+  onLogout: () => void;
+  onSaveProfile: (participantId: string, name: string, avatarUrl: string | undefined, email: string, phone: string) => void;
+  onChangePassword: () => void;
   onSaveIntegrations: (participantId: string, integrations: UserIntegration[]) => void;
   onImportDemo: (provider: IntegrationProvider, participantId: string) => void;
   onImportTestFile: (provider: IntegrationProvider, participantId: string, mode: "tagged" | "untagged", tag?: string) => void;
@@ -15,6 +21,7 @@ type PersonalIntegrationsModalProps = {
 
 const mailProviders: IntegrationProvider[] = ["outlook", "yandex", "gmail"];
 const folderProviders: IntegrationProvider[] = ["telegram", "folder"];
+const demoRoles: DemoUserRole[] = ["employee", "gip", "director"];
 
 const providerLabels: Record<IntegrationProvider, string> = {
   outlook: "Outlook",
@@ -43,8 +50,13 @@ const providerIcons: Record<IntegrationProvider, typeof Mail> = {
 export function PersonalIntegrationsModal({
   project,
   user,
+  role,
+  access,
   onClose,
+  onRoleChange,
+  onLogout,
   onSaveProfile,
+  onChangePassword,
   onSaveIntegrations,
   onImportDemo,
   onImportTestFile,
@@ -55,19 +67,47 @@ export function PersonalIntegrationsModal({
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const [profileName, setProfileName] = useState(user.name);
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl ?? "");
+  const [profileEmail, setProfileEmail] = useState(user.email);
+  const [profilePhone, setProfilePhone] = useState(user.phone);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [securityError, setSecurityError] = useState("");
   const [integrations, setIntegrations] = useState<UserIntegration[]>(() => normalizeIntegrations(user.integrations));
   const [accounts, setAccounts] = useState<Record<string, string>>(() =>
     Object.fromEntries(normalizeIntegrations(user.integrations).map((integration) => [integration.provider, integration.account ?? user.email])),
   );
   const [testTags, setTestTags] = useState<Record<string, string>>({});
-  const isPrivileged = user.role === "admin" || user.role === "gip";
+  const isPrivileged = access.canViewAll;
 
   const connectedCount = useMemo(() => integrations.filter((integration) => integration.status === "connected").length, [integrations]);
 
   useEffect(() => {
     setProfileName(user.name);
     setAvatarUrl(user.avatarUrl ?? "");
-  }, [user.id, user.name, user.avatarUrl]);
+    setProfileEmail(user.email);
+    setProfilePhone(user.phone);
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setSecurityError("");
+  }, [user.avatarUrl, user.email, user.id, user.name, user.phone]);
+
+  function handlePasswordChange() {
+    if (!currentPassword || newPassword.length < 4) {
+      setSecurityError("Укажите текущий и новый пароль от 4 символов.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setSecurityError("Новые пароли не совпадают.");
+      return;
+    }
+    setSecurityError("");
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    onChangePassword();
+  }
 
   function save(next: UserIntegration[]) {
     setIntegrations(next);
@@ -142,7 +182,7 @@ export function PersonalIntegrationsModal({
             </span>
             <h2>{user.name}</h2>
             <p>
-              Профиль пользователя, рабочая почта и подключенные папки проекта.
+              {access.label} · {access.scopeLabel}
             </p>
           </div>
           <button className="icon-button" onClick={onClose} aria-label="Закрыть настройки">
@@ -166,6 +206,31 @@ export function PersonalIntegrationsModal({
         </section>
 
         <div className="integration-modal-body">
+          <section className="demo-session-settings">
+            <div className="section-title">
+              <UserRoundCog size={18} />
+              <div>
+                <h3>Демо-роль</h3>
+                <p>{user.position} · {user.email}</p>
+              </div>
+            </div>
+            <div className="personal-role-switch" role="group" aria-label="Демо-роль пользователя">
+              {demoRoles.map((item) => (
+                <button
+                  key={item}
+                  className={item === role ? "active" : ""}
+                  onClick={() => onRoleChange(item)}
+                >
+                  {getDemoRoleLabel(item)}
+                </button>
+              ))}
+            </div>
+            <button className="personal-logout" onClick={onLogout}>
+              <LogOut size={16} />
+              Выйти
+            </button>
+          </section>
+
           <section className="personal-profile-settings">
             <div className="personal-profile-avatar">
               {avatarUrl ? <img src={avatarUrl} alt="Аватар пользователя" /> : <span>{getInitials(profileName)}</span>}
@@ -186,18 +251,59 @@ export function PersonalIntegrationsModal({
                 onChange={(event) => handleAvatarSelect(event.currentTarget.files?.[0])}
               />
             </div>
-            <label>
-              <span>Имя пользователя</span>
-              <input value={profileName} onChange={(event) => setProfileName(event.currentTarget.value)} />
-            </label>
+            <div className="personal-profile-fields">
+              <label>
+                <span>Имя пользователя</span>
+                <input value={profileName} onChange={(event) => setProfileName(event.currentTarget.value)} />
+              </label>
+              <label>
+                <span>Логин / рабочая почта</span>
+                <input type="email" value={profileEmail} onChange={(event) => setProfileEmail(event.currentTarget.value)} />
+              </label>
+              <label>
+                <span>Телефон</span>
+                <input value={profilePhone} onChange={(event) => setProfilePhone(event.currentTarget.value)} />
+              </label>
+            </div>
             <button
               className="personal-profile-save"
-              onClick={() => onSaveProfile(user.id, profileName, avatarUrl || undefined)}
-              disabled={!profileName.trim()}
+              onClick={() => onSaveProfile(user.id, profileName, avatarUrl || undefined, profileEmail, profilePhone)}
+              disabled={!profileName.trim() || !profileEmail.trim()}
             >
               <Save size={16} />
               Сохранить профиль
             </button>
+          </section>
+
+          <section className="personal-security-settings">
+            <div className="section-title">
+              <KeyRound size={18} />
+              <div>
+                <h3>Безопасность</h3>
+                <p>Пароль демо-аккаунта</p>
+              </div>
+            </div>
+            <div className="personal-password-fields">
+              <label>
+                <span>Текущий пароль</span>
+                <input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.currentTarget.value)} />
+              </label>
+              <label>
+                <span>Новый пароль</span>
+                <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.currentTarget.value)} />
+              </label>
+              <label>
+                <span>Повторите пароль</span>
+                <input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.currentTarget.value)} />
+              </label>
+            </div>
+            <div className="personal-security-actions">
+              {securityError ? <span>{securityError}</span> : <span>Демо: пароль не отправляется на сервер.</span>}
+              <button onClick={handlePasswordChange}>
+                <Save size={16} />
+                Обновить пароль
+              </button>
+            </div>
           </section>
 
           <section className="integration-section">
@@ -236,17 +342,21 @@ export function PersonalIntegrationsModal({
                       ) : (
                         <button onClick={() => handleConnect(provider)}>Подключить демо</button>
                       )}
-                      <button className="ghost-action" onClick={() => onImportDemo(provider, user.id)}>
-                        <RefreshCw size={15} />
-                        Сканировать демо
-                      </button>
+                      {access.canUploadFiles ? (
+                        <button className="ghost-action" onClick={() => onImportDemo(provider, user.id)}>
+                          <RefreshCw size={15} />
+                          Сканировать демо
+                        </button>
+                      ) : null}
                     </footer>
-                    <IntegrationTestActions
-                      provider={provider}
-                      tag={testTags[provider] ?? ""}
-                      onTagChange={(value) => setTestTags((current) => ({ ...current, [provider]: value }))}
-                      onImportTestFile={(mode) => onImportTestFile(provider, user.id, mode, testTags[provider])}
-                    />
+                    {access.canUploadFiles ? (
+                      <IntegrationTestActions
+                        provider={provider}
+                        tag={testTags[provider] ?? ""}
+                        onTagChange={(value) => setTestTags((current) => ({ ...current, [provider]: value }))}
+                        onImportTestFile={(mode) => onImportTestFile(provider, user.id, mode, testTags[provider])}
+                      />
+                    ) : null}
                     {integration.lastSyncAt ? <small>Последняя проверка: {integration.lastSyncAt}</small> : null}
                   </article>
                 );
@@ -279,18 +389,22 @@ export function PersonalIntegrationsModal({
                     <p>{providerDescriptions[provider]}</p>
                     <div className="folder-path-preview">{integration.folderPath ?? "Папка не выбрана"}</div>
                     <footer>
-                      <button onClick={() => inputRef.current?.click()}>Выбрать папку</button>
-                      <button className="ghost-action" onClick={() => onImportDemo(provider, user.id)}>
-                        <RefreshCw size={15} />
-                        Сканировать демо
-                      </button>
+                      {access.canUploadFiles ? <button onClick={() => inputRef.current?.click()}>Выбрать папку</button> : null}
+                      {access.canUploadFiles ? (
+                        <button className="ghost-action" onClick={() => onImportDemo(provider, user.id)}>
+                          <RefreshCw size={15} />
+                          Сканировать демо
+                        </button>
+                      ) : null}
                     </footer>
-                    <IntegrationTestActions
-                      provider={provider}
-                      tag={testTags[provider] ?? ""}
-                      onTagChange={(value) => setTestTags((current) => ({ ...current, [provider]: value }))}
-                      onImportTestFile={(mode) => onImportTestFile(provider, user.id, mode, testTags[provider])}
-                    />
+                    {access.canUploadFiles ? (
+                      <IntegrationTestActions
+                        provider={provider}
+                        tag={testTags[provider] ?? ""}
+                        onTagChange={(value) => setTestTags((current) => ({ ...current, [provider]: value }))}
+                        onImportTestFile={(mode) => onImportTestFile(provider, user.id, mode, testTags[provider])}
+                      />
+                    ) : null}
                     <input
                       ref={inputRef}
                       className="hidden-file-input"
@@ -361,6 +475,16 @@ function getStatusLabel(status: UserIntegration["status"]) {
     return "Нужно разрешение";
   }
   return "Не подключено";
+}
+
+function getDemoRoleLabel(role: DemoUserRole) {
+  if (role === "employee") {
+    return "Сотрудник";
+  }
+  if (role === "gip") {
+    return "ГИП";
+  }
+  return "Директор";
 }
 
 function getInitials(name: string) {

@@ -1,5 +1,6 @@
 import { Bell, Menu, Plus, Search, SlidersHorizontal, Trash2, UserCog, X } from "lucide-react";
 import { useState } from "react";
+import type { DemoAccess } from "../lib/demoAccess";
 import type { DemoNotification, DemoProject, ProjectParticipant } from "../types";
 
 type TopSearchProps = {
@@ -11,6 +12,7 @@ type TopSearchProps = {
   projects: DemoProject[];
   activeProjectId: string;
   user?: ProjectParticipant;
+  access: DemoAccess;
   onProjectChange: (projectId: string) => void;
   onProjectDelete: (projectId: string) => void;
   notifications: DemoNotification[];
@@ -28,6 +30,7 @@ export function TopSearch({
   projects,
   activeProjectId,
   user,
+  access,
   onProjectChange,
   onProjectDelete,
   notifications,
@@ -57,17 +60,21 @@ export function TopSearch({
             ))}
           </select>
         </label>
-        <button className="project-add-tab" onClick={onOpenProjectManager} title="Создать проект">
-          <Plus size={18} />
-          <span>Создать</span>
-        </button>
-        <button
-          className="project-delete-tab"
-          onClick={() => onProjectDelete(activeProjectId)}
-          title="Удалить текущий проект"
-        >
-          <Trash2 size={17} />
-        </button>
+        {access.canManageProjects ? (
+          <>
+            <button className="project-add-tab" onClick={onOpenProjectManager} title="Создать проект">
+              <Plus size={18} />
+              <span>Создать</span>
+            </button>
+            <button
+              className="project-delete-tab"
+              onClick={() => onProjectDelete(activeProjectId)}
+              title="Удалить текущий проект"
+            >
+              <Trash2 size={17} />
+            </button>
+          </>
+        ) : null}
       </div>
 
       <div className="search-wrap">
@@ -97,7 +104,7 @@ export function TopSearch({
         </span>
         <div>
           <b>{user?.name ?? "Павел Андреев"}</b>
-          <small>{activeProject.title}</small>
+          <small>{access.label} · {activeProject.title}</small>
         </div>
         <button className="icon-button" aria-label="Личный кабинет" onClick={onOpenPersonalSettings}>
           <UserCog size={18} />

@@ -14,6 +14,8 @@ export type ProjectParticipantStatus = "active" | "invited" | "blocked";
 
 export type ProjectVisibilityMode = "all" | "assigned" | "custom";
 
+export type DemoUserRole = "employee" | "gip" | "director";
+
 export type IntegrationProvider = "outlook" | "yandex" | "gmail" | "telegram" | "folder";
 
 export type IntegrationStatus = "connected" | "not_connected" | "needs_permission";

@@ -15,6 +15,7 @@ import {
 import clsx from "clsx";
 import { useState } from "react";
 import { getNodeById } from "../lib/graph";
+import type { DemoAccess } from "../lib/demoAccess";
 import type { DemoProject, ProcessDocument, ProcessStatus } from "../types";
 
 export type SidebarMenuId =
@@ -32,6 +33,7 @@ type SidebarProps = {
   activeMenu: SidebarMenuId;
   project: DemoProject;
   chatUnreadCount: number;
+  access: DemoAccess;
   onMenuSelect: (menu: SidebarMenuId) => void;
   onSelectProcess: (processId: string) => void;
   onSelectNode: (nodeId: string) => void;
@@ -61,6 +63,7 @@ export function Sidebar({
   activeMenu,
   project,
   chatUnreadCount,
+  access,
   onMenuSelect,
   onSelectProcess,
   onSelectNode,
@@ -81,7 +84,7 @@ export function Sidebar({
         </div>
 
         <nav className="sidebar-nav">
-          {navItems.map((item) => {
+          {navItems.filter((item) => isMenuVisible(item.id, access)).map((item) => {
             const Icon = item.icon;
             return (
               <button
@@ -192,4 +195,11 @@ export function Sidebar({
       {isOpen ? <button className="mobile-scrim" aria-label="Закрыть меню" onClick={onClose} /> : null}
     </>
   );
+}
+
+function isMenuVisible(menu: SidebarMenuId, access: DemoAccess) {
+  if (menu === "checks") return access.canViewChecks;
+  if (menu === "participants") return access.canViewParticipants;
+  if (menu === "settings") return access.canViewProjectSettings;
+  return true;
 }

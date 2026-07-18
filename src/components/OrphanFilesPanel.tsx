@@ -7,6 +7,8 @@ import type { DemoProject, ProcessDocument } from "../types";
 
 type OrphanFilesPanelProps = {
   project: DemoProject;
+  canUploadFiles: boolean;
+  canDeleteDocuments: boolean;
   onAddRandomFile: (tag?: string) => void;
   onMaterializeInboxDocument: (documentId: string) => void;
   onMoveDocumentNodeToInbox: (documentNodeId: string) => void;
@@ -17,6 +19,8 @@ type OrphanFilesPanelProps = {
 
 export function OrphanFilesPanel({
   project,
+  canUploadFiles,
+  canDeleteDocuments,
   onAddRandomFile,
   onMaterializeInboxDocument,
   onMoveDocumentNodeToInbox,
@@ -44,10 +48,12 @@ export function OrphanFilesPanel({
   }, []);
 
   function addFile() {
+    if (!canUploadFiles) return;
     onAddRandomFile(tag.trim() || undefined);
   }
 
   function handleDragOver(event: DragEvent<HTMLElement>) {
+    if (!canUploadFiles) return;
     event.preventDefault();
     event.stopPropagation();
     event.dataTransfer.dropEffect = "move";
@@ -55,6 +61,7 @@ export function OrphanFilesPanel({
   }
 
   function handleDrop(event: DragEvent<HTMLElement>) {
+    if (!canUploadFiles) return;
     event.preventDefault();
     event.stopPropagation();
     setDropActive(false);
@@ -84,7 +91,7 @@ export function OrphanFilesPanel({
           <strong>Бесхозные файлы · {files.length}</strong>
         </div>
         <div className="orphan-header-actions">
-          {!collapsed ? (
+          {!collapsed && canUploadFiles ? (
             <div className="orphan-add-control">
               <input
                 value={tag}
@@ -132,13 +139,13 @@ export function OrphanFilesPanel({
               >
                 <button
                   className="orphan-main-action"
-                  draggable
+                  draggable={canUploadFiles}
                   onDragStart={(event) => {
                     event.dataTransfer.setData("application/x-molecule-inbox-document", document.id);
                     event.dataTransfer.effectAllowed = "move";
                   }}
-                  onClick={() => onMaterializeInboxDocument(document.id)}
-                  title="Перетащите на рабочую область или нажмите, чтобы вынести файл на карту"
+                  onClick={() => canUploadFiles ? onMaterializeInboxDocument(document.id) : onOpenDocument(document)}
+                  title={canUploadFiles ? "Перетащите на рабочую область или нажмите, чтобы вынести файл на карту" : "Открыть документ"}
                 >
                   <span style={{ color }}>
                     <FileText size={16} />
@@ -157,7 +164,7 @@ export function OrphanFilesPanel({
           })}
         </div>
       ) : !collapsed ? (
-        <p>Нет бесхозных файлов. Перетащите сюда файл с компьютера или отправьте тестовый файл из интеграций.</p>
+        <p>{canUploadFiles ? "Нет бесхозных файлов. Перетащите сюда файл с компьютера или отправьте тестовый файл из интеграций." : "Бесхозных файлов нет."}</p>
       ) : null}
       {contextMenu && contextDocument ? createPortal(
         <div
@@ -166,15 +173,17 @@ export function OrphanFilesPanel({
           onContextMenu={(event) => event.preventDefault()}
         >
           <strong>{contextDocument.title}</strong>
-          <button
-            onClick={() => {
-              onMaterializeInboxDocument(contextDocument.id);
-              setContextMenu(null);
-            }}
-          >
-            <LocateFixed size={15} />
-            Вынести на карту
-          </button>
+          {canUploadFiles ? (
+            <button
+              onClick={() => {
+                onMaterializeInboxDocument(contextDocument.id);
+                setContextMenu(null);
+              }}
+            >
+              <LocateFixed size={15} />
+              Вынести на карту
+            </button>
+          ) : null}
           <button
             onClick={() => {
               onOpenDocument(contextDocument);
@@ -184,16 +193,18 @@ export function OrphanFilesPanel({
             <Maximize2 size={15} />
             Открыть файл
           </button>
-          <button
-            className="danger"
-            onClick={() => {
-              onDeleteDocument(contextDocument.id);
-              setContextMenu(null);
-            }}
-          >
-            <Trash2 size={15} />
-            Удалить файл
-          </button>
+          {canDeleteDocuments ? (
+            <button
+              className="danger"
+              onClick={() => {
+                onDeleteDocument(contextDocument.id);
+                setContextMenu(null);
+              }}
+            >
+              <Trash2 size={15} />
+              Удалить файл
+            </button>
+          ) : null}
         </div>,
         document.body,
       ) : null}

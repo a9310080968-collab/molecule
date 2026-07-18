@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { useEffect, useState } from "react";
+import type { DemoAccess } from "../lib/demoAccess";
 import {
   getAcceptedAssignments,
   getChecks,
@@ -52,6 +53,8 @@ import type { SidebarMenuId } from "./Sidebar";
 type WorkspacePanelProps = {
   activeMenu: SidebarMenuId;
   project: DemoProject;
+  user?: ProjectParticipant;
+  access: DemoAccess;
   onClose: () => void;
   onSelectProcess: (processId: string) => void;
   onOpenDocument: (document: ProcessDocument) => void;
@@ -59,7 +62,7 @@ type WorkspacePanelProps = {
   onReceiveChat: () => void;
   onSendMessage: (text: string) => void;
   projectTemplates: ProjectTemplate[];
-  onCreateTemplate: (title: string, description: string) => ProjectTemplate;
+  onCreateTemplate: (title: string, description: string) => ProjectTemplate | undefined;
   onCreateTaggedDocument: (title: string, tag: string) => void;
   onCreateTaskDraft: (edit: WorkspaceTaskDraft) => void;
   onUpdateDocumentStatus: (documentId: string, status: NodeStatus) => void;
@@ -136,6 +139,8 @@ const menuMeta = {
 export function WorkspacePanel({
   activeMenu,
   project,
+  user,
+  access,
   onClose,
   onSelectProcess,
   onOpenDocument,
@@ -181,6 +186,8 @@ export function WorkspacePanel({
       <WorkspaceContent
         activeMenu={activeMenu}
         project={project}
+        user={user}
+        access={access}
         onSelectProcess={onSelectProcess}
         onOpenDocument={onOpenDocument}
         onReceiveMail={onReceiveMail}
@@ -206,6 +213,8 @@ export function WorkspacePanel({
 function WorkspaceContent({
   activeMenu,
   project,
+  user,
+  access,
   onSelectProcess,
   onOpenDocument,
   onReceiveMail,
@@ -230,6 +239,7 @@ function WorkspaceContent({
         project={project}
         onOpenDocument={onOpenDocument}
         onCreateTaggedDocument={onCreateTaggedDocument}
+        canCreate={access.canUploadFiles}
       />
     );
   }
@@ -241,6 +251,7 @@ function WorkspaceContent({
         processes={project.processes}
         onSelectProcess={onSelectProcess}
         onCreateTaskDraft={onCreateTaskDraft}
+        canCreateTasks={access.canCreateTasks}
       />
     );
   }
@@ -271,6 +282,7 @@ function WorkspaceContent({
     return (
       <MessengerWorkspace
         project={project}
+        user={user}
         onSelectProcess={onSelectProcess}
         onReceiveChat={onReceiveChat}
         onReceiveMail={onReceiveMail}
@@ -283,6 +295,7 @@ function WorkspaceContent({
     return (
       <ParticipantsManager
         project={project}
+        canManage={access.canManageUsers}
         onAddParticipant={onAddParticipant}
         onUpdateParticipant={onUpdateParticipant}
         onDeleteParticipant={onDeleteParticipant}
@@ -315,7 +328,7 @@ function SettingsWorkspace({
 }: {
   project: DemoProject;
   projectTemplates: ProjectTemplate[];
-  onCreateTemplate: (title: string, description: string) => ProjectTemplate;
+  onCreateTemplate: (title: string, description: string) => ProjectTemplate | undefined;
   fontScale: number;
   interfaceScale: number;
   onFontScaleChange: (scale: number) => void;
@@ -326,6 +339,9 @@ function SettingsWorkspace({
 
   function saveTemplate() {
     const template = onCreateTemplate(title, description);
+    if (!template) {
+      return;
+    }
     setTitle(`${template.title}: копия`);
     setDescription(template.description);
   }
@@ -451,11 +467,13 @@ function TasksWorkspace({
   processes,
   onSelectProcess,
   onCreateTaskDraft,
+  canCreateTasks,
 }: {
   project: DemoProject;
   processes: BusinessProcess[];
   onSelectProcess: (processId: string) => void;
   onCreateTaskDraft: (edit: WorkspaceTaskDraft) => void;
+  canCreateTasks: boolean;
 }) {
   const rootLevel = getDefaultLevel(project);
   const nodes = getLevelNodes(project, rootLevel).filter((node) => node.type !== "central" && node.type !== "document");
@@ -488,13 +506,15 @@ function TasksWorkspace({
           <strong>Задания проекта</strong>
           <span>Задание можно создать прямо здесь, без выбора ноды на карте.</span>
         </div>
-        <button onClick={() => setCreatorOpen(true)}>
-          <ClipboardCheck size={17} />
-          Создать задание
-        </button>
+        {canCreateTasks ? (
+          <button onClick={() => setCreatorOpen(true)}>
+            <ClipboardCheck size={17} />
+            Создать задание
+          </button>
+        ) : null}
       </section>
 
-      {creatorOpen ? (
+      {creatorOpen && canCreateTasks ? (
         <section className="task-create-card">
           <header>
             <strong>Новое задание</strong>
@@ -552,21 +572,20 @@ function TasksWorkspace({
 
 function MessengerWorkspace({
   project,
+  user,
   onSelectProcess,
   onReceiveChat,
   onReceiveMail,
   onSendMessage,
 }: {
   project: DemoProject;
+  user?: ProjectParticipant;
   onSelectProcess: (processId: string) => void;
   onReceiveChat: () => void;
   onReceiveMail: () => void;
   onSendMessage: (text: string) => void;
 }) {
   const [messageText, setMessageText] = useState("");
-  const currentUser = project.participants.find((participant) => participant.name === "Павел Андреев")
-    ?? project.participants.find((participant) => participant.role === "admin")
-    ?? project.participants[0];
   const messages = [...project.chatMessages].reverse();
   const activeProcesses = project.processes
     .filter((process) => process.status !== "accepted")
@@ -598,7 +617,7 @@ function MessengerWorkspace({
 
         <div className="messenger-feed" aria-label="Сообщения проекта">
           {messages.length ? messages.map((message) => {
-            const isOwn = currentUser ? message.author === currentUser.name : false;
+            const isOwn = user ? message.author === user.name : false;
 
             return (
               <article key={message.id} className={clsx("messenger-message", isOwn && "own")}>
@@ -696,10 +715,12 @@ function DocumentsRegistry({
   project,
   onOpenDocument,
   onCreateTaggedDocument,
+  canCreate,
 }: {
   project: DemoProject;
   onOpenDocument: (document: ProcessDocument) => void;
   onCreateTaggedDocument: (title: string, tag: string) => void;
+  canCreate: boolean;
 }) {
   const groups = buildDocumentRegistry(project);
   const total = groups.reduce((sum, group) => sum + group.documents.length, 0);
@@ -709,12 +730,14 @@ function DocumentsRegistry({
   if (!total) {
     return (
       <div className="documents-registry empty-documents-registry">
-        <button className="documents-create-button" onClick={() => setCreatorOpen(true)}>
-          <FilePlus2 size={17} />
-          Создать тестовый документ
-        </button>
+        {canCreate ? (
+          <button className="documents-create-button" onClick={() => setCreatorOpen(true)}>
+            <FilePlus2 size={17} />
+            Создать тестовый документ
+          </button>
+        ) : null}
         <p className="workspace-empty">В проекте пока нет документов.</p>
-        {creatorOpen ? (
+        {creatorOpen && canCreate ? (
           <TaggedDocumentModal
             onClose={() => setCreatorOpen(false)}
             onCreate={(title, tag) => {
@@ -734,10 +757,12 @@ function DocumentsRegistry({
           <strong>Реестр последних версий</strong>
           <span>Одинаковые названия внутри одного раздела схлопываются до самой поздней записи.</span>
         </div>
-        <button onClick={() => setCreatorOpen(true)}>
-          <FilePlus2 size={17} />
-          Создать тестовый документ
-        </button>
+        {canCreate ? (
+          <button onClick={() => setCreatorOpen(true)}>
+            <FilePlus2 size={17} />
+            Создать тестовый документ
+          </button>
+        ) : null}
       </div>
       <section className="documents-registry-summary">
         <article>
@@ -779,7 +804,7 @@ function DocumentsRegistry({
           </section>
         ))}
       </div>
-      {creatorOpen ? (
+      {creatorOpen && canCreate ? (
         <TaggedDocumentModal
           onClose={() => setCreatorOpen(false)}
           onCreate={(title, tag) => {
@@ -1064,11 +1089,13 @@ const emptyParticipantForm: ParticipantEdit = {
 
 function ParticipantsManager({
   project,
+  canManage,
   onAddParticipant,
   onUpdateParticipant,
   onDeleteParticipant,
 }: {
   project: DemoProject;
+  canManage: boolean;
   onAddParticipant: (edit: ParticipantEdit) => void;
   onUpdateParticipant: (participantId: string, edit: ParticipantEdit) => void;
   onDeleteParticipant: (participantId: string) => void;
@@ -1155,18 +1182,20 @@ function ParticipantsManager({
         <div>
           <span>
             <ShieldCheck size={16} />
-            Админский режим
+            {canManage ? "Управление сотрудниками" : "Команда проекта"}
           </span>
           <strong>{project.participants.length} участников</strong>
           <p>Email и телефон обязательны. Мессенджер и другие способы связи можно заполнить позже.</p>
         </div>
-        <button onClick={openCreate}>
-          <UserPlus size={17} />
-          Добавить пользователя
-        </button>
+        {canManage ? (
+          <button onClick={openCreate}>
+            <UserPlus size={17} />
+            Добавить пользователя
+          </button>
+        ) : null}
       </section>
 
-      {isEditorOpen ? (
+      {isEditorOpen && canManage ? (
         <section className="participant-editor">
           <header>
             <div>
@@ -1300,18 +1329,20 @@ function ParticipantsManager({
                   <small>{getParticipantAccessText(participant, relatedNodes)}</small>
                 </footer>
               </div>
-              <div className="participant-actions">
-                <button onClick={() => openEdit(participant)} title="Редактировать пользователя">
-                  <PencilLine size={16} />
-                </button>
-                <button
-                  onClick={() => onDeleteParticipant(participant.id)}
-                  disabled={!canDelete}
-                  title={canDelete ? "Удалить пользователя" : "Нельзя удалить последнего администратора"}
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
+              {canManage ? (
+                <div className="participant-actions">
+                  <button onClick={() => openEdit(participant)} title="Редактировать пользователя">
+                    <PencilLine size={16} />
+                  </button>
+                  <button
+                    onClick={() => onDeleteParticipant(participant.id)}
+                    disabled={!canDelete}
+                    title={canDelete ? "Удалить пользователя" : "Нельзя удалить последнего администратора"}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ) : null}
             </article>
           );
         })}

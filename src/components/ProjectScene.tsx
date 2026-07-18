@@ -38,6 +38,7 @@ import {
   getProjectProgress,
 } from "../lib/graph";
 import type { BusinessProcess, DemoProject, MapLevel, NodeStatus, ProcessDocument, ProjectNode, Vec2 } from "../types";
+import type { DemoAccess } from "../lib/demoAccess";
 
 export type SceneHandle = {
   reset: () => void;
@@ -60,6 +61,7 @@ type ProjectSceneProps = {
   isSearching: boolean;
   levelTransition: "down" | "up" | null;
   interfaceScale: number;
+  access: DemoAccess;
   onSelectNode: (nodeId: string) => void;
   onOpenNodeLevel: (node: ProjectNode) => void;
   onBackLevel: () => void;
@@ -146,6 +148,7 @@ export function ProjectScene({
   isSearching,
   levelTransition,
   interfaceScale,
+  access,
   onSelectNode,
   onOpenNodeLevel,
   onBackLevel,
@@ -402,6 +405,9 @@ export function ProjectScene({
     if (node.id === centerNodeId || node.type === "central") {
       return;
     }
+    if (node.type === "document" ? !access.canUploadFiles : !access.canEditStructure) {
+      return;
+    }
     if (node.positionLocked) {
       return;
     }
@@ -594,6 +600,13 @@ export function ProjectScene({
     onSelectNode(node.id);
     setSceneContextMenu(null);
     setProcessContextMenu(null);
+    const hasActions = node.type === "document"
+      || (node.type !== "central" && (canDrillIntoNode(node, level) || access.canEditStructure))
+      || (node.type === "central" && access.canManageProjects);
+    if (!hasActions) {
+      setContextMenu(null);
+      return;
+    }
     setContextMenu({
       nodeId: node.id,
       ...getContextMenuPosition(event.clientX, event.clientY, 236, 430),
@@ -612,6 +625,9 @@ export function ProjectScene({
 
   const handleSceneContextMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
     event.preventDefault();
+    if (!access.canEditStructure && !access.canUploadFiles) {
+      return;
+    }
     const target = event.target as HTMLElement;
     if (target.closest(".map-node, .process-hit, .process-label, .context-menu, .process-task-popover, .level-chip, .linking-hint, .document-exit-zone")) {
       return;
@@ -900,7 +916,7 @@ export function ProjectScene({
           onContextMenu={(event) => event.preventDefault()}
         >
           <strong>{contextNode.shortCode ?? contextNode.title}</strong>
-          {contextNode.type !== "central" ? (
+          {contextNode.type !== "central" && access.canEditStructure ? (
             <button
               onClick={() => {
                 onToggleNodePositionLock(contextNode.id);
@@ -921,32 +937,36 @@ export function ProjectScene({
               >
                 Открыть документ
               </button>
-              <button
-                onClick={() => {
-                  onUpdateDocumentStatus(contextNode.document!.id, "review");
-                  setContextMenu(null);
-                }}
-              >
-                На проверке
-              </button>
-              <button
-                onClick={() => {
-                  onUpdateDocumentStatus(contextNode.document!.id, "approved");
-                  setContextMenu(null);
-                }}
-              >
-                Согласовано
-              </button>
-              <button
-                className="danger"
-                onClick={() => {
-                  onUpdateDocumentStatus(contextNode.document!.id, "comments");
-                  setContextMenu(null);
-                }}
-              >
-                Не принято
-              </button>
-              {contextNode.documentOwnerNodeId ? (
+              {access.canApprove ? (
+                <>
+                  <button
+                    onClick={() => {
+                      onUpdateDocumentStatus(contextNode.document!.id, "review");
+                      setContextMenu(null);
+                    }}
+                  >
+                    На проверке
+                  </button>
+                  <button
+                    onClick={() => {
+                      onUpdateDocumentStatus(contextNode.document!.id, "approved");
+                      setContextMenu(null);
+                    }}
+                  >
+                    Согласовано
+                  </button>
+                  <button
+                    className="danger"
+                    onClick={() => {
+                      onUpdateDocumentStatus(contextNode.document!.id, "comments");
+                      setContextMenu(null);
+                    }}
+                  >
+                    Не принято
+                  </button>
+                </>
+              ) : null}
+              {contextNode.documentOwnerNodeId && access.canUploadFiles ? (
                 <button
                   onClick={() => {
                     onMoveDocumentNode(contextNode.id, null);
@@ -956,15 +976,17 @@ export function ProjectScene({
                   Вынести из ноды
                 </button>
               ) : null}
-              <button
-                onClick={() => {
-                  onMoveDocumentNodeToInbox(contextNode.id);
-                  setContextMenu(null);
-                }}
-              >
-                <FolderInput size={15} />
-                В бесхозные
-              </button>
+              {access.canUploadFiles ? (
+                <button
+                  onClick={() => {
+                    onMoveDocumentNodeToInbox(contextNode.id);
+                    setContextMenu(null);
+                  }}
+                >
+                  <FolderInput size={15} />
+                  В бесхозные
+                </button>
+              ) : null}
             </>
           ) : null}
           {contextNode.type !== "central" && contextNode.type !== "document" ? (
@@ -980,25 +1002,29 @@ export function ProjectScene({
                   {contextNode.childrenLevelId ? "Открыть уровень ноды" : "Добавить уровень"}
                 </button>
               ) : null}
-              <button
-                onClick={() => {
-                  onStartLink(contextNode.id);
-                  setContextMenu(null);
-                }}
-              >
-                Создать бизнес-процесс
-              </button>
-              <button
-                onClick={() => {
-                  onAddRandomFile(contextNode.id);
-                  setContextMenu(null);
-                }}
-              >
-                Положить тестовый файл
-              </button>
+              {access.canEditStructure ? (
+                <>
+                  <button
+                    onClick={() => {
+                      onStartLink(contextNode.id);
+                      setContextMenu(null);
+                    }}
+                  >
+                    Создать бизнес-процесс
+                  </button>
+                  <button
+                    onClick={() => {
+                      onAddRandomFile(contextNode.id);
+                      setContextMenu(null);
+                    }}
+                  >
+                    Положить тестовый файл
+                  </button>
+                </>
+              ) : null}
             </>
           ) : null}
-          {contextNode.type !== "central" ? (
+          {contextNode.type !== "central" && access.canEditStructure ? (
             <button
               className="danger"
               onClick={() => {
@@ -1009,7 +1035,7 @@ export function ProjectScene({
               <Trash2 size={15} />
               {contextNode.type === "document" ? "Удалить файл" : "Удалить ноду"}
             </button>
-          ) : (
+          ) : contextNode.type === "central" && access.canManageProjects ? (
             <button
               className="danger"
               onClick={() => {
@@ -1020,7 +1046,7 @@ export function ProjectScene({
               <Trash2 size={15} />
               Удалить проект
             </button>
-          )}
+          ) : null}
         </div>,
         document.body,
       ) : null}
@@ -1042,16 +1068,18 @@ export function ProjectScene({
             <ExternalLink size={15} />
             Открыть процесс
           </button>
-          <button
-            className="danger"
-            onClick={() => {
-              onDeleteProcess(contextProcess.id);
-              setProcessContextMenu(null);
-            }}
-          >
-            <Trash2 size={15} />
-            Удалить процесс
-          </button>
+          {access.canEditStructure ? (
+            <button
+              className="danger"
+              onClick={() => {
+                onDeleteProcess(contextProcess.id);
+                setProcessContextMenu(null);
+              }}
+            >
+              <Trash2 size={15} />
+              Удалить процесс
+            </button>
+          ) : null}
         </div>,
         document.body,
       ) : null}
@@ -1063,25 +1091,29 @@ export function ProjectScene({
           onClick={(event) => event.stopPropagation()}
           onContextMenu={(event) => event.preventDefault()}
         >
-          <button
-            onClick={() => {
-              onAddSectionNode(sceneContextMenu.position);
-              setSceneContextMenu(null);
-            }}
-          >
-            <SquarePlus size={15} />
-            Создать ноду
-          </button>
-          <button
-            onClick={() => {
-              uploadPositionRef.current = sceneContextMenu.position;
-              uploadInputRef.current?.click();
-              setSceneContextMenu(null);
-            }}
-          >
-            <Upload size={15} />
-            Загрузить файл сюда
-          </button>
+          {access.canEditStructure ? (
+            <button
+              onClick={() => {
+                onAddSectionNode(sceneContextMenu.position);
+                setSceneContextMenu(null);
+              }}
+            >
+              <SquarePlus size={15} />
+              Создать ноду
+            </button>
+          ) : null}
+          {access.canUploadFiles ? (
+            <button
+              onClick={() => {
+                uploadPositionRef.current = sceneContextMenu.position;
+                uploadInputRef.current?.click();
+                setSceneContextMenu(null);
+              }}
+            >
+              <Upload size={15} />
+              Загрузить файл сюда
+            </button>
+          ) : null}
         </div>,
         document.body,
       ) : null}
