@@ -29,6 +29,7 @@ import type {
   ProcessFieldRequirement,
   ProjectParticipantSeed,
 } from "../types";
+import { useI18n, type TranslationParams } from "../lib/i18n";
 
 type BuilderMode = "draft" | "launch";
 
@@ -64,6 +65,7 @@ const fieldDefaults: ProcessFieldRequirement[] = [
 ];
 
 export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenDocument, onAddParticipant }: ProcessBuilderModalProps) {
+  const { t } = useI18n();
   const fromNode = getNodeById(project, process.from);
   const toNode = getNodeById(project, process.to);
   const documentChoices = useMemo(() => getDocumentChoices(project, process), [project, process]);
@@ -161,7 +163,7 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
         documentRequirements: documentRequirementList,
         documents,
         status: mode === "launch" ? "sent" : process.status,
-        validationAt: mode === "launch" ? dueAt || "ожидает проверки" : process.validationAt,
+        validationAt: mode === "launch" ? dueAt || t("ожидает проверки") : process.validationAt,
       },
       mode,
     );
@@ -195,12 +197,12 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
           <div>
             <span>
               <Route size={18} />
-              Конструктор процесса
+              {t("Конструктор процесса")}
             </span>
-            <h2>{process.status === "draft" ? "Черновик процесса" : getProcessStatusText(process.status)}</h2>
-            <p>Соберите маршрут: какие документы передаются, кто согласует, к какому сроку и какие поля обязательны.</p>
+            <h2>{process.status === "draft" ? t("Черновик процесса") : t(getProcessStatusText(process.status))}</h2>
+            <p>{t("Соберите маршрут: какие документы передаются, кто согласует, к какому сроку и какие поля обязательны.")}</p>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Закрыть конструктор">
+          <button className="icon-button" onClick={onClose} aria-label={t("Закрыть конструктор")}>
             <X size={20} />
           </button>
         </header>
@@ -210,41 +212,41 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
             <div className="section-title">
               <ArrowLeftRight size={18} />
               <div>
-                <h3>Маршрут</h3>
-                <p>Связь остается бизнес-процессом между выбранными нодами.</p>
+                <h3>{t("Маршрут")}</h3>
+                <p>{t("Связь остается бизнес-процессом между выбранными нодами.")}</p>
               </div>
             </div>
 
             <div className="builder-route">
               <article>
-                <span>Откуда</span>
-                <strong>{fromNode?.shortCode ?? fromNode?.title ?? "Источник"}</strong>
+                <span>{t("Откуда")}</span>
+                <strong>{fromNode?.shortCode ?? fromNode?.title ?? t("Источник")}</strong>
                 <small>{fromNode?.title}</small>
               </article>
               <i />
               <article>
-                <span>Куда</span>
-                <strong>{toNode?.shortCode ?? toNode?.title ?? "Получатель"}</strong>
+                <span>{t("Куда")}</span>
+                <strong>{toNode?.shortCode ?? toNode?.title ?? t("Получатель")}</strong>
                 <small>{toNode?.title}</small>
               </article>
             </div>
 
             <div className="builder-form-grid">
               <label>
-                <span>Название процесса</span>
+                <span>{t("Название процесса")}</span>
                 <input value={title} onChange={(event) => setTitle(event.currentTarget.value)} />
               </label>
               <label>
-                <span>Направление</span>
+                <span>{t("Направление")}</span>
                 <select value={direction} onChange={(event) => setDirectionValue(event.currentTarget.value as ProcessDirection)}>
-                  <option value="forward">В одну сторону</option>
-                  <option value="backward">Обратно</option>
-                  <option value="both">В обе стороны</option>
+                  <option value="forward">{t("В одну сторону")}</option>
+                  <option value="backward">{t("Обратно")}</option>
+                  <option value="both">{t("В обе стороны")}</option>
                 </select>
               </label>
               <label className="wide">
-                <span>Описание / суть передачи</span>
-                <input value={description} onChange={(event) => setDescription(event.currentTarget.value)} placeholder="Коротко: что передается и зачем" />
+                <span>{t("Описание / суть передачи")}</span>
+                <input value={description} onChange={(event) => setDescription(event.currentTarget.value)} placeholder={t("Коротко: что передается и зачем")} />
               </label>
             </div>
           </section>
@@ -253,52 +255,52 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
             <div className="section-title">
               <UserCheck size={18} />
               <div>
-                <h3>Ответственные</h3>
-                <p>Кто передает, кто получает и кто должен согласовать пакет.</p>
+                <h3>{t("Ответственные")}</h3>
+                <p>{t("Кто передает, кто получает и кто должен согласовать пакет.")}</p>
               </div>
             </div>
 
             <div className="builder-form-grid">
               <label>
-                <span>Кто передает</span>
+                <span>{t("Кто передает")}</span>
                 <PersonSelect value={sender} options={participantOptions} onChange={(value) => handlePersonChange("sender", value)} />
               </label>
               <label>
-                <span>Кому передается</span>
+                <span>{t("Кому передается")}</span>
                 <PersonSelect value={receiver} options={participantOptions} onChange={(value) => handlePersonChange("receiver", value)} />
               </label>
               <label>
-                <span>Кто согласует</span>
+                <span>{t("Кто согласует")}</span>
                 <PersonSelect value={approver} options={participantOptions} onChange={(value) => handlePersonChange("approver", value)} />
               </label>
               <label>
-                <span>{direction === "backward" ? "Срок обратно" : "Срок передачи"}</span>
+                <span>{direction === "backward" ? t("Срок обратно") : t("Срок передачи")}</span>
                 <input type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.currentTarget.value)} />
               </label>
               {direction === "both" ? (
                 <label>
-                  <span>Срок обратной передачи</span>
+                  <span>{t("Срок обратной передачи")}</span>
                   <input type="datetime-local" value={dueBackAt} onChange={(event) => setDueBackAt(event.currentTarget.value)} />
                 </label>
               ) : null}
             </div>
-            {!canSave ? <p className="builder-required-note">Выберите передающего, получателя, согласующего и срок.</p> : null}
+            {!canSave ? <p className="builder-required-note">{t("Выберите передающего, получателя, согласующего и срок.")}</p> : null}
           </section>
 
           <section className="builder-section builder-documents-section">
             <div className="section-title">
               <FileCheck2 size={18} />
               <div>
-                <h3>Документы</h3>
-                <p>Выберите файлы из процесса, вложенных в ноды документов или входящих без связи.</p>
+                <h3>{t("Документы")}</h3>
+                <p>{t("Выберите файлы из процесса, вложенных в ноды документов или входящих без связи.")}</p>
               </div>
             </div>
 
             <div className="builder-document-summary">
               <b>{selectedDocuments.length}</b>
-              <span>выбрано</span>
+              <span>{t("выбрано")}</span>
               <b>{selectedRequiredCount}</b>
-              <span>обязательных</span>
+              <span>{t("обязательных")}</span>
             </div>
 
             <div className="builder-document-list">
@@ -309,23 +311,23 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
                     <article key={`${choice.origin}-${choice.document.id}`} className={state.selected ? "selected" : ""}>
                       <label>
                         <input type="checkbox" checked={state.selected} onChange={() => toggleDocument(choice.document.id)} />
-                        <span style={{ color: getFileTypeColor(choice.document.fileType) }}>{getFileLabel(choice.document.fileType)}</span>
+                        <span style={{ color: getFileTypeColor(choice.document.fileType) }}>{t(getFileLabel(choice.document.fileType))}</span>
                         <div>
                           <strong>{choice.document.title}</strong>
-                          <small>{getOriginText(choice)}</small>
+                          <small>{getOriginText(choice, t)}</small>
                         </div>
                       </label>
                       <button disabled={!state.selected} onClick={() => toggleDocumentRequired(choice.document.id)}>
-                        {state.required ? "обязательный" : "необязательный"}
+                        {state.required ? t("обязательный") : t("необязательный")}
                       </button>
-                      <button className="icon-only" onClick={() => onOpenDocument(choice.document)} title="Открыть документ">
+                      <button className="icon-only" onClick={() => onOpenDocument(choice.document)} title={t("Открыть документ")}>
                         <ExternalLink size={15} />
                       </button>
                     </article>
                   );
                 })
               ) : (
-                <p className="builder-empty">Документов пока нет. Добавьте файл в одну из нод или во входящие, затем вернитесь к конструктору.</p>
+                <p className="builder-empty">{t("Документов пока нет. Добавьте файл в одну из нод или во входящие, затем вернитесь к конструктору.")}</p>
               )}
             </div>
           </section>
@@ -334,16 +336,16 @@ export function ProcessBuilderModal({ project, process, onClose, onSave, onOpenD
 
         <footer className="process-builder-footer">
           <div>
-            <span style={{ color: getProcessStatusColor(process.status) }}>{getProcessStatusText(process.status)}</span>
-            <small>{selectedDocuments.length ? "Можно сохранить или отправить на проверку." : "Процесс можно сохранить без документов как черновик."}</small>
+            <span style={{ color: getProcessStatusColor(process.status) }}>{t(getProcessStatusText(process.status))}</span>
+            <small>{selectedDocuments.length ? t("Можно сохранить или отправить на проверку.") : t("Процесс можно сохранить без документов как черновик.")}</small>
           </div>
           <button onClick={() => save("draft")} disabled={!canSave}>
             <Save size={17} />
-            Сохранить черновик
+            {t("Сохранить черновик")}
           </button>
           <button className="primary-action" onClick={() => save("launch")} disabled={!canSave}>
             <Send size={17} />
-            Отправить на согласование
+            {t("Отправить на согласование")}
           </button>
         </footer>
       </article>
@@ -360,19 +362,20 @@ function PersonSelect({
   options: ParticipantOption[];
   onChange: (value: string) => void;
 }) {
+  const { t } = useI18n();
   const projectOptions = options.filter((option) => option.inProject);
   const directoryOptions = options.filter((option) => !option.inProject);
 
   return (
     <select value={value} onChange={(event) => onChange(event.currentTarget.value)} required>
-      <option value="" disabled>Выберите участника</option>
-      <optgroup label="Команда проекта">
+      <option value="" disabled>{t("Выберите участника")}</option>
+      <optgroup label={t("Команда проекта")}>
         {projectOptions.map((option) => (
           <option key={option.name} value={option.name}>{option.label}</option>
         ))}
       </optgroup>
       {directoryOptions.length ? (
-        <optgroup label="Добавить из справочника">
+        <optgroup label={t("Добавить из справочника")}>
           {directoryOptions.slice(0, 12).map((option) => (
             <option key={option.name} value={option.name}>{option.label}</option>
           ))}
@@ -431,14 +434,14 @@ function getDocumentChoices(project: DemoProject, process: BusinessProcess): Doc
   return choices;
 }
 
-function getOriginText(choice: DocumentChoice) {
+function getOriginText(choice: DocumentChoice, t: (source: string, params?: TranslationParams) => string) {
   if (choice.origin === "process") {
-    return `уже в процессе · ${choice.document.version}`;
+    return t("уже в процессе · {version}", { version: choice.document.version });
   }
   if (choice.origin === "node") {
-    return `внутри ноды: ${choice.ownerTitle ?? "раздел"} · ${choice.document.version}`;
+    return t("внутри ноды: {owner} · {version}", { owner: choice.ownerTitle ?? t("раздел"), version: choice.document.version });
   }
-  return `входящие без связи · ${choice.document.version}`;
+  return t("входящие без связи · {version}", { version: choice.document.version });
 }
 
 function uniqueNames(values: Array<string | undefined>) {

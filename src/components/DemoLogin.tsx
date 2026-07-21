@@ -1,6 +1,7 @@
 import { Building2, HardHat, LockKeyhole, LogIn, ShieldCheck, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { demoAccessByRole } from "../lib/demoAccess";
+import { useI18n } from "../lib/i18n";
 import type { DemoUserRole, ProjectParticipant } from "../types";
 
 type DemoLoginProps = {
@@ -17,6 +18,7 @@ const roleIcons = {
 };
 
 export function DemoLogin({ accounts, initialRole, onLogin }: DemoLoginProps) {
+  const { language, t } = useI18n();
   const [role, setRole] = useState<DemoUserRole>(initialRole);
   const [email, setEmail] = useState(accounts[initialRole]?.email ?? "");
   const [password, setPassword] = useState("demo");
@@ -34,14 +36,14 @@ export function DemoLogin({ accounts, initialRole, onLogin }: DemoLoginProps) {
           <div className="demo-login-brand">
             <span><UserRound size={18} /></span>
             <div>
-              <b>Молекула</b>
-              <small>Демо-доступ</small>
+              <b>{t("Молекула")}</b>
+              <small>{t("Демо-доступ")}</small>
             </div>
           </div>
-          <h1>Вход в систему</h1>
+          <h1>{t("Вход в систему")}</h1>
         </header>
 
-        <div className="demo-role-selector" role="tablist" aria-label="Роль пользователя">
+        <div className="demo-role-selector" role="tablist" aria-label={t("Роль пользователя")}>
           {roles.map((item) => {
             const Icon = roleIcons[item];
             const profile = accounts[item];
@@ -55,8 +57,8 @@ export function DemoLogin({ accounts, initialRole, onLogin }: DemoLoginProps) {
                 aria-selected={role === item}
               >
                 <Icon size={18} />
-                <span>{demoAccessByRole[item].label}</span>
-                <small>{profile?.name ?? "Профиль недоступен"}</small>
+                <span>{t(demoAccessByRole[item].label)}</span>
+                <small>{profile?.name ?? t("Профиль недоступен")}</small>
               </button>
             );
           })}
@@ -74,16 +76,16 @@ export function DemoLogin({ accounts, initialRole, onLogin }: DemoLoginProps) {
           <div className="demo-login-account">
             <span>{account?.avatarUrl ? <img src={account.avatarUrl} alt="" /> : getInitials(account?.name ?? "")}</span>
             <div>
-              <strong>{account?.name ?? "Нет пользователя"}</strong>
-              <small>{account?.position ?? demoAccessByRole[role].scopeLabel}</small>
+              <strong>{account?.name ?? t("Нет пользователя")}</strong>
+              <small>{account?.position ?? t(demoAccessByRole[role].scopeLabel)}</small>
             </div>
           </div>
           <label>
-            <span>Логин</span>
+            <span>{t("Логин")}</span>
             <input type="email" value={email} onChange={(event) => setEmail(event.currentTarget.value)} autoComplete="username" />
           </label>
           <label>
-            <span>Пароль</span>
+            <span>{t("Пароль")}</span>
             <div className="demo-password-field">
               <LockKeyhole size={16} />
               <input type="password" value={password} onChange={(event) => setPassword(event.currentTarget.value)} autoComplete="current-password" />
@@ -91,7 +93,7 @@ export function DemoLogin({ accounts, initialRole, onLogin }: DemoLoginProps) {
           </label>
           <button className="demo-login-submit" type="submit" disabled={!account || !email.trim() || !password}>
             <LogIn size={17} />
-            Войти как {demoAccessByRole[role].label.toLocaleLowerCase()}
+            {t("Войти как {role}", { role: t(demoAccessByRole[role].label).toLocaleLowerCase(language === "en" ? "en-US" : "ru-RU") })}
           </button>
         </form>
       </main>

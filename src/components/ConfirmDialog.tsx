@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { TriangleAlert, Trash2, X } from "lucide-react";
+import { useI18n } from "../lib/i18n";
 
 type ConfirmDialogProps = {
   title: string;
@@ -17,6 +18,7 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const { t } = useI18n();
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
@@ -50,12 +52,12 @@ export function ConfirmDialog({
             <h2 id="confirm-dialog-title">{title}</h2>
             <p id="confirm-dialog-description">{description}</p>
           </div>
-          <button className="icon-button" onClick={onCancel} aria-label="Закрыть подтверждение">
+          <button className="icon-button" onClick={onCancel} aria-label={t("Закрыть подтверждение")}>
             <X size={18} />
           </button>
         </header>
         <footer>
-          <button ref={cancelButtonRef} onClick={onCancel}>Отмена</button>
+          <button ref={cancelButtonRef} onClick={onCancel}>{t("Отмена")}</button>
           <button className="danger-action" onClick={onConfirm}>
             <Trash2 size={16} />
             {confirmLabel}

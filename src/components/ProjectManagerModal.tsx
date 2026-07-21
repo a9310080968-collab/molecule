@@ -2,6 +2,7 @@ import { Check, FolderPlus, Search, UsersRound, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import clsx from "clsx";
 import type { ProjectParticipantRole, ProjectParticipantSeed, ProjectTemplate } from "../types";
+import { useI18n } from "../lib/i18n";
 
 type ProjectManagerModalProps = {
   templates: ProjectTemplate[];
@@ -40,8 +41,9 @@ export function ProjectManagerModal({
   onClose,
   onCreateProject,
 }: ProjectManagerModalProps) {
-  const [projectTitle, setProjectTitle] = useState("Новый проект");
-  const [projectAddress, setProjectAddress] = useState("Объект без адреса");
+  const { t } = useI18n();
+  const [projectTitle, setProjectTitle] = useState(() => t("Новый проект"));
+  const [projectAddress, setProjectAddress] = useState(() => t("Объект без адреса"));
   const [selectedTemplateId, setSelectedTemplateId] = useState(templates[0]?.id ?? "");
   const [selectedTeamEmails, setSelectedTeamEmails] = useState<string[]>([
     baseTeam[0].email,
@@ -93,12 +95,12 @@ export function ProjectManagerModal({
           <div>
             <span>
               <FolderPlus size={18} />
-              Новый проект
+              {t("Новый проект")}
             </span>
-            <h2>Создание проекта</h2>
-            <p>Задайте базовые данные. После создания проект откроется на карте, где ноды и бизнес-процессы собираются визуально.</p>
+            <h2>{t("Создание проекта")}</h2>
+            <p>{t("Задайте базовые данные. После создания проект откроется на карте, где ноды и бизнес-процессы собираются визуально.")}</p>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Закрыть">
+          <button className="icon-button" onClick={onClose} aria-label={t("Закрыть")}>
             <X size={20} />
           </button>
         </header>
@@ -106,19 +108,19 @@ export function ProjectManagerModal({
         <div className="project-create-body">
           <section className="project-create-form project-manager-form">
             <label>
-              <span>Название проекта</span>
+              <span>{t("Название проекта")}</span>
               <input value={projectTitle} onChange={(event) => setProjectTitle(event.currentTarget.value)} />
             </label>
             <label>
-              <span>Объект / адрес</span>
+              <span>{t("Объект / адрес")}</span>
               <input value={projectAddress} onChange={(event) => setProjectAddress(event.currentTarget.value)} />
             </label>
             <label>
-              <span>Стартовый шаблон</span>
+              <span>{t("Стартовый шаблон")}</span>
               <select value={selectedTemplate?.id ?? ""} onChange={(event) => setSelectedTemplateId(event.currentTarget.value)}>
                 {templates.map((template) => (
                   <option key={template.id} value={template.id}>
-                    {template.title}
+                    {t(template.title)}
                   </option>
                 ))}
               </select>
@@ -129,18 +131,18 @@ export function ProjectManagerModal({
             <div>
               <span>
                 <UsersRound size={17} />
-                Команда
+                {t("Команда")}
               </span>
-              <strong>{selectedTeam.length} участников выбрано</strong>
-              <p>Список может быть большим. Для выбора участников откройте отдельное окно с поиском.</p>
+              <strong>{t("{count} участников выбрано", { count: selectedTeam.length })}</strong>
+              <p>{t("Список может быть большим. Для выбора участников откройте отдельное окно с поиском.")}</p>
             </div>
             <button onClick={() => setTeamPickerOpen(true)}>
               <UsersRound size={17} />
-              Выбрать команду
+              {t("Выбрать команду")}
             </button>
           </section>
 
-          <section className="selected-team-preview" aria-label="Выбранная команда">
+          <section className="selected-team-preview" aria-label={t("Выбранная команда")}>
             {selectedTeam.slice(0, 8).map((member) => (
               <article key={member.email}>
                 <b>{getInitials(member.name)}</b>
@@ -150,15 +152,15 @@ export function ProjectManagerModal({
                 </div>
               </article>
             ))}
-            {selectedTeam.length > 8 ? <em>+{selectedTeam.length - 8} участников</em> : null}
+            {selectedTeam.length > 8 ? <em>{t("+{count} участников", { count: selectedTeam.length - 8 })}</em> : null}
           </section>
         </div>
 
         <footer className="project-create-footer">
-          <span>{canCreate ? "Проект готов к созданию." : "Заполните название, объект и выберите шаблон."}</span>
+          <span>{canCreate ? t("Проект готов к созданию.") : t("Заполните название, объект и выберите шаблон.")}</span>
           <button className="primary-action" disabled={!canCreate} onClick={createProject}>
             <FolderPlus size={17} />
-            Создать проект
+            {t("Создать проект")}
           </button>
         </footer>
       </article>
@@ -170,19 +172,19 @@ export function ProjectManagerModal({
               <div>
                 <span>
                   <UsersRound size={18} />
-                  Команда проекта
+                  {t("Команда проекта")}
                 </span>
-                <h2>Выбор участников</h2>
-                <p>Администратор включен всегда. Остальных участников можно быстро найти и добавить.</p>
+                <h2>{t("Выбор участников")}</h2>
+                <p>{t("Администратор включен всегда. Остальных участников можно быстро найти и добавить.")}</p>
               </div>
-              <button className="icon-button" onClick={() => setTeamPickerOpen(false)} aria-label="Закрыть выбор команды">
+              <button className="icon-button" onClick={() => setTeamPickerOpen(false)} aria-label={t("Закрыть выбор команды")}>
                 <X size={20} />
               </button>
             </header>
 
             <label className="team-search">
               <Search size={17} />
-              <input value={teamQuery} onChange={(event) => setTeamQuery(event.currentTarget.value)} placeholder="Поиск по имени, роли, почте или телефону..." />
+              <input value={teamQuery} onChange={(event) => setTeamQuery(event.currentTarget.value)} placeholder={t("Поиск по имени, роли, почте или телефону...")} />
             </label>
 
             <div className="team-picker-list">
@@ -201,16 +203,16 @@ export function ProjectManagerModal({
                       <span>{member.position}</span>
                       <small>{member.email} · {member.phone}</small>
                     </div>
-                    <em>{member.role}</em>
+                    <em>{t(getRoleLabel(member.role))}</em>
                   </button>
                 );
               })}
             </div>
 
             <footer>
-              <span>{selectedTeam.length} участников выбрано</span>
+              <span>{t("{count} участников выбрано", { count: selectedTeam.length })}</span>
               <button className="primary-action" onClick={() => setTeamPickerOpen(false)}>
-                Готово
+                {t("Готово")}
               </button>
             </footer>
           </article>
@@ -248,4 +250,19 @@ function getInitials(name: string) {
     .join("")
     .slice(0, 2)
     .toUpperCase();
+}
+
+function getRoleLabel(role: ProjectParticipantRole) {
+  const labels: Record<ProjectParticipantRole, string> = {
+    admin: "Администратор",
+    gip: "ГИП",
+    coordinator: "Координатор",
+    architect: "Архитектор",
+    constructor: "Конструктор",
+    engineer: "Инженер",
+    estimator: "Сметчик",
+    observer: "Наблюдатель",
+    contractor: "Подрядчик",
+  };
+  return labels[role];
 }

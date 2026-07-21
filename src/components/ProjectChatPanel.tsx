@@ -1,6 +1,7 @@
 import { ChevronDown, MessageCircle, Send } from "lucide-react";
 import { type CSSProperties, type PointerEvent, useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "../types";
+import { useI18n } from "../lib/i18n";
 
 type ProjectChatPanelProps = {
   messages: ChatMessage[];
@@ -19,6 +20,7 @@ type ChatFrame = {
 };
 
 export function ProjectChatPanel({ messages, isOpen, unreadCount, onSend, onToggle, onOpenChat }: ProjectChatPanelProps) {
+  const { t, system } = useI18n();
   const [value, setValue] = useState("");
   const [frame, setFrame] = useState(() => getInitialChatFrame());
   const panelRef = useRef<HTMLElement | null>(null);
@@ -116,7 +118,7 @@ export function ProjectChatPanel({ messages, isOpen, unreadCount, onSend, onTogg
 
   if (!isOpen) {
     return (
-      <button className="project-chat-launcher glass-panel" onClick={onToggle} aria-label="Открыть мессенджер проекта">
+      <button className="project-chat-launcher glass-panel" onClick={onToggle} aria-label={t("Открыть мессенджер проекта")}>
         <MessageCircle size={19} />
         {unreadCount > 0 ? <span>{unreadCount}</span> : null}
       </button>
@@ -128,11 +130,11 @@ export function ProjectChatPanel({ messages, isOpen, unreadCount, onSend, onTogg
       <header onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
         <button onClick={onOpenChat}>
           <MessageCircle size={17} />
-          Мессенджер
+          {t("Мессенджер")}
         </button>
         <div className="project-chat-actions">
           <span>{unreadCount || messages.length}</span>
-          <button className="project-chat-collapse" onClick={onToggle} aria-label="Свернуть мессенджер">
+          <button className="project-chat-collapse" onClick={onToggle} aria-label={t("Свернуть мессенджер")}>
             <ChevronDown size={17} />
           </button>
         </div>
@@ -142,8 +144,8 @@ export function ProjectChatPanel({ messages, isOpen, unreadCount, onSend, onTogg
         {messages.map((message) => (
           <article key={message.id}>
             <b>{message.author}</b>
-            <span>{message.role} · {message.time}</span>
-            <p>{message.text}</p>
+            <span>{t(message.role)} · {system(message.time)}</span>
+            <p>{system(message.text)}</p>
           </article>
         ))}
       </div>
@@ -158,9 +160,9 @@ export function ProjectChatPanel({ messages, isOpen, unreadCount, onSend, onTogg
               send();
             }
           }}
-          placeholder="Сообщение в проект..."
+          placeholder={t("Сообщение в проект...")}
         />
-        <button onClick={send} aria-label="Отправить сообщение в мессенджер">
+        <button onClick={send} aria-label={t("Отправить сообщение в мессенджер")}>
           <Send size={16} />
         </button>
       </footer>

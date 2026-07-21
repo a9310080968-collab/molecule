@@ -8,6 +8,7 @@ import {
   FileStack,
   FilePlus2,
   FolderPlus,
+  Globe2,
   MessageCircle,
   Phone,
   Send,
@@ -24,6 +25,7 @@ import {
 import clsx from "clsx";
 import { useEffect, useState } from "react";
 import type { DemoAccess } from "../lib/demoAccess";
+import { useI18n } from "../lib/i18n";
 import {
   getAcceptedAssignments,
   getChecks,
@@ -160,6 +162,7 @@ export function WorkspacePanel({
   onFontScaleChange,
   onInterfaceScaleChange,
 }: WorkspacePanelProps) {
+  const { t } = useI18n();
   if (activeMenu === "map") {
     return null;
   }
@@ -168,17 +171,17 @@ export function WorkspacePanel({
   const Icon = meta.icon;
 
   return (
-    <section className="workspace-panel glass-panel" aria-label={meta.title}>
+    <section className="workspace-panel glass-panel" aria-label={t(meta.title)}>
       <header className="workspace-header">
         <div>
           <span>
             <Icon size={18} />
-            {meta.badge}
+            {t(meta.badge)}
           </span>
-          <h2>{meta.title}</h2>
-          <p>{meta.subtitle}</p>
+          <h2>{t(meta.title)}</h2>
+          <p>{t(meta.subtitle)}</p>
         </div>
-        <button className="icon-button" onClick={onClose} aria-label="Закрыть раздел">
+        <button className="icon-button" onClick={onClose} aria-label={t("Закрыть раздел")}>
           <X size={20} />
         </button>
       </header>
@@ -233,6 +236,7 @@ function WorkspaceContent({
   onFontScaleChange,
   onInterfaceScaleChange,
 }: Omit<WorkspacePanelProps, "onClose">) {
+  const { t, system } = useI18n();
   if (activeMenu === "documents") {
     return (
       <DocumentsRegistry
@@ -266,7 +270,7 @@ function WorkspaceContent({
       <div className="workspace-grid">
         {accepted.map((process) => (
           <button key={process.id} className="workspace-row version-row" onClick={() => onSelectProcess(process.id)}>
-            <b>{process.validationAt ?? "в работе"}</b>
+            <b>{system(process.validationAt ?? t("В работе"))}</b>
             <div>
               <strong>{process.title}</strong>
               <span>{process.sender} → {process.receiver}</span>
@@ -334,33 +338,67 @@ function SettingsWorkspace({
   onFontScaleChange: (scale: number) => void;
   onInterfaceScaleChange: (scale: number) => void;
 }) {
-  const [title, setTitle] = useState(`${project.title}: шаблон`);
-  const [description, setDescription] = useState("Структура проекта без рабочих документов.");
+  const { language, setLanguage, t } = useI18n();
+  const [title, setTitle] = useState(() => `${project.title}: ${t("шаблон")}`);
+  const [description, setDescription] = useState(() => t("Структура проекта без рабочих документов."));
+
+  useEffect(() => {
+    setTitle((current) =>
+      current === `${project.title}: шаблон` || current === `${project.title}: template`
+        ? `${project.title}: ${t("шаблон")}`
+        : current,
+    );
+    setDescription((current) =>
+      current === "Структура проекта без рабочих документов." || current === "Project structure without working documents."
+        ? t("Структура проекта без рабочих документов.")
+        : current,
+    );
+  }, [language, project.title, t]);
 
   function saveTemplate() {
     const template = onCreateTemplate(title, description);
     if (!template) {
       return;
     }
-    setTitle(`${template.title}: копия`);
-    setDescription(template.description);
+    setTitle(t("{title}: копия", { title: t(template.title) }));
+    setDescription(t(template.description));
   }
 
   return (
     <div className="settings-workspace">
+      <section className="template-settings-card language-settings-card">
+        <div className="section-title">
+          <Globe2 size={18} />
+          <div>
+            <h3>{t("Язык интерфейса")}</h3>
+            <p>{t("Язык применяется сразу и сохраняется для этого браузера.")}</p>
+          </div>
+        </div>
+        <div className="language-switch" role="group" aria-label={t("Язык интерфейса")}>
+          <button className={language === "ru" ? "active" : ""} onClick={() => setLanguage("ru")}>
+            RU
+            <span>{t("Русский")}</span>
+          </button>
+          <button className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")}>
+            EN
+            <span>{t("Английский")}</span>
+          </button>
+        </div>
+      </section>
+
       <section className="template-settings-card appearance-settings-card">
         <div className="section-title">
           <Scaling size={18} />
           <div>
-            <h3>Масштаб интерфейса</h3>
-            <p>Размеры текста и рабочих панелей сохраняются для этого браузера.</p>
+            <h3>{t("Масштаб интерфейса")}</h3>
+            <p>{t("Размеры текста и рабочих панелей сохраняются для этого браузера.")}</p>
           </div>
         </div>
         <label className="appearance-setting-row">
           <Type size={18} />
           <span>
-            <strong>Размер текста</strong>
-            <small>Подписи, поля и служебный текст</small>
+            <strong>{t("Размер текста")}</strong>
+            <small>{t("Подписи, поля и служебный текст")}</small>
           </span>
           <input
             type="range"
@@ -375,8 +413,8 @@ function SettingsWorkspace({
         <label className="appearance-setting-row">
           <Scaling size={18} />
           <span>
-            <strong>Размер интерфейса</strong>
-            <small>Ширина панелей и размер основных элементов управления</small>
+            <strong>{t("Размер интерфейса")}</strong>
+            <small>{t("Ширина панелей и размер основных элементов управления")}</small>
           </span>
           <input
             type="range"
@@ -394,21 +432,21 @@ function SettingsWorkspace({
         <div className="section-title">
           <FolderPlus size={18} />
           <div>
-            <h3>Шаблоны проектов</h3>
-            <p>Шаблоны создаются здесь, отдельно от конструктора нового проекта.</p>
+            <h3>{t("Шаблоны проектов")}</h3>
+            <p>{t("Шаблоны создаются здесь, отдельно от конструктора нового проекта.")}</p>
           </div>
         </div>
         <div className="template-settings-form">
           <label>
-            <span>Название шаблона</span>
+            <span>{t("Название шаблона")}</span>
             <input value={title} onChange={(event) => setTitle(event.currentTarget.value)} />
           </label>
           <label>
-            <span>Описание</span>
+            <span>{t("Описание")}</span>
             <textarea value={description} onChange={(event) => setDescription(event.currentTarget.value)} />
           </label>
           <button className="settings-open-button" onClick={saveTemplate}>
-            Сохранить текущий проект как шаблон
+            {t("Сохранить текущий проект как шаблон")}
           </button>
         </div>
       </section>
@@ -417,16 +455,16 @@ function SettingsWorkspace({
         <div className="section-title">
           <FileStack size={18} />
           <div>
-            <h3>Доступные шаблоны</h3>
-            <p>Эти шаблоны доступны в форме создания нового проекта.</p>
+            <h3>{t("Доступные шаблоны")}</h3>
+            <p>{t("Эти шаблоны доступны в форме создания нового проекта.")}</p>
           </div>
         </div>
         <div className="settings-template-list">
           {projectTemplates.map((template) => (
             <article key={template.id}>
-              <strong>{template.title}</strong>
-              <span>{template.description}</span>
-              <em>{template.nodes.length} нод · {template.levels.length} уровней · {template.sourceProjectTitle}</em>
+              <strong>{t(template.title)}</strong>
+              <span>{t(template.description)}</span>
+              <em>{formatTemplateStats(template.nodes.length, template.levels.length, t(template.sourceProjectTitle), language)}</em>
             </article>
           ))}
         </div>
@@ -434,32 +472,50 @@ function SettingsWorkspace({
 
       <div className="workspace-grid settings-grid">
       <article className="workspace-row">
-        <b>Цвет</b>
+        <b>{t("Цвет")}</b>
         <div>
-          <strong>Цвет нод фиксирован правилами</strong>
-          <span>Согласованные разделы получают спокойный янтарный акцент, остальные остаются серыми.</span>
+          <strong>{t("Цвет нод фиксирован правилами")}</strong>
+          <span>{t("Согласованные разделы получают спокойный янтарный акцент, остальные остаются серыми.")}</span>
         </div>
-        <em>без палитры</em>
+        <em>{t("без палитры")}</em>
       </article>
       <article className="workspace-row">
-        <b>Связи</b>
+        <b>{t("Связи")}</b>
         <div>
-          <strong>Только ручное построение</strong>
-          <span>Нода → плюс → вторая нода. Автоматического прилипания больше нет.</span>
+          <strong>{t("Только ручное построение")}</strong>
+          <span>{t("Нода → плюс → вторая нода. Автоматического прилипания больше нет.")}</span>
         </div>
-        <em>процесс</em>
+        <em>{t("процесс")}</em>
       </article>
       <article className="workspace-row">
-        <b>Теги</b>
+        <b>{t("Теги")}</b>
         <div>
-          <strong>Почта и мессенджер могут предложить связь</strong>
-          <span>Если тегов нет, задание прикручивается вручную из входящих.</span>
+          <strong>{t("Почта и мессенджер могут предложить связь")}</strong>
+          <span>{t("Если тегов нет, задание прикручивается вручную из входящих.")}</span>
         </div>
-        <em>демо</em>
+        <em>{t("демо")}</em>
       </article>
     </div>
     </div>
   );
+}
+
+function formatTemplateStats(nodes: number, levels: number, source: string, language: "ru" | "en") {
+  if (language === "en") {
+    return `${nodes} ${nodes === 1 ? "node" : "nodes"} · ${levels} ${levels === 1 ? "level" : "levels"} · ${source}`;
+  }
+  return `${formatRussianCount(nodes, ["нода", "ноды", "нод"])} · ${formatRussianCount(levels, ["уровень", "уровня", "уровней"])} · ${source}`;
+}
+
+function formatRussianCount(value: number, forms: [string, string, string]) {
+  const mod10 = value % 10;
+  const mod100 = value % 100;
+  const form = mod10 === 1 && mod100 !== 11
+    ? forms[0]
+    : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
+      ? forms[1]
+      : forms[2];
+  return `${value} ${form}`;
 }
 
 function TasksWorkspace({
@@ -475,14 +531,15 @@ function TasksWorkspace({
   onCreateTaskDraft: (edit: WorkspaceTaskDraft) => void;
   canCreateTasks: boolean;
 }) {
+  const { t } = useI18n();
   const rootLevel = getDefaultLevel(project);
   const nodes = getLevelNodes(project, rootLevel).filter((node) => node.type !== "central" && node.type !== "document");
   const [creatorOpen, setCreatorOpen] = useState(false);
-  const [title, setTitle] = useState("Новое задание");
-  const [description, setDescription] = useState("Передать комплект документов на проверку.");
+  const [title, setTitle] = useState(() => t("Новое задание"));
+  const [description, setDescription] = useState(() => t("Передать комплект документов на проверку."));
   const [fromNodeId, setFromNodeId] = useState(nodes[0]?.id ?? "");
   const [toNodeId, setToNodeId] = useState(nodes[1]?.id ?? nodes[0]?.id ?? "");
-  const [dueAt, setDueAt] = useState("сегодня, 18:00");
+  const [dueAt, setDueAt] = useState(() => t("сегодня, 18:00"));
   const canCreate = Boolean(title.trim() && fromNodeId && toNodeId && fromNodeId !== toNodeId);
 
   function createTask() {
@@ -503,13 +560,13 @@ function TasksWorkspace({
     <div className="tasks-workspace">
       <section className="tasks-toolbar">
         <div>
-          <strong>Задания проекта</strong>
-          <span>Задание можно создать прямо здесь, без выбора ноды на карте.</span>
+          <strong>{t("Задания проекта")}</strong>
+          <span>{t("Задание можно создать прямо здесь, без выбора ноды на карте.")}</span>
         </div>
         {canCreateTasks ? (
           <button onClick={() => setCreatorOpen(true)}>
             <ClipboardCheck size={17} />
-            Создать задание
+            {t("Создать задание")}
           </button>
         ) : null}
       </section>
@@ -517,22 +574,22 @@ function TasksWorkspace({
       {creatorOpen && canCreateTasks ? (
         <section className="task-create-card">
           <header>
-            <strong>Новое задание</strong>
-            <button className="icon-button" onClick={() => setCreatorOpen(false)} aria-label="Закрыть создание задания">
+            <strong>{t("Новое задание")}</strong>
+            <button className="icon-button" onClick={() => setCreatorOpen(false)} aria-label={t("Закрыть создание задания")}>
               <X size={18} />
             </button>
           </header>
           <div className="task-create-grid">
             <label>
-              <span>Название</span>
+              <span>{t("Название")}</span>
               <input value={title} onChange={(event) => setTitle(event.currentTarget.value)} />
             </label>
             <label>
-              <span>Срок</span>
+              <span>{t("Срок")}</span>
               <input value={dueAt} onChange={(event) => setDueAt(event.currentTarget.value)} />
             </label>
             <label>
-              <span>Откуда</span>
+              <span>{t("Откуда")}</span>
               <select value={fromNodeId} onChange={(event) => setFromNodeId(event.currentTarget.value)}>
                 {nodes.map((node) => (
                   <option key={node.id} value={node.id}>
@@ -542,7 +599,7 @@ function TasksWorkspace({
               </select>
             </label>
             <label>
-              <span>Куда</span>
+              <span>{t("Куда")}</span>
               <select value={toNodeId} onChange={(event) => setToNodeId(event.currentTarget.value)}>
                 {nodes.map((node) => (
                   <option key={node.id} value={node.id}>
@@ -552,14 +609,14 @@ function TasksWorkspace({
               </select>
             </label>
             <label className="wide">
-              <span>Описание</span>
+              <span>{t("Описание")}</span>
               <textarea value={description} onChange={(event) => setDescription(event.currentTarget.value)} />
             </label>
           </div>
           <footer>
-            <span>{canCreate ? "Будет создан черновик бизнес-процесса." : "Выберите разные ноды отправителя и получателя."}</span>
+            <span>{canCreate ? t("Будет создан черновик бизнес-процесса.") : t("Выберите разные ноды отправителя и получателя.")}</span>
             <button className="primary-action" disabled={!canCreate} onClick={createTask}>
-              Создать задание
+              {t("Создать задание")}
             </button>
           </footer>
         </section>
@@ -585,6 +642,7 @@ function MessengerWorkspace({
   onReceiveMail: () => void;
   onSendMessage: (text: string) => void;
 }) {
+  const { t, system } = useI18n();
   const [messageText, setMessageText] = useState("");
   const messages = [...project.chatMessages].reverse();
   const activeProcesses = project.processes
@@ -607,15 +665,15 @@ function MessengerWorkspace({
           <div>
             <span>
               <MessageCircle size={16} />
-              Мессенджер проекта
+              {t("Мессенджер проекта")}
             </span>
             <strong>{project.title}</strong>
-            <p>{project.participants.length} участников, события из почты и рабочих интеграций попадают сюда же.</p>
+            <p>{t("{count} участников, события из почты и рабочих интеграций попадают сюда же.", { count: project.participants.length })}</p>
           </div>
-          <em>{messages.length} сообщений</em>
+          <em>{t("{count} сообщений", { count: messages.length })}</em>
         </header>
 
-        <div className="messenger-feed" aria-label="Сообщения проекта">
+        <div className="messenger-feed" aria-label={t("Сообщения проекта")}>
           {messages.length ? messages.map((message) => {
             const isOwn = user ? message.author === user.name : false;
 
@@ -623,18 +681,18 @@ function MessengerWorkspace({
               <article key={message.id} className={clsx("messenger-message", isOwn && "own")}>
                 <header>
                   <b>{message.author}</b>
-                  <span>{message.role} · {message.time}</span>
+                  <span>{t(message.role)} · {system(message.time)}</span>
                 </header>
-                <p>{message.text}</p>
+                <p>{system(message.text)}</p>
                 {message.processId ? (
                   <button className="messenger-process-link" onClick={() => onSelectProcess(message.processId!)}>
-                    Открыть бизнес-процесс
+                    {t("Открыть бизнес-процесс")}
                   </button>
                 ) : null}
               </article>
             );
           }) : (
-            <p className="workspace-empty">В мессенджере пока нет сообщений.</p>
+            <p className="workspace-empty">{t("В мессенджере пока нет сообщений.")}</p>
           )}
         </div>
 
@@ -648,44 +706,44 @@ function MessengerWorkspace({
                 submitMessage();
               }
             }}
-            placeholder="Напишите сообщение команде проекта..."
+            placeholder={t("Напишите сообщение команде проекта...")}
           />
           <button className="messenger-send-button" disabled={!messageText.trim()} onClick={submitMessage}>
             <Send size={16} />
-            Отправить
+            {t("Отправить")}
           </button>
         </footer>
       </section>
 
-      <aside className="messenger-side" aria-label="События мессенджера">
+      <aside className="messenger-side" aria-label={t("События мессенджера")}>
         <article className="messenger-action-card">
           <span>
             <Paperclip size={15} />
-            Демо-события
+            {t("Демо-события")}
           </span>
-          <strong>Проверка входящих</strong>
-          <p>Эти кнопки имитируют, как сообщение или письмо приносит файл и привязывает его к процессу.</p>
+          <strong>{t("Проверка входящих")}</strong>
+          <p>{t("Эти кнопки имитируют, как сообщение или письмо приносит файл и привязывает его к процессу.")}</p>
           <button onClick={onReceiveChat}>
             <MessageCircle size={15} />
-            Событие из мессенджера
+            {t("Событие из мессенджера")}
           </button>
           <button onClick={onReceiveMail}>
             <Mail size={15} />
-            Письмо с вложением
+            {t("Письмо с вложением")}
           </button>
         </article>
 
         <article className="messenger-action-card">
-          <span>Активные контейнеры</span>
+          <span>{t("Активные контейнеры")}</span>
           {activeProcesses.length ? activeProcesses.map((process) => (
             <button key={process.id} onClick={() => onSelectProcess(process.id)}>
               <i style={{ background: getProcessStatusColor(process.status) }} />
               <div>
                 <b>{process.title}</b>
-                <small>{getProcessStatusText(process.status)}</small>
+                <small>{t(getProcessStatusText(process.status))}</small>
               </div>
             </button>
-          )) : <p>Нет активных контейнеров.</p>}
+          )) : <p>{t("Нет активных контейнеров.")}</p>}
         </article>
       </aside>
     </div>
@@ -722,7 +780,8 @@ function DocumentsRegistry({
   onCreateTaggedDocument: (title: string, tag: string) => void;
   canCreate: boolean;
 }) {
-  const groups = buildDocumentRegistry(project);
+  const { t, system } = useI18n();
+  const groups = buildDocumentRegistry(project, t);
   const total = groups.reduce((sum, group) => sum + group.documents.length, 0);
   const orphanCount = groups.find((group) => group.isOrphan)?.documents.length ?? 0;
   const [creatorOpen, setCreatorOpen] = useState(false);
@@ -733,10 +792,10 @@ function DocumentsRegistry({
         {canCreate ? (
           <button className="documents-create-button" onClick={() => setCreatorOpen(true)}>
             <FilePlus2 size={17} />
-            Создать тестовый документ
+            {t("Создать тестовый документ")}
           </button>
         ) : null}
-        <p className="workspace-empty">В проекте пока нет документов.</p>
+        <p className="workspace-empty">{t("В проекте пока нет документов.")}</p>
         {creatorOpen && canCreate ? (
           <TaggedDocumentModal
             onClose={() => setCreatorOpen(false)}
@@ -754,28 +813,28 @@ function DocumentsRegistry({
     <div className="documents-registry">
       <div className="documents-registry-toolbar">
         <div>
-          <strong>Реестр последних версий</strong>
-          <span>Одинаковые названия внутри одного раздела схлопываются до самой поздней записи.</span>
+          <strong>{t("Реестр последних версий")}</strong>
+          <span>{t("Одинаковые названия внутри одного раздела схлопываются до самой поздней записи.")}</span>
         </div>
         {canCreate ? (
           <button onClick={() => setCreatorOpen(true)}>
             <FilePlus2 size={17} />
-            Создать тестовый документ
+            {t("Создать тестовый документ")}
           </button>
         ) : null}
       </div>
       <section className="documents-registry-summary">
         <article>
           <strong>{total}</strong>
-          <span>актуальных документов</span>
+          <span>{t("актуальных документов")}</span>
         </article>
         <article>
           <strong>{groups.length}</strong>
-          <span>разделов и нод</span>
+          <span>{t("разделов и нод")}</span>
         </article>
         <article>
           <strong>{orphanCount}</strong>
-          <span>бесхозных наверху</span>
+          <span>{t("бесхозных наверху")}</span>
         </article>
       </section>
 
@@ -786,16 +845,16 @@ function DocumentsRegistry({
               <b>{group.code}</b>
               <div>
                 <strong>{group.title}</strong>
-                <span>{group.documents.length} последних версий</span>
+                <span>{t("{count} последних версий", { count: group.documents.length })}</span>
               </div>
             </header>
             <div className="document-group-list">
               {group.documents.map((item) => (
                 <button key={`${item.groupKey}-${item.document.id}`} className="document-registry-row" onClick={() => onOpenDocument(item.document)}>
-                  <b style={{ color: getFileTypeColor(item.document.fileType) }}>{getFileLabel(item.document.fileType)}</b>
+                  <b style={{ color: getFileTypeColor(item.document.fileType) }}>{t(getFileLabel(item.document.fileType))}</b>
                   <div>
                     <strong>{item.document.title}</strong>
-                    <span>{item.location} · {getDocumentSourceLabel(item.document)} · изменён {item.document.updatedAt}</span>
+                    <span>{t("{location} · {source} · изменён {time}", { location: item.location, source: t(getDocumentSourceLabel(item.document)), time: system(item.document.updatedAt) })}</span>
                   </div>
                   <em>{item.document.version}</em>
                 </button>
@@ -824,6 +883,7 @@ function TaggedDocumentModal({
   onClose: () => void;
   onCreate: (title: string, tag: string) => void;
 }) {
+  const { t } = useI18n();
   const [title, setTitle] = useState("Планировка_АР.pdf");
   const [tag, setTag] = useState("АР");
   const canCreate = Boolean(title.trim());
@@ -835,27 +895,27 @@ function TaggedDocumentModal({
           <div>
             <span>
               <FilePlus2 size={17} />
-              Тестовый документ
+              {t("Тестовый документ")}
             </span>
-            <h3>Создать документ с тегом</h3>
-            <p>Если тег совпадет с тегом ноды, документ сразу попадет внутрь этой ноды.</p>
+            <h3>{t("Создать документ с тегом")}</h3>
+            <p>{t("Если тег совпадет с тегом ноды, документ сразу попадет внутрь этой ноды.")}</p>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Закрыть">
+          <button className="icon-button" onClick={onClose} aria-label={t("Закрыть")}>
             <X size={18} />
           </button>
         </header>
         <label>
-          <span>Название файла</span>
-          <input value={title} onChange={(event) => setTitle(event.currentTarget.value)} placeholder="Например: Планировка_АР.pdf" />
+          <span>{t("Название файла")}</span>
+          <input value={title} onChange={(event) => setTitle(event.currentTarget.value)} placeholder={t("Например: Планировка_АР.pdf")} />
         </label>
         <label>
-          <span>Тег маршрутизации</span>
-          <input value={tag} onChange={(event) => setTag(event.currentTarget.value)} placeholder="АР, КР, ПЗ, ВК..." />
+          <span>{t("Тег маршрутизации")}</span>
+          <input value={tag} onChange={(event) => setTag(event.currentTarget.value)} placeholder={t("АР, КР, ПЗ, ВК...")} />
         </label>
         <footer>
-          <button onClick={onClose}>Отмена</button>
+          <button onClick={onClose}>{t("Отмена")}</button>
           <button className="primary-action" disabled={!canCreate} onClick={() => onCreate(title, tag)}>
-            Создать документ
+            {t("Создать документ")}
           </button>
         </footer>
       </article>
@@ -863,11 +923,11 @@ function TaggedDocumentModal({
   );
 }
 
-function buildDocumentRegistry(project: DemoProject): DocumentGroup[] {
+function buildDocumentRegistry(project: DemoProject, t: (source: string, params?: Record<string, string | number>) => string): DocumentGroup[] {
   const entries: RegistryDocument[] = [];
 
   project.inboxDocuments.forEach((document) => {
-    entries.push(createRegistryEntry(project, document, "Входящие без связи", undefined, undefined, true));
+    entries.push(createRegistryEntry(project, document, t("Входящие без связи"), t, undefined, undefined, true));
   });
 
   project.nodes
@@ -879,7 +939,8 @@ function buildDocumentRegistry(project: DemoProject): DocumentGroup[] {
         createRegistryEntry(
           project,
           document,
-          owner ? `Внутри ноды: ${owner.shortCode ?? owner.title}` : "Бесхозный файл на карте",
+          owner ? t("Внутри ноды: {node}", { node: owner.shortCode ?? owner.title }) : t("Бесхозный файл на карте"),
+          t,
           owner?.id,
           undefined,
           !owner,
@@ -890,7 +951,7 @@ function buildDocumentRegistry(project: DemoProject): DocumentGroup[] {
   project.processes.forEach((process) => {
     process.documents.forEach((document) => {
       const owner = findDocumentOwnerNode(project, document, process.from);
-      entries.push(createRegistryEntry(project, document, `Контейнер: ${process.title}`, owner?.id, process.id, false));
+      entries.push(createRegistryEntry(project, document, t("Контейнер: {process}", { process: process.title }), t, owner?.id, process.id, false));
     });
   });
 
@@ -926,6 +987,7 @@ function createRegistryEntry(
   project: DemoProject,
   document: ProcessDocument,
   location: string,
+  t: (source: string, params?: Record<string, string | number>) => string,
   ownerNodeId?: string,
   processId?: string,
   isOrphan = false,
@@ -936,8 +998,8 @@ function createRegistryEntry(
     return {
       document,
       groupKey: "00-orphans",
-      groupCode: "Бесхозные",
-      groupTitle: "Нераспределенные и входящие файлы",
+      groupCode: t("Бесхозные"),
+      groupTitle: t("Нераспределенные и входящие файлы"),
       location,
       ownerNodeId,
       processId,
@@ -1100,6 +1162,7 @@ function ParticipantsManager({
   onUpdateParticipant: (participantId: string, edit: ParticipantEdit) => void;
   onDeleteParticipant: (participantId: string) => void;
 }) {
+  const { t } = useI18n();
   const [isEditorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ParticipantEdit>(emptyParticipantForm);
@@ -1182,15 +1245,15 @@ function ParticipantsManager({
         <div>
           <span>
             <ShieldCheck size={16} />
-            {canManage ? "Управление сотрудниками" : "Команда проекта"}
+            {t(canManage ? "Управление сотрудниками" : "Команда проекта")}
           </span>
-          <strong>{project.participants.length} участников</strong>
-          <p>Email и телефон обязательны. Мессенджер и другие способы связи можно заполнить позже.</p>
+          <strong>{t("{count} участников", { count: project.participants.length })}</strong>
+          <p>{t("Email и телефон обязательны. Мессенджер и другие способы связи можно заполнить позже.")}</p>
         </div>
         {canManage ? (
           <button onClick={openCreate}>
             <UserPlus size={17} />
-            Добавить пользователя
+            {t("Добавить пользователя")}
           </button>
         ) : null}
       </section>
@@ -1199,8 +1262,8 @@ function ParticipantsManager({
         <section className="participant-editor">
           <header>
             <div>
-              <span>{editingId ? "Редактирование" : "Новый пользователь"}</span>
-              <strong>{editingId ? form.name || "Карточка участника" : "Добавить в проект"}</strong>
+              <span>{t(editingId ? "Редактирование" : "Новый пользователь")}</span>
+              <strong>{editingId ? form.name || t("Карточка участника") : t("Добавить в проект")}</strong>
             </div>
             <button
               className="icon-button"
@@ -1209,7 +1272,7 @@ function ParticipantsManager({
                 setEditingId(null);
                 setForm(emptyParticipantForm);
               }}
-              aria-label="Закрыть форму"
+              aria-label={t("Закрыть форму")}
             >
               <X size={18} />
             </button>
@@ -1217,55 +1280,55 @@ function ParticipantsManager({
 
           <div className="participant-form-grid">
             <label>
-              <span>ФИО</span>
-              <input value={form.name} onChange={(event) => setForm({ ...form, name: event.currentTarget.value })} placeholder="Например, Иван Петров" />
+              <span>{t("ФИО")}</span>
+              <input value={form.name} onChange={(event) => setForm({ ...form, name: event.currentTarget.value })} placeholder={t("Например, Иван Петров")} />
             </label>
             <label>
-              <span>Должность</span>
-              <input value={form.position} onChange={(event) => setForm({ ...form, position: event.currentTarget.value })} placeholder="Ведущий инженер" />
+              <span>{t("Должность")}</span>
+              <input value={form.position} onChange={(event) => setForm({ ...form, position: event.currentTarget.value })} placeholder={t("Ведущий инженер")} />
             </label>
             <label>
-              <span>Роль</span>
+              <span>{t("Роль")}</span>
               <select value={form.role} onChange={(event) => setForm({ ...form, role: event.currentTarget.value as ProjectParticipantRole })}>
                 {Object.entries(participantRoleLabels).map(([role, label]) => (
                   <option key={role} value={role}>
-                    {label}
+                    {t(label)}
                   </option>
                 ))}
               </select>
             </label>
             <label>
-              <span>Статус</span>
+              <span>{t("Статус")}</span>
               <select value={form.status} onChange={(event) => setForm({ ...form, status: event.currentTarget.value as ProjectParticipantStatus })}>
                 {Object.entries(participantStatusLabels).map(([status, label]) => (
                   <option key={status} value={status}>
-                    {label}
+                    {t(label)}
                   </option>
                 ))}
               </select>
             </label>
             <label>
-              <span>Почта *</span>
+              <span>{t("Почта *")}</span>
               <input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.currentTarget.value })} placeholder="name@company.ru" />
             </label>
             <label>
-              <span>Телефон *</span>
+              <span>{t("Телефон *")}</span>
               <input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.currentTarget.value })} placeholder="+7 900 000-00-00" />
             </label>
             <label>
-              <span>Мессенджер</span>
+              <span>{t("Мессенджер")}</span>
               <input value={form.messenger ?? ""} onChange={(event) => setForm({ ...form, messenger: event.currentTarget.value })} placeholder="@telegram / WhatsApp" />
             </label>
             <label>
-              <span>Другие способы связи</span>
-              <input value={form.otherContacts ?? ""} onChange={(event) => setForm({ ...form, otherContacts: event.currentTarget.value })} placeholder="Teams, Диадок, внутренний номер" />
+              <span>{t("Другие способы связи")}</span>
+              <input value={form.otherContacts ?? ""} onChange={(event) => setForm({ ...form, otherContacts: event.currentTarget.value })} placeholder={t("Teams, Диадок, внутренний номер")} />
             </label>
             <label>
-              <span>Видимость в проекте</span>
+              <span>{t("Видимость в проекте")}</span>
               <select value={form.visibilityMode ?? "all"} onChange={(event) => setForm({ ...form, visibilityMode: event.currentTarget.value as ProjectVisibilityMode })}>
                 {Object.entries(visibilityModeLabels).map(([mode, label]) => (
                   <option key={mode} value={mode}>
-                    {label}
+                    {t(label)}
                   </option>
                 ))}
               </select>
@@ -1274,7 +1337,7 @@ function ParticipantsManager({
 
           {form.visibilityMode === "custom" ? (
             <section className="participant-access-list">
-              <span>Доступные ноды</span>
+              <span>{t("Доступные ноды")}</span>
               <div>
                 {accessNodes.map((node) => (
                   <button key={node.id} className={(form.visibleNodeIds ?? []).includes(node.id) ? "active" : ""} onClick={() => toggleVisibleNode(node.id)}>
@@ -1286,9 +1349,9 @@ function ParticipantsManager({
           ) : null}
 
           <footer>
-            <small>{canSubmit ? "Карточка готова к сохранению." : "Заполните ФИО, должность, почту и телефон."}</small>
+            <small>{t(canSubmit ? "Карточка готова к сохранению." : "Заполните ФИО, должность, почту и телефон.")}</small>
             <button className="settings-open-button" disabled={!canSubmit} onClick={submitParticipant}>
-              {editingId ? "Сохранить" : "Добавить"}
+              {t(editingId ? "Сохранить" : "Добавить")}
             </button>
           </footer>
         </section>
@@ -1310,7 +1373,7 @@ function ParticipantsManager({
                     <strong>{participant.name}</strong>
                     <span>{participant.position}</span>
                   </div>
-                  <em>{participantRoleLabels[participant.role]}</em>
+                  <em>{t(participantRoleLabels[participant.role])}</em>
                 </header>
                 <div className="participant-contacts">
                   <span>
@@ -1325,19 +1388,19 @@ function ParticipantsManager({
                   {participant.otherContacts ? <span>{participant.otherContacts}</span> : null}
                 </div>
                 <footer>
-                  <small>{participantStatusLabels[participant.status]}</small>
-                  <small>{getParticipantAccessText(participant, relatedNodes)}</small>
+                  <small>{t(participantStatusLabels[participant.status])}</small>
+                  <small>{getParticipantAccessText(participant, relatedNodes, t)}</small>
                 </footer>
               </div>
               {canManage ? (
                 <div className="participant-actions">
-                  <button onClick={() => openEdit(participant)} title="Редактировать пользователя">
+                  <button onClick={() => openEdit(participant)} title={t("Редактировать пользователя")}>
                     <PencilLine size={16} />
                   </button>
                   <button
                     onClick={() => onDeleteParticipant(participant.id)}
                     disabled={!canDelete}
-                    title={canDelete ? "Удалить пользователя" : "Нельзя удалить последнего администратора"}
+                    title={t(canDelete ? "Удалить пользователя" : "Нельзя удалить последнего администратора")}
                   >
                     <Trash2 size={16} />
                   </button>
@@ -1360,19 +1423,20 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
-function getParticipantAccessText(participant: ProjectParticipant, relatedNodes: number) {
+function getParticipantAccessText(participant: ProjectParticipant, relatedNodes: number, t: ReturnType<typeof useI18n>["t"]) {
   if (participant.visibilityMode === "custom") {
-    return `${participant.visibleNodeIds?.length ?? 0} нод в доступе`;
+    return t("{count} нод в доступе", { count: participant.visibleNodeIds?.length ?? 0 });
   }
   if (participant.visibilityMode === "assigned") {
-    return relatedNodes ? `${relatedNodes} назначенных зон` : "только назначенные зоны";
+    return relatedNodes ? t("{count} назначенных зон", { count: relatedNodes }) : t("только назначенные зоны");
   }
-  return "видит все ноды проекта";
+  return t("видит все ноды проекта");
 }
 
 function ProcessRows({ processes, onSelectProcess }: { processes: BusinessProcess[]; onSelectProcess: (processId: string) => void }) {
+  const { t } = useI18n();
   if (!processes.length) {
-    return <p className="workspace-empty">Нет контейнеров в этом разделе.</p>;
+    return <p className="workspace-empty">{t("Нет контейнеров в этом разделе.")}</p>;
   }
 
   return (
@@ -1384,7 +1448,7 @@ function ProcessRows({ processes, onSelectProcess }: { processes: BusinessProces
             <strong>{process.title}</strong>
             <span>{process.sender} → {process.receiver}</span>
           </div>
-          <em>{getProcessStatusText(process.status)}</em>
+          <em>{t(getProcessStatusText(process.status))}</em>
         </button>
       ))}
     </div>

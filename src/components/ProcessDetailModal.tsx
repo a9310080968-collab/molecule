@@ -10,6 +10,7 @@ import {
   getStatusText,
 } from "../lib/graph";
 import type { BusinessProcess, DemoProject, ProcessDocument } from "../types";
+import { useI18n } from "../lib/i18n";
 
 type ProcessDetailModalProps = {
   project: DemoProject;
@@ -36,6 +37,7 @@ export function ProcessDetailModal({
   onTaskCommentChange,
   onClarification,
 }: ProcessDetailModalProps) {
+  const { t, system } = useI18n();
   const fromNode = getNodeById(project, process.from);
   const toNode = getNodeById(project, process.to);
   const color = getProcessRuntimeColor(process);
@@ -87,32 +89,32 @@ export function ProcessDetailModal({
           <div>
             <span>
               <Route size={18} />
-              Бизнес-процесс
+              {t("Бизнес-процесс")}
             </span>
             <h2>{process.title}</h2>
             <p>{process.description}</p>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Закрыть детализацию">
+          <button className="icon-button" onClick={onClose} aria-label={t("Закрыть детализацию")}>
             <X size={20} />
           </button>
         </header>
 
         <section className="process-detail-summary">
           <article>
-            <small>Откуда</small>
-            <strong>{fromNode?.shortCode ?? fromNode?.title ?? "Источник"}</strong>
+            <small>{t("Откуда")}</small>
+            <strong>{fromNode?.shortCode ?? fromNode?.title ?? t("Источник")}</strong>
             <span>{process.sender}</span>
           </article>
           <i style={{ background: color, boxShadow: `0 0 22px ${color}` }} />
           <article>
-            <small>Куда</small>
-            <strong>{toNode?.shortCode ?? toNode?.title ?? "Получатель"}</strong>
+            <small>{t("Куда")}</small>
+            <strong>{toNode?.shortCode ?? toNode?.title ?? t("Получатель")}</strong>
             <span>{process.receiver}</span>
           </article>
           <article className="status-card">
-            <small>Статус</small>
-            <strong style={{ color }}>{getProcessStatusText(process.status)}</strong>
-            <span>{getProcessDeadlineLabel(process)}</span>
+            <small>{t("Статус")}</small>
+            <strong style={{ color }}>{t(getProcessStatusText(process.status))}</strong>
+            <span>{system(getProcessDeadlineLabel(process))}</span>
           </article>
         </section>
 
@@ -120,23 +122,23 @@ export function ProcessDetailModal({
           <div className="process-party">
             <UserRound size={18} />
             <strong>{process.sender}</strong>
-            <span>{fromNode?.title ?? "Нода-источник"}</span>
+            <span>{fromNode?.title ?? t("Нода-источник")}</span>
           </div>
 
           <div className="process-transfer-workspace">
             <section className="process-task-comment">
               <header>
-                <span><MessageSquareText size={15} /> Комментарий к заданию</span>
-                <small>Исполнитель: {executorName}</small>
+                <span><MessageSquareText size={15} /> {t("Комментарий к заданию")}</span>
+                <small>{t("Исполнитель: {name}", { name: executorName })}</small>
               </header>
               <textarea
                 disabled={!canEdit}
                 value={taskComment}
                 onChange={(event) => setTaskComment(event.currentTarget.value)}
                 onBlur={saveTaskComment}
-                placeholder="Передать нужный файл ответственному и сообщить результат..."
+                placeholder={t("Передать нужный файл ответственному и сообщить результат...")}
               />
-              {canEdit ? <button onClick={saveTaskComment} disabled={taskComment === (process.taskComment ?? "")}>Сохранить</button> : null}
+              {canEdit ? <button onClick={saveTaskComment} disabled={taskComment === (process.taskComment ?? "")}>{t("Сохранить")}</button> : null}
             </section>
 
             <div className="process-documents-lane">
@@ -150,13 +152,13 @@ export function ProcessDetailModal({
                   >
                     <FileText size={16} />
                     <strong>{document.title}</strong>
-                    <span>{getFileLabel(document.fileType)} · {getStatusText(document.status)} · {document.version}</span>
+                    <span>{t(getFileLabel(document.fileType))} · {t(getStatusText(document.status))} · {document.version}</span>
                   </button>
                 ))
               ) : (
                 <div className="process-detail-empty">
-                  <strong>Документов в контейнере пока нет</strong>
-                  <span>Добавьте документы через конструктор бизнес-процесса.</span>
+                  <strong>{t("Документов в контейнере пока нет")}</strong>
+                  <span>{t("Добавьте документы через конструктор бизнес-процесса.")}</span>
                 </div>
               )}
             </div>
@@ -172,14 +174,14 @@ export function ProcessDetailModal({
                       sendQuestion();
                     }
                   }}
-                  placeholder="Задать вопрос постановщику..."
+                  placeholder={t("Задать вопрос постановщику...")}
                 />
-                <button onClick={sendQuestion} disabled={!question.trim()} aria-label="Отправить вопрос">
+                <button onClick={sendQuestion} disabled={!question.trim()} aria-label={t("Отправить вопрос")}>
                   <Send size={15} />
                 </button>
-                <button className="unclear-action" onClick={() => onClarification(process.id, "Задание непонятно. Нужны дополнительные пояснения.", "unclear")}>
+                <button className="unclear-action" onClick={() => onClarification(process.id, t("Задание непонятно. Нужны дополнительные пояснения."), "unclear")}>
                   <CircleHelp size={15} />
-                  Задание непонятно
+                  {t("Задание непонятно")}
                 </button>
               </div> : null}
               {process.discussion?.length ? (
@@ -188,7 +190,7 @@ export function ProcessDetailModal({
                     <article key={entry.id}>
                       <strong>{entry.author}</strong>
                       <span>{entry.text}</span>
-                      <small>{entry.createdAt}</small>
+                      <small>{system(entry.createdAt)}</small>
                     </article>
                   ))}
                 </div>
@@ -199,38 +201,38 @@ export function ProcessDetailModal({
           <div className="process-party">
             <UserRound size={18} />
             <strong>{process.approver ?? process.receiver}</strong>
-            <span>{toNode?.title ?? "Нода-получатель"}</span>
+            <span>{toNode?.title ?? t("Нода-получатель")}</span>
           </div>
         </section>
 
         <section className="process-document-table">
-          <h3>Документы внутри процесса</h3>
+          <h3>{t("Документы внутри процесса")}</h3>
           {process.documents.length ? (
             process.documents.map((document) => (
               <button key={document.id} onClick={() => onOpenDocument(document)}>
                 <i style={{ background: getFileTypeColor(document.fileType) }} />
                 <span>{document.title}</span>
-                <em>{getStatusText(document.status)}</em>
-                <small>{document.updatedAt}</small>
+                <em>{t(getStatusText(document.status))}</em>
+                <small>{system(document.updatedAt)}</small>
               </button>
             ))
           ) : (
-            <p>Список пуст. Этот процесс пока описывает маршрут, но не содержит переданных файлов.</p>
+            <p>{t("Список пуст. Этот процесс пока описывает маршрут, но не содержит переданных файлов.")}</p>
           )}
         </section>
 
         <section className="process-delegation">
           <header>
             <div>
-              <h3>Делегирование внутри отдела</h3>
-              <p>Получатель может передать задание исполнителям, не меняя маршрут файла между основными нодами.</p>
+              <h3>{t("Делегирование внутри отдела")}</h3>
+              <p>{t("Получатель может передать задание исполнителям, не меняя маршрут файла между основными нодами.")}</p>
             </div>
           </header>
           <div className="process-delegation-chain">
             <article>
               <UserRound size={17} />
               <div>
-                <span>Ответственный</span>
+                <span>{t("Ответственный")}</span>
                 <strong>{process.receiver}</strong>
               </div>
             </article>
@@ -238,13 +240,13 @@ export function ProcessDetailModal({
               <article key={delegate}>
                 <ArrowRight size={15} />
                 <div>
-                  <span>Исполнитель</span>
+                  <span>{t("Исполнитель")}</span>
                   <strong>{delegate}</strong>
                 </div>
                 {canEdit ? (
                   <button
                     onClick={() => onDelegationChange(process.id, delegates.filter((name) => name !== delegate))}
-                    aria-label={`Убрать исполнителя ${delegate}`}
+                    aria-label={t("Убрать исполнителя {name}", { name: delegate })}
                   >
                     <Trash2 size={15} />
                   </button>
@@ -261,27 +263,27 @@ export function ProcessDetailModal({
               </select>
               <button onClick={addDelegate} disabled={!selectedDelegateCandidate}>
                 <Plus size={16} />
-                Передать исполнителю
+                {t("Передать исполнителю")}
               </button>
             </div>
           ) : canEdit ? (
-            <p className="process-delegation-empty">Все доступные участники уже добавлены в цепочку исполнения.</p>
+            <p className="process-delegation-empty">{t("Все доступные участники уже добавлены в цепочку исполнения.")}</p>
           ) : null}
         </section>
 
         <footer className="process-detail-footer">
           <span>
-            Двойной клик по линии открывает этот контейнер. На верхнем уровне остается одна линия, даже если внутри много документов.
+            {t("Двойной клик по линии открывает этот контейнер. На верхнем уровне остается одна линия, даже если внутри много документов.")}
           </span>
           {canConfigure ? (
             <button className="primary-action" onClick={() => onConfigure(process.id)}>
               <Settings2 size={17} />
-              Настроить бизнес-процесс
+              {t("Настроить бизнес-процесс")}
             </button>
           ) : null}
           <button onClick={onClose}>
             <ArrowRight size={17} />
-            Вернуться к карте
+            {t("Вернуться к карте")}
           </button>
         </footer>
       </article>

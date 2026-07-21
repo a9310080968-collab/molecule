@@ -43,6 +43,7 @@ import {
 } from "./lib/projectMutations";
 import { createBlankProjectTemplate, createDefaultProjectTemplate, createProjectFromTemplate, createTemplateFromProject } from "./lib/projectTemplates";
 import { buildRoleProject, canEditNode, canEditProcess, demoAccessByRole, resolveDemoUser } from "./lib/demoAccess";
+import { useI18n } from "./lib/i18n";
 import type {
   BusinessProcess,
   ChatMessage,
@@ -125,10 +126,14 @@ function mergeProjectTemplates(savedTemplates: ProjectTemplate[] | undefined, de
     return defaultTemplates;
   }
 
-  const savedIds = new Set(savedTemplates.map((template) => template.id));
+  const defaultIds = new Set(defaultTemplates.map((template) => template.id));
+  const defaultSignatures = new Set(defaultTemplates.map((template) => `${template.title}\u0000${template.sourceProjectTitle}`));
   return [
-    ...defaultTemplates.filter((template) => !savedIds.has(template.id)),
-    ...savedTemplates,
+    ...defaultTemplates,
+    ...savedTemplates.filter((template) =>
+      !defaultIds.has(template.id)
+      && !defaultSignatures.has(`${template.title}\u0000${template.sourceProjectTitle}`),
+    ),
   ];
 }
 
@@ -157,13 +162,14 @@ function mergeDemoNotifications(savedNotifications: DemoNotification[] | undefin
 }
 
 export default function App() {
+  const { t } = useI18n();
   const persistedState = getPersistedState();
   const defaultTemplates = useMemo(() => [
     createBlankProjectTemplate(),
     createDefaultProjectTemplate(),
-    createTemplateFromProject(demoProjects[0], "ЖК Рога и копыта / ТЗ с готовыми БП", "Структура по приложенному ТЗ: ИРД, РД, разделы, подразделы, участники и готовые бизнес-процессы."),
-    createTemplateFromProject(demoProjects[1], "Жилой комплекс / полный комплект", "Структура разделов, внутренних уровней и контейнеров связи без рабочих документов."),
-    createTemplateFromProject(demoProjects[2], "Компактный офисный проект", "Легкая структура для небольшого объекта с ИРД, АР, КР, ЭОМ и сметой."),
+    { ...createTemplateFromProject(demoProjects[0], "ЖК Рога и копыта / ТЗ с готовыми БП", "Структура по приложенному ТЗ: ИРД, РД, разделы, подразделы, участники и готовые бизнес-процессы."), id: "template-demo-roga-kopyta" },
+    { ...createTemplateFromProject(demoProjects[1], "Жилой комплекс / полный комплект", "Структура разделов, внутренних уровней и контейнеров связи без рабочих документов."), id: "template-demo-sirius" },
+    { ...createTemplateFromProject(demoProjects[2], "Компактный офисный проект", "Легкая структура для небольшого объекта с ИРД, АР, КР, ЭОМ и сметой."), id: "template-demo-vega" },
   ], []);
   const initialProjects = mergeDemoProjects(persistedState?.projects, demoProjects);
   const savedHasPrimaryDemo = Boolean(persistedState?.projects?.some((project) => project.id === demoProjects[0]?.id));
@@ -400,7 +406,7 @@ export default function App() {
 
     recordHistory();
     const project = applyProjectTeam(
-      createProjectFromTemplate(template, title || `Проект ${projects.length + 1}`, address || "Адрес не указан"),
+      createProjectFromTemplate(template, title || t("Проект {count}", { count: projects.length + 1 }), address || t("Адрес не указан")),
       teamMembers,
     );
     const defaultLevel = getDefaultLevel(project);
@@ -416,7 +422,7 @@ export default function App() {
     setActiveMenu("map");
     setConstructorHintDismissed(false);
     setProjectManagerOpen(false);
-    showToast(`Проект «${project.title}» создан из шаблона «${template.title}».`);
+    showToast(t("Проект «{project}» создан из шаблона «{template}».", { project: project.title, template: template.title }));
   }
 
   function deleteProject(projectId: string) {
@@ -430,9 +436,9 @@ export default function App() {
     setDeletionRequest({
       kind: "project",
       id: project.id,
-      title: `Удалить проект «${project.title}»?`,
-      description: "Будут удалены все уровни, ноды, процессы, документы и история проекта. После подтверждения восстановить проект через интерфейс нельзя.",
-      confirmLabel: "Удалить проект",
+      title: t("Удалить проект «{title}»?", { title: project.title }),
+      description: t("Будут удалены все уровни, ноды, процессы, документы и история проекта. После подтверждения восстановить проект через интерфейс нельзя."),
+      confirmLabel: t("Удалить проект"),
     });
   }
 
@@ -457,7 +463,7 @@ export default function App() {
       setProjectManagerOpen(false);
       setPersonalSettingsOpen(false);
       setActiveMenu("map");
-      showToast(`Проект «${project.title}» удален.`);
+      showToast(t("Проект «{title}» удален.", { title: project.title }));
       return;
     }
 
@@ -482,7 +488,7 @@ export default function App() {
     setProjectManagerOpen(false);
     setPersonalSettingsOpen(false);
     setActiveMenu("map");
-    showToast(`Проект «${project.title}» удален.`);
+    showToast(t("Проект «{title}» удален.", { title: project.title }));
   }
 
   function addSectionNode(position?: Vec2) {
@@ -490,15 +496,15 @@ export default function App() {
       return;
     }
     const sectionCount = levelNodes.filter((node) => node.type !== "central" && node.type !== "document").length + 1;
-    const shortCode = `Б${sectionCount}`;
+    const shortCode = `${t("Б")}${sectionCount}`;
     const node: ProjectNode = {
       id: `node-section-${Date.now()}-${Math.round(Math.random() * 10000)}`,
       projectId: activeProject.id,
       levelId: activeLevel.id,
       type: "section",
-      title: `Новый блок ${sectionCount}`,
+      title: t("Новый блок {count}", { count: sectionCount }),
       shortCode,
-      description: "Новый средний блок проекта. Переименуйте его и задайте теги автопривязки в правой панели.",
+      description: t("Новый средний блок проекта. Переименуйте его и задайте теги автопривязки в правой панели."),
       status: "unchecked",
       responsible: currentUser?.name,
       updatedAt: "только что",
@@ -524,7 +530,7 @@ export default function App() {
     if (!position) {
       window.setTimeout(() => sceneRef.current?.focusNode(node.id), 80);
     }
-    showToast(`Добавлен средний блок «${node.title}».`);
+    showToast(t("Добавлен средний блок «{title}».", { title: node.title }));
   }
 
   function createTemplate(title: string, description: string) {
@@ -533,11 +539,11 @@ export default function App() {
     }
     const template = createTemplateFromProject(
       activeProject,
-      title || `${activeProject.title}: шаблон`,
-      description || "Структура проекта без рабочих документов.",
+      title || t("{project}: шаблон", { project: activeProject.title }),
+      description || t("Структура проекта без рабочих документов."),
     );
     setProjectTemplates((current) => [template, ...current]);
-    showToast(`Шаблон «${template.title}» сохранен.`);
+    showToast(t("Шаблон «{title}» сохранен.", { title: template.title }));
     return template;
   }
 
@@ -674,7 +680,7 @@ export default function App() {
     }
 
     updateNode(nodeId, { positionLocked: !node.positionLocked });
-    showToast(node.positionLocked ? "Положение ноды разблокировано." : "Положение ноды закреплено.");
+    showToast(t(node.positionLocked ? "Положение ноды разблокировано." : "Положение ноды закреплено."));
   }
 
   function deleteNode(nodeId: string) {
@@ -695,9 +701,9 @@ export default function App() {
     setDeletionRequest({
       kind: "node",
       id: node.id,
-      title: `Удалить ноду «${title}»?`,
-      description: "Связанные процессы и вложенные уровни будут удалены. Документы из ноды и процессов сохранятся в бесхозных файлах.",
-      confirmLabel: "Удалить ноду",
+      title: t("Удалить ноду «{title}»?", { title }),
+      description: t("Связанные процессы и вложенные уровни будут удалены. Документы из ноды и процессов сохранятся в бесхозных файлах."),
+      confirmLabel: t("Удалить ноду"),
     });
   }
 
@@ -715,7 +721,7 @@ export default function App() {
     setLinkingFromId(null);
     setProcessBuilderId(null);
     setProcessDetailId(null);
-    showToast(`Нода «${node.shortCode ?? node.title}» удалена. Файлы перенесены во входящие.`);
+    showToast(t("Нода «{title}» удалена. Файлы перенесены во входящие.", { title: node.shortCode ?? node.title }));
   }
 
   function deleteDocument(documentId: string, title: string) {
@@ -725,9 +731,9 @@ export default function App() {
     setDeletionRequest({
       kind: "document",
       id: documentId,
-      title: `Удалить файл «${title}»?`,
-      description: "Файл будет безвозвратно удалён с карты, из бизнес-процессов, нод и бесхозных файлов.",
-      confirmLabel: "Удалить файл",
+      title: t("Удалить файл «{title}»?", { title }),
+      description: t("Файл будет безвозвратно удалён с карты, из бизнес-процессов, нод и бесхозных файлов."),
+      confirmLabel: t("Удалить файл"),
     });
   }
 
@@ -743,7 +749,7 @@ export default function App() {
     setSelectedProcessId(null);
     setProcessBuilderId(null);
     setProcessDetailId(null);
-    showToast(`Файл «${document?.title ?? "Документ"}» удален.`);
+    showToast(t("Файл «{title}» удален.", { title: document?.title ?? t("Документ") }));
   }
 
   function deleteInboxDocument(documentId: string) {
@@ -809,7 +815,9 @@ export default function App() {
       ...delegatedTo,
     ]));
     updateProcess(processId, { delegatedTo, participantNames });
-    showToast(delegatedTo.length ? `Исполнители назначены: ${delegatedTo.join(", ")}.` : "Внутреннее делегирование очищено.");
+    showToast(delegatedTo.length
+      ? t("Исполнители назначены: {names}.", { names: delegatedTo.join(", ") })
+      : t("Внутреннее делегирование очищено."));
   }
 
   function submitProcessClarification(processId: string, text: string, kind: "question" | "unclear") {
@@ -852,7 +860,7 @@ export default function App() {
       description: `${process.sender}: ${author} просит уточнить «${process.title}». ${normalizedText}`,
       targetProcessId: processId,
     });
-    showToast(`Уведомление отправлено постановщику: ${process.sender}.`);
+    showToast(t("Уведомление отправлено постановщику: {sender}.", { sender: process.sender }));
   }
 
   function updateDocumentStatus(documentId: string, status: NodeStatus) {
@@ -886,19 +894,19 @@ export default function App() {
       ),
       updatedAt: "только что",
     }));
-    showToast(status === "approved" ? "Документ согласован." : status === "comments" ? "Документ отмечен как не принятый." : "Документ принят в работу.");
+    showToast(t(status === "approved" ? "Документ согласован." : status === "comments" ? "Документ отмечен как не принятый." : "Документ принят в работу."));
   }
 
   function createTaggedDocument(title: string, tag: string) {
     if (!requireAccess(access.canUploadFiles)) {
       return;
     }
-    const normalizedTitle = title.trim() || "Новый_документ.pdf";
+    const normalizedTitle = title.trim() || t("Новый_документ.pdf");
     const normalizedTag = normalizeFileTag(tag);
     const taggedTitle = appendTagToFileName(normalizedTitle, normalizedTag);
     const document: ProcessDocument = {
       ...createDocumentFromName(taggedTitle, "manual"),
-      from: "Тестовый импорт",
+      from: t("Тестовый импорт"),
       detectedTag: normalizedTag || undefined,
       isNew: true,
       updatedAt: "только что",
@@ -921,7 +929,9 @@ export default function App() {
         : "Совпадающая нода не найдена, документ остался в бесхозных.",
       targetNodeId: result.documentNode?.id,
     });
-    showToast(result.targetNode ? `Документ попал в ноду «${result.targetNode.shortCode ?? result.targetNode.title}».` : "Документ добавлен в бесхозные.");
+    showToast(result.targetNode
+      ? t("Документ попал в ноду «{title}».", { title: result.targetNode.shortCode ?? result.targetNode.title })
+      : t("Документ добавлен в бесхозные."));
   }
 
   function createTaskDraft(edit: WorkspaceTaskDraft) {
@@ -931,7 +941,7 @@ export default function App() {
     const from = getNodeById(activeProject, edit.fromNodeId);
     const to = getNodeById(activeProject, edit.toNodeId);
     if (!from || !to || from.id === to.id) {
-      showToast("Для задания нужны две разные ноды.");
+      showToast(t("Для задания нужны две разные ноды."));
       return;
     }
 
@@ -947,8 +957,8 @@ export default function App() {
       levelId: level.id,
       from: from.id,
       to: to.id,
-      title: edit.title.trim() || "Новое задание",
-      description: edit.description.trim() || "Черновик задания, созданный из вкладки «Задания».",
+      title: edit.title.trim() || t("Новое задание"),
+      description: edit.description.trim() || t("Черновик задания, созданный из вкладки «Задания»."),
       status: "draft",
       direction: "forward",
       sender: from.responsible ?? from.title,
@@ -970,7 +980,7 @@ export default function App() {
     setSelectedNodeId(from.id);
     setSelectedProcessId(process.id);
     setActiveMenu("map");
-    showToast("Черновик задания создан.");
+    showToast(t("Черновик задания создан."));
   }
 
   function addParticipant(edit: ParticipantEdit) {
@@ -988,7 +998,7 @@ export default function App() {
       participants: [participant, ...project.participants],
       updatedAt: "только что",
     }));
-    showToast(`Пользователь «${participant.name}» добавлен в проект.`);
+    showToast(t("Пользователь «{name}» добавлен в проект.", { name: participant.name }));
   }
 
   function addParticipantFromDirectory(seed: ProjectParticipantSeed) {
@@ -996,7 +1006,7 @@ export default function App() {
       return;
     }
     if (activeProject.participants.some((participant) => participant.email === seed.email)) {
-      showToast(`Участник «${seed.name}» уже есть в команде проекта.`);
+      showToast(t("Участник «{name}» уже есть в команде проекта.", { name: seed.name }));
       return;
     }
 
@@ -1012,7 +1022,7 @@ export default function App() {
       participants: [participant, ...project.participants],
       updatedAt: "только что",
     }));
-    showToast(`Участник «${participant.name}» добавлен в проект и доступен в процессе.`);
+    showToast(t("Участник «{name}» добавлен в проект и доступен в процессе.", { name: participant.name }));
   }
 
   function updateParticipant(participantId: string, edit: ParticipantEdit) {
@@ -1031,7 +1041,7 @@ export default function App() {
       ),
       updatedAt: "только что",
     }));
-    showToast(`Карточка пользователя «${edit.name}» обновлена.`);
+    showToast(t("Карточка пользователя «{name}» обновлена.", { name: edit.name }));
   }
 
   function deleteParticipant(participantId: string) {
@@ -1045,7 +1055,7 @@ export default function App() {
 
     const adminCount = activeProject.participants.filter((item) => item.role === "admin").length;
     if (participant.role === "admin" && adminCount <= 1) {
-      showToast("В проекте должен остаться хотя бы один администратор.");
+      showToast(t("В проекте должен остаться хотя бы один администратор."));
       return;
     }
 
@@ -1054,7 +1064,7 @@ export default function App() {
       participants: project.participants.filter((item) => item.id !== participantId),
       updatedAt: "только что",
     }));
-    showToast(`Пользователь «${participant.name}» удален из проекта.`);
+    showToast(t("Пользователь «{name}» удален из проекта.", { name: participant.name }));
   }
 
   function saveParticipantIntegrations(participantId: string, integrations: UserIntegration[]) {
@@ -1113,12 +1123,12 @@ export default function App() {
       return;
     }
     const tag = mode === "tagged" ? normalizeFileTag(customTag) || getRandomProjectTag(activeProject) : undefined;
-    const fileName = tag ? appendTagToFileName("Входящий файл.pdf", tag) : "Входящий файл без тега.pdf";
+    const fileName = tag ? appendTagToFileName(t("Входящий файл.pdf"), tag) : t("Входящий файл без тега.pdf");
     const document = {
       ...createDocumentFromName(fileName, provider, undefined, undefined, "application/pdf", getRandomFileSize()),
       previewText: tag
-        ? `Демо-файл из ${getIntegrationProviderLabel(provider)}. Тег ${tag} найден, документ должен попасть в соответствующую ноду.`
-        : `Демо-файл из ${getIntegrationProviderLabel(provider)} без тега. Документ должен попасть во входящие бесхозные файлы.`,
+        ? t("Демо-файл из {provider}. Тег {tag} найден, документ должен попасть в соответствующую ноду.", { provider: getIntegrationProviderLabel(provider), tag })
+        : t("Демо-файл из {provider} без тега. Документ должен попасть во входящие бесхозные файлы.", { provider: getIntegrationProviderLabel(provider) }),
     };
 
     markIntegrationSynced(participantId, provider);
@@ -1225,7 +1235,11 @@ export default function App() {
       description: `${recipient?.name ?? "Пользователь"} получил(а) ${documents.length} файл(а): ${routedCount} распределено по тегам, ${unassignedCount} во входящих.`,
       targetNodeId: firstNode?.id,
     });
-    showToast(`${documents.length} файл(а) импортировано: ${routedCount} распределено, ${unassignedCount} во входящих.`);
+    showToast(t("{count} файл(а) импортировано: {routed} распределено, {unassigned} во входящих.", {
+      count: documents.length,
+      routed: routedCount,
+      unassigned: unassignedCount,
+    }));
   }
 
   function startLink(nodeId: string) {
@@ -1236,7 +1250,7 @@ export default function App() {
     setSelectedNodeId(nodeId);
     setSelectedProcessId(null);
     setProcessBuilderId(null);
-    showToast("Выберите вторую ноду для бизнес-процесса.");
+    showToast(t("Выберите вторую ноду для бизнес-процесса."));
   }
 
   function completeLink(targetNodeId: string) {
@@ -1268,8 +1282,8 @@ export default function App() {
       levelId: activeLevel.id,
       from: from.id,
       to: to.id,
-      title: `Передача задания: ${from.shortCode ?? from.title} → ${to.shortCode ?? to.title}`,
-      description: "Ручной контейнер связи. Здесь можно описать, какие файлы передаются и как валидируется задание.",
+      title: t("Передача задания: {from} → {to}", { from: from.shortCode ?? from.title, to: to.shortCode ?? to.title }),
+      description: t("Ручной контейнер связи. Здесь можно описать, какие файлы передаются и как валидируется задание."),
       status: "draft",
       direction: "forward",
       sender: from.responsible ?? from.title,
@@ -1290,7 +1304,7 @@ export default function App() {
     setLinkingFromId(null);
     setSelectedProcessId(process.id);
     setProcessBuilderId(process.id);
-    showToast("Создан черновик процесса. Открыл конструктор маршрута.");
+    showToast(t("Создан черновик процесса. Открыл конструктор маршрута."));
   }
 
   function deleteProcess(processId: string) {
@@ -1304,9 +1318,9 @@ export default function App() {
     setDeletionRequest({
       kind: "process",
       id: process.id,
-      title: `Удалить процесс «${process.title}»?`,
-      description: "Маршрут и история задания будут удалены. Прикреплённые документы останутся в проекте.",
-      confirmLabel: "Удалить процесс",
+      title: t("Удалить процесс «{title}»?", { title: process.title }),
+      description: t("Маршрут и история задания будут удалены. Прикреплённые документы останутся в проекте."),
+      confirmLabel: t("Удалить процесс"),
     });
   }
 
@@ -1333,7 +1347,7 @@ export default function App() {
     setSelectedProcessId(null);
     setProcessBuilderId((current) => (current === processId ? null : current));
     setProcessDetailId((current) => (current === processId ? null : current));
-    showToast("Контейнер связи удален. Его документы сохранены в проекте.");
+    showToast(t("Контейнер связи удален. Его документы сохранены в проекте."));
   }
 
   function confirmDeletion() {
@@ -1367,11 +1381,11 @@ export default function App() {
         description: `Маршрут «${edit.title ?? currentProcess?.title ?? "бизнес-процесс"}» собран в конструкторе и отправлен на проверку.`,
         targetProcessId: processId,
       });
-      showToast("Процесс собран и отправлен на согласование.");
+      showToast(t("Процесс собран и отправлен на согласование."));
       return;
     }
 
-    showToast("Черновик процесса сохранен.");
+    showToast(t("Черновик процесса сохранен."));
   }
 
   function attachInboxDocument(processId: string, documentId: string) {
@@ -1399,7 +1413,7 @@ export default function App() {
         updatedAt: "только что",
       };
     });
-    showToast("Задание вручную прикручено к выбранной связи.");
+    showToast(t("Задание вручную прикручено к выбранной связи."));
   }
 
   function rejectProcessDocument(processId: string, documentId: string) {
@@ -1424,14 +1438,14 @@ export default function App() {
           ...existingNode,
           levelId: process.levelId,
           documentOwnerNodeId: undefined,
-          description: "Не принято. Документ выброшен наружу для доработки.",
+          description: t("Не принято. Документ выброшен наружу для доработки."),
           status: "comments",
           updatedAt: "только что",
           document: rejectedDocument,
         }
       : {
           ...createDocumentNode(activeProject.id, process.levelId, rejectedDocument),
-          description: "Не принято. Документ выброшен наружу для доработки.",
+          description: t("Не принято. Документ выброшен наружу для доработки."),
           status: "comments",
         };
 
@@ -1469,7 +1483,7 @@ export default function App() {
       targetNodeId: rejectedNode.id,
       targetProcessId: process.id,
     });
-    showToast("Документ не принят и выброшен наружу как малая нода.");
+    showToast(t("Документ не принят и выброшен наружу как малая нода."));
   }
 
   function receiveMail(processId?: string) {
@@ -1507,7 +1521,7 @@ export default function App() {
       description: targetProcess ? `Вложение добавлено в контейнер «${targetProcess.title}».` : "Тег не распознан, задание можно прикрутить вручную.",
       targetProcessId: targetProcess?.id,
     });
-    showToast(targetProcess ? "Почтовое вложение добавлено в контейнер связи." : "Письмо без тега добавлено во входящие.");
+    showToast(t(targetProcess ? "Почтовое вложение добавлено в контейнер связи." : "Письмо без тега добавлено во входящие."));
   }
 
   function receiveChat(processId?: string) {
@@ -1558,7 +1572,7 @@ export default function App() {
       description: targetProcess ? "Контейнер принят в работу через событие мессенджера." : "Сообщение добавлено во входящие для ручной привязки.",
       targetProcessId: targetProcess?.id,
     });
-    showToast(targetProcess ? "Статус связи изменен событием из мессенджера." : "Сообщение добавлено во входящие.");
+    showToast(t(targetProcess ? "Статус связи изменен событием из мессенджера." : "Сообщение добавлено во входящие."));
   }
 
   function addRandomFile(targetNodeId?: string, customTag?: string) {
@@ -1574,9 +1588,9 @@ export default function App() {
         setActiveLevelId(result.levelId);
         setSelectedNodeId(result.documentNode.id);
         window.setTimeout(() => sceneRef.current?.focusNode(result.documentNode!.id), 80);
-        showToast("Файл распределен по тегу и добавлен в нужную ноду.");
+        showToast(t("Файл распределен по тегу и добавлен в нужную ноду."));
       } else {
-        showToast("Файл добавлен в бесхозные. Перетащите его на рабочую область, когда будете готовы разобрать.");
+        showToast(t("Файл добавлен в бесхозные. Перетащите его на рабочую область, когда будете готовы разобрать."));
       }
       return;
     }
@@ -1592,7 +1606,9 @@ export default function App() {
       setSelectedNodeId(result.documentNode.id);
     }
     setSelectedProcessId(null);
-    showToast(targetNodeId ? `Документ добавлен внутрь ноды «${targetLabel}».` : "Бесхозный файл добавлен на карту как малая нода.");
+    showToast(targetNodeId
+      ? t("Документ добавлен внутрь ноды «{title}».", { title: targetLabel })
+      : t("Бесхозный файл добавлен на карту как малая нода."));
   }
 
   function moveDocumentNode(documentNodeId: string, targetNodeId: string | null, position?: Vec2) {
@@ -1605,7 +1621,7 @@ export default function App() {
       updateActiveProject(() => result.project);
       setSelectedNodeId(targetNodeId);
       setSelectedProcessId(null);
-      showToast(`Файл вложен в ноду «${targetLabel}».`);
+      showToast(t("Файл вложен в ноду «{title}».", { title: targetLabel }));
       return;
     }
 
@@ -1614,7 +1630,7 @@ export default function App() {
     setActiveLevelId(result.levelId);
     setSelectedNodeId(documentNodeId);
     setSelectedProcessId(null);
-    showToast("Файл вынесен из ноды и снова стал бесхозным.");
+    showToast(t("Файл вынесен из ноды и снова стал бесхозным."));
   }
 
   function materializeInboxDocument(documentId: string, position?: Vec2) {
@@ -1635,7 +1651,7 @@ export default function App() {
     if (!position) {
       window.setTimeout(() => sceneRef.current?.focusNode(result.documentNode.id), 80);
     }
-    showToast("Файл вынесен из бесхозных на рабочую область.");
+    showToast(t("Файл вынесен из бесхозных на рабочую область."));
   }
 
   function moveDocumentNodeToInbox(documentNodeId: string) {
@@ -1656,7 +1672,7 @@ export default function App() {
     updateActiveProject((project) => addDocumentToInbox(project, document));
     setSelectedNodeId(activeLevel.centralNodeId);
     setSelectedProcessId(null);
-    showToast("Файл возвращен в бесхозные и убран с рабочей области.");
+    showToast(t("Файл возвращен в бесхозные и убран с рабочей области."));
   }
 
   function sendProjectChatMessage(text: string) {
@@ -1674,7 +1690,7 @@ export default function App() {
       chatMessages: [message, ...project.chatMessages],
       updatedAt: "только что",
     }));
-    showToast("Сообщение отправлено в мессенджер проекта.");
+    showToast(t("Сообщение отправлено в мессенджер проекта."));
   }
 
   async function createDocumentsFromDroppedFiles(files: File[]) {
@@ -1701,7 +1717,7 @@ export default function App() {
       return;
     }
     if (!normalizedName || !normalizedEmail) {
-      showToast("Укажите имя и рабочую почту пользователя.");
+      showToast(t("Укажите имя и рабочую почту пользователя."));
       return;
     }
 
@@ -1731,7 +1747,7 @@ export default function App() {
       chatMessages: project.chatMessages.map((message) => ({ ...message, author: replaceName(message.author) ?? message.author })),
       updatedAt: "только что",
     }));
-    showToast("Профиль пользователя обновлен.");
+    showToast(t("Профиль пользователя обновлен."));
   }
 
   async function importFilesToProjectPool(files: File[]) {
@@ -1763,7 +1779,7 @@ export default function App() {
       setSelectedNodeId(documentNodes[0].id);
       setSelectedProcessId(null);
     }
-    showToast(`Файлы импортированы: ${routedCount} распределено по тегам, ${inboxCount} добавлено в бесхозные.`);
+    showToast(t("Файлы импортированы: {routed} распределено по тегам, {inbox} добавлено в бесхозные.", { routed: routedCount, inbox: inboxCount }));
   }
 
   async function importFilesToWorkspace(files: File[], position?: Vec2 | null) {
@@ -1793,7 +1809,7 @@ export default function App() {
       setSelectedProcessId(null);
       setActiveMenu("map");
     }
-    showToast(`Файлы добавлены на карту в точку перетаскивания: ${documents.length}.`);
+    showToast(t("Файлы добавлены на карту в точку перетаскивания: {count}.", { count: documents.length }));
   }
 
   async function handleDrop(event: DragEvent<HTMLDivElement>) {
@@ -1858,7 +1874,7 @@ export default function App() {
     if (allowed) {
       return true;
     }
-    showToast(`Роль «${access.label}» не может выполнить это действие.`);
+    showToast(t("Роль «{role}» не может выполнить это действие.", { role: t(access.label) }));
     return false;
   }
 
@@ -1899,10 +1915,10 @@ export default function App() {
       <div className="app-shell empty-project-shell" style={appVars}>
         <div className="cosmos-backdrop" />
         <main className="empty-project-state glass-panel">
-          <span>Проекты не созданы</span>
-          <h1>Создайте первый проект</h1>
-          <p>{access.canManageProjects ? "После создания здесь появится рабочая карта проекта, ноды, документы, бизнес-процессы и мессенджер." : "Обратитесь к директору, чтобы получить доступ к проекту."}</p>
-          {access.canManageProjects ? <button onClick={() => setProjectManagerOpen(true)}>Создать новый проект</button> : null}
+          <span>{t("Проекты не созданы")}</span>
+          <h1>{t("Создайте первый проект")}</h1>
+          <p>{t(access.canManageProjects ? "После создания здесь появится рабочая карта проекта, ноды, документы, бизнес-процессы и мессенджер." : "Обратитесь к директору, чтобы получить доступ к проекту.")}</p>
+          {access.canManageProjects ? <button onClick={() => setProjectManagerOpen(true)}>{t("Создать новый проект")}</button> : null}
         </main>
         {projectManagerOpen ? (
           <ProjectManagerModal
@@ -2092,7 +2108,7 @@ export default function App() {
       />
       <DocumentModal
         document={modalDocument}
-        onShowInFolder={(document) => showToast(`Демо: файл «${document.title}» лежит в контейнере проекта.`)}
+        onShowInFolder={(document) => showToast(t("Демо: файл «{title}» лежит в контейнере проекта.", { title: document.title }))}
         onClose={() => setModalDocument(null)}
       />
       {projectManagerOpen ? (
@@ -2113,7 +2129,7 @@ export default function App() {
           onLogout={logoutDemo}
           onSaveIntegrations={saveParticipantIntegrations}
           onSaveProfile={updateParticipantProfile}
-          onChangePassword={() => showToast("Демо-пароль обновлен для текущей сессии.")}
+          onChangePassword={() => showToast(t("Демо-пароль обновлен для текущей сессии."))}
           onImportDemo={importDemoIntegration}
           onImportTestFile={importIntegrationTestFile}
           onImportFiles={(provider, participantId, files) => {
@@ -2159,8 +2175,8 @@ export default function App() {
       ) : null}
       {isDropActive ? (
         <div className="drop-overlay">
-          <strong>Отпустите файлы</strong>
-          <span>Они попадут в выбранный контейнер связи или во входящие без тега.</span>
+          <strong>{t("Отпустите файлы")}</strong>
+          <span>{t("Они попадут в выбранный контейнер связи или во входящие без тега.")}</span>
         </div>
       ) : null}
       {toast ? <div className="toast glass-panel">{toast}</div> : null}
@@ -2445,19 +2461,20 @@ function getIntegrationProviderLabel(provider: IntegrationProvider) {
 }
 
 function ConstructorHint({ onClose }: { onClose: () => void }) {
+  const { t } = useI18n();
   return (
     <aside className="constructor-hint glass-panel">
       <header>
         <div>
-          <span>Пустой проект</span>
-          <strong>Как начать сборку</strong>
+          <span>{t("Пустой проект")}</span>
+          <strong>{t("Как начать сборку")}</strong>
         </div>
-        <button onClick={onClose} aria-label="Скрыть подсказку">×</button>
+        <button onClick={onClose} aria-label={t("Скрыть подсказку")}>×</button>
       </header>
       <ol>
-        <li>Выберите ноду и переименуйте ее в правой панели.</li>
-        <li>Наведите на ноду и нажмите плюс, чтобы создать бизнес-процесс.</li>
-        <li>Двойной клик по ноде открывает ее внутренний уровень.</li>
+        <li>{t("Выберите ноду и переименуйте ее в правой панели.")}</li>
+        <li>{t("Наведите на ноду и нажмите плюс, чтобы создать бизнес-процесс.")}</li>
+        <li>{t("Двойной клик по ноде открывает ее внутренний уровень.")}</li>
       </ol>
     </aside>
   );

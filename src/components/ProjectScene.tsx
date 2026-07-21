@@ -39,6 +39,7 @@ import {
 } from "../lib/graph";
 import type { BusinessProcess, DemoProject, MapLevel, NodeStatus, ProcessDocument, ProjectNode, Vec2 } from "../types";
 import type { DemoAccess } from "../lib/demoAccess";
+import { useI18n } from "../lib/i18n";
 
 export type SceneHandle = {
   reset: () => void;
@@ -170,6 +171,7 @@ export function ProjectScene({
   onDeleteProject,
   sceneRef,
 }: ProjectSceneProps) {
+  const { t, system } = useI18n();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const exitZoneRef = useRef<HTMLDivElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
@@ -717,7 +719,7 @@ export function ProjectScene({
               }}
             >
               <ChevronUp size={17} />
-              Уровень выше
+              {t("Уровень выше")}
             </button>
           </div>
         ) : null}
@@ -725,14 +727,14 @@ export function ProjectScene({
 
       {linkingFromId ? (
         <div className="linking-hint glass-panel">
-          Выберите вторую ноду для контейнера связи
+          {t("Выберите вторую ноду для контейнера связи")}
         </div>
       ) : null}
 
       {dragUi?.ownerNodeId ? (
         <div ref={exitZoneRef} className={clsx("document-exit-zone glass-panel", dragUi.overExit && "active")}>
-          <strong>Вынести наружу</strong>
-          <span>Отпустите файл здесь, чтобы вернуть его на уровень выше</span>
+          <strong>{t("Вынести наружу")}</strong>
+          <span>{t("Отпустите файл здесь, чтобы вернуть его на уровень выше")}</span>
         </div>
       ) : null}
 
@@ -778,15 +780,15 @@ export function ProjectScene({
         >
           <header>
             <div>
-              <span>Задания на связи</span>
-              <strong>{getProcessRouteLabel(openProcessGroup, nodeMap)}</strong>
+              <span>{t("Задания на связи")}</span>
+              <strong>{getProcessRouteLabel(openProcessGroup, nodeMap, t)}</strong>
             </div>
-            <button onClick={() => setOpenProcessGroupKey(null)} aria-label="Закрыть список заданий">
+            <button onClick={() => setOpenProcessGroupKey(null)} aria-label={t("Закрыть список заданий")}>
               <X size={16} />
             </button>
           </header>
           <div className="process-task-carousel">
-            <button onClick={() => shiftOpenProcess(-1)} disabled={openProcessGroup.processes.length <= 1} aria-label="Предыдущее задание">
+            <button onClick={() => shiftOpenProcess(-1)} disabled={openProcessGroup.processes.length <= 1} aria-label={t("Предыдущее задание")}>
               <ChevronLeft size={17} />
             </button>
             <button
@@ -798,21 +800,21 @@ export function ProjectScene({
                 event.stopPropagation();
                 handleProcessContextMenu(openProcess.id, event.clientX, event.clientY);
               }}
-              title="Двойной клик: открыть бизнес-процесс"
+              title={t("Двойной клик: открыть бизнес-процесс")}
             >
-              <span>{boundedOpenProcessIndex + 1} из {openProcessGroup.processes.length}</span>
+              <span>{t("{current} из {total}", { current: boundedOpenProcessIndex + 1, total: openProcessGroup.processes.length })}</span>
               <strong>{openProcess.title}</strong>
-              <small>{getProcessStatusText(openProcess.status)} · {getProcessDeadlineLabel(openProcess)}</small>
+              <small>{t(getProcessStatusText(openProcess.status))} · {system(getProcessDeadlineLabel(openProcess))}</small>
             </button>
-            <button onClick={() => shiftOpenProcess(1)} disabled={openProcessGroup.processes.length <= 1} aria-label="Следующее задание">
+            <button onClick={() => shiftOpenProcess(1)} disabled={openProcessGroup.processes.length <= 1} aria-label={t("Следующее задание")}>
               <ChevronRight size={17} />
             </button>
           </div>
           <footer>
-            <span>{openProcess.documents.length} файлов</span>
+            <span>{t("{count} файлов", { count: openProcess.documents.length })}</span>
             <button onClick={() => onOpenProcessDetails(openProcess.id)}>
               <ExternalLink size={15} />
-              Открыть процесс
+              {t("Открыть процесс")}
             </button>
           </footer>
         </aside>
@@ -873,7 +875,7 @@ export function ProjectScene({
             onContextMenu={(event) => handleNodeContextMenu(event, node)}
             onMouseEnter={() => setHoveredNodeId(node.id)}
             onMouseLeave={() => setHoveredNodeId((current) => (current === node.id ? null : current))}
-            title={canDrill ? "Двойной клик: провалиться внутрь" : tone.label}
+            title={canDrill ? t("Двойной клик: провалиться внутрь") : t(tone.label)}
           >
             <span className="node-orb">
               {isCenter ? <i style={{ height: `${progress}%` }} /> : null}
@@ -882,9 +884,9 @@ export function ProjectScene({
               <strong>{label.primary}</strong>
               <em>{label.secondary}</em>
             </span>
-            {node.type === "document" && node.status === "comments" ? <span className="node-status-badge">Не принято</span> : null}
+            {node.type === "document" && node.status === "comments" ? <span className="node-status-badge">{t("Не принято")}</span> : null}
             {node.positionLocked ? (
-              <span className="node-lock-badge" title="Положение закреплено">
+              <span className="node-lock-badge" title={t("Положение закреплено")}>
                 <LockKeyhole size={13} />
               </span>
             ) : null}
@@ -924,7 +926,7 @@ export function ProjectScene({
               }}
             >
               {contextNode.positionLocked ? <PinOff size={15} /> : <Pin size={15} />}
-              {contextNode.positionLocked ? "Открепить положение" : "Закрепить положение"}
+              {t(contextNode.positionLocked ? "Открепить положение" : "Закрепить положение")}
             </button>
           ) : null}
           {contextNode.type === "document" && contextNode.document ? (
@@ -935,7 +937,7 @@ export function ProjectScene({
                   setContextMenu(null);
                 }}
               >
-                Открыть документ
+                {t("Открыть документ")}
               </button>
               {access.canApprove ? (
                 <>
@@ -945,7 +947,7 @@ export function ProjectScene({
                       setContextMenu(null);
                     }}
                   >
-                    На проверке
+                    {t("На проверке")}
                   </button>
                   <button
                     onClick={() => {
@@ -953,7 +955,7 @@ export function ProjectScene({
                       setContextMenu(null);
                     }}
                   >
-                    Согласовано
+                    {t("Согласовано")}
                   </button>
                   <button
                     className="danger"
@@ -962,7 +964,7 @@ export function ProjectScene({
                       setContextMenu(null);
                     }}
                   >
-                    Не принято
+                    {t("Не принято")}
                   </button>
                 </>
               ) : null}
@@ -973,7 +975,7 @@ export function ProjectScene({
                     setContextMenu(null);
                   }}
                 >
-                  Вынести из ноды
+                  {t("Вынести из ноды")}
                 </button>
               ) : null}
               {access.canUploadFiles ? (
@@ -984,7 +986,7 @@ export function ProjectScene({
                   }}
                 >
                   <FolderInput size={15} />
-                  В бесхозные
+                  {t("В бесхозные")}
                 </button>
               ) : null}
             </>
@@ -999,7 +1001,7 @@ export function ProjectScene({
                   }}
                 >
                   <Layers3 size={15} />
-                  {contextNode.childrenLevelId ? "Открыть уровень ноды" : "Добавить уровень"}
+                  {t(contextNode.childrenLevelId ? "Открыть уровень ноды" : "Добавить уровень")}
                 </button>
               ) : null}
               {access.canEditStructure ? (
@@ -1010,7 +1012,7 @@ export function ProjectScene({
                       setContextMenu(null);
                     }}
                   >
-                    Создать бизнес-процесс
+                    {t("Создать бизнес-процесс")}
                   </button>
                   <button
                     onClick={() => {
@@ -1018,7 +1020,7 @@ export function ProjectScene({
                       setContextMenu(null);
                     }}
                   >
-                    Положить тестовый файл
+                    {t("Положить тестовый файл")}
                   </button>
                 </>
               ) : null}
@@ -1033,7 +1035,7 @@ export function ProjectScene({
               }}
             >
               <Trash2 size={15} />
-              {contextNode.type === "document" ? "Удалить файл" : "Удалить ноду"}
+              {t(contextNode.type === "document" ? "Удалить файл" : "Удалить ноду")}
             </button>
           ) : contextNode.type === "central" && access.canManageProjects ? (
             <button
@@ -1044,7 +1046,7 @@ export function ProjectScene({
               }}
             >
               <Trash2 size={15} />
-              Удалить проект
+              {t("Удалить проект")}
             </button>
           ) : null}
         </div>,
@@ -1066,7 +1068,7 @@ export function ProjectScene({
             }}
           >
             <ExternalLink size={15} />
-            Открыть процесс
+            {t("Открыть процесс")}
           </button>
           {access.canEditStructure ? (
             <button
@@ -1077,7 +1079,7 @@ export function ProjectScene({
               }}
             >
               <Trash2 size={15} />
-              Удалить процесс
+              {t("Удалить процесс")}
             </button>
           ) : null}
         </div>,
@@ -1099,7 +1101,7 @@ export function ProjectScene({
               }}
             >
               <SquarePlus size={15} />
-              Создать ноду
+              {t("Создать ноду")}
             </button>
           ) : null}
           {access.canUploadFiles ? (
@@ -1111,7 +1113,7 @@ export function ProjectScene({
               }}
             >
               <Upload size={15} />
-              Загрузить файл сюда
+              {t("Загрузить файл сюда")}
             </button>
           ) : null}
         </div>,
@@ -1159,6 +1161,7 @@ function ProcessPath({
   onOpenDetails: () => void;
   onOpenContextMenu: (clientX: number, clientY: number) => void;
 }) {
+  const { language, t } = useI18n();
   if (!from || !to || !fromNode || !toNode || !processes.length) {
     return null;
   }
@@ -1252,20 +1255,20 @@ function ProcessPath({
               event.stopPropagation();
               onOpenContextMenu(event.clientX, event.clientY);
             }}
-            title="Двойной клик: открыть бизнес-процесс"
+            title={t("Двойной клик: открыть бизнес-процесс")}
           >
-            <span className="process-status-dots" title={statuses.map((status) => getProcessStatusText(status)).join(", ")}>
+            <span className="process-status-dots" title={statuses.map((status) => t(getProcessStatusText(status))).join(", ")}>
               {statusColors.map((statusColor) => <i key={statusColor} style={{ background: statusColor }} />)}
             </span>
             <b>
               {overview
-                ? `${taskCount} ${pluralizeTasks(taskCount)}`
+                ? formatTaskCount(taskCount, language)
                 : `${fromNode.shortCode ?? fromNode.title} ↔ ${toNode.shortCode ?? toNode.title}`}
             </b>
-            {!overview ? <em>{taskCount} {pluralizeTasks(taskCount)}</em> : null}
+            {!overview ? <em>{formatTaskCount(taskCount, language)}</em> : null}
             {detailed ? (
               <small>
-                {representative.title} · {representative.documents.length} файлов · {getProcessStatusText(representative.status)}
+                {representative.title} · {t("{count} файлов", { count: representative.documents.length })} · {t(getProcessStatusText(representative.status))}
               </small>
             ) : null}
           </button>
@@ -1332,19 +1335,22 @@ function getTaskPopoverPosition(anchor: Vec2, size: { width: number; height: num
   };
 }
 
-function getProcessRouteLabel(group: ProcessGroup, nodeMap: Map<string, ProjectNode>) {
+function getProcessRouteLabel(group: ProcessGroup, nodeMap: Map<string, ProjectNode>, t: ReturnType<typeof useI18n>["t"]) {
   const process = group.processes[0];
   const from = nodeMap.get(process.from);
   const to = nodeMap.get(process.to);
-  return `${from?.shortCode ?? from?.title ?? "Источник"} ↔ ${to?.shortCode ?? to?.title ?? "Получатель"}`;
+  return `${from?.shortCode ?? from?.title ?? t("Источник")} ↔ ${to?.shortCode ?? to?.title ?? t("Получатель")}`;
 }
 
-function pluralizeTasks(value: number) {
+function formatTaskCount(value: number, language: "ru" | "en") {
+  if (language === "en") {
+    return `${value} ${value === 1 ? "task" : "tasks"}`;
+  }
   const mod10 = value % 10;
   const mod100 = value % 100;
-  if (mod10 === 1 && mod100 !== 11) return "задание";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "задания";
-  return "заданий";
+  if (mod10 === 1 && mod100 !== 11) return `${value} задание`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${value} задания`;
+  return `${value} заданий`;
 }
 
 function buildInitialPositions(nodes: ProjectNode[], levelId: string, centralNodeId: string) {

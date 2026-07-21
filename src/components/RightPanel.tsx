@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import clsx from "clsx";
 import { canEditNode, canEditProcess, type DemoAccess } from "../lib/demoAccess";
+import { useI18n } from "../lib/i18n";
 import {
   getFileLabel,
   getFileTypeColor,
@@ -145,6 +146,7 @@ function NodeInfo({
   onMoveDocumentNode: (documentNodeId: string, targetNodeId: string | null) => void;
   onUpdateDocumentStatus: (documentId: string, status: NodeStatus) => void;
 }) {
+  const { t, system } = useI18n();
   if (node.type === "document") {
     return (
         <DocumentNodeInfo
@@ -170,19 +172,19 @@ function NodeInfo({
 
   return (
     <>
-      <PanelHeader eyebrow={node.shortCode ?? "Нода"} title={node.title} status={getStatusText(node.status)} statusColor={tone.glow} />
+      <PanelHeader eyebrow={node.shortCode ?? t("Нода")} title={node.title} status={getStatusText(node.status)} statusColor={tone.glow} />
 
       <section className="node-editor">
         <label>
-          <span>Код на сфере</span>
-          <input disabled={!canEdit} value={node.shortCode ?? ""} onChange={(event) => onNodeUpdate(node.id, { shortCode: event.currentTarget.value })} placeholder="АР / Б1 / ИРД" />
+          <span>{t("Код на сфере")}</span>
+          <input disabled={!canEdit} value={node.shortCode ?? ""} onChange={(event) => onNodeUpdate(node.id, { shortCode: event.currentTarget.value })} placeholder={t("АР / Б1 / ИРД")} />
         </label>
         <label>
-          <span>Название ноды</span>
+          <span>{t("Название ноды")}</span>
           <input disabled={!canEdit} value={node.title} onChange={(event) => onNodeUpdate(node.id, { title: event.currentTarget.value })} />
         </label>
         <label>
-          <span>Описание</span>
+          <span>{t("Описание")}</span>
           <textarea disabled={!canEdit} value={node.description ?? ""} onChange={(event) => onNodeUpdate(node.id, { description: event.currentTarget.value })} />
         </label>
       </section>
@@ -206,8 +208,8 @@ function NodeInfo({
           onChange={(responsible) => onNodeUpdate(node.id, { responsible })}
           disabled={!canAssignResponsible}
         />
-        <Metric icon={<Clock3 size={16} />} label="Обновлено" value={`${node.updatedAt ?? "сегодня"} · ${updatedBy}`} wide={!isLevelCenter} />
-        {isLevelCenter && levelProgress !== null ? <Metric icon={<CheckCircle2 size={16} />} label="Готовность уровня" value={`${levelProgress}%`} /> : null}
+        <Metric icon={<Clock3 size={16} />} label={t("Обновлено")} value={`${system(node.updatedAt ?? "сегодня")} · ${system(updatedBy)}`} wide={!isLevelCenter} />
+        {isLevelCenter && levelProgress !== null ? <Metric icon={<CheckCircle2 size={16} />} label={t("Готовность уровня")} value={`${levelProgress}%`} /> : null}
       </div>
 
       <DocumentList
@@ -235,6 +237,7 @@ function NodeChecklistEditor({
   onNodeUpdate: (nodeId: string, edit: NodeEdit) => void;
   onOpenDocument: (document: ProcessDocument) => void;
 }) {
+  const { t } = useI18n();
   const checklist = node.checklist ?? [];
   const [newTitle, setNewTitle] = useState("");
   const [bindingItemId, setBindingItemId] = useState<string | null>(null);
@@ -287,8 +290,8 @@ function NodeChecklistEditor({
     <section className="node-checklist-editor">
       <header>
         <div>
-          <h3>Документы ноды</h3>
-          <span>{checklist.filter((item) => item.done).length} из {checklist.length} закрыто</span>
+          <h3>{t("Документы ноды")}</h3>
+          <span>{t("{done} из {total} закрыто", { done: checklist.filter((item) => item.done).length, total: checklist.length })}</span>
         </div>
         <b>{getNodeCompletion(node)}%</b>
       </header>
@@ -303,9 +306,9 @@ function NodeChecklistEditor({
               addItem();
             }
           }}
-          placeholder="Название документа или результата..."
+          placeholder={t("Название документа или результата...")}
         />
-        <button onClick={addItem}>Добавить</button>
+        <button onClick={addItem}>{t("Добавить")}</button>
       </div> : null}
 
       <div className="checklist-items">
@@ -330,7 +333,7 @@ function NodeChecklistEditor({
                       <FileText size={15} />
                       <span>{attachedDocument.title}</span>
                     </button>
-                    {canEdit ? <button className="checklist-rebind-button" onClick={() => setBindingItemId(item.id)}>Сменить</button> : null}
+                    {canEdit ? <button className="checklist-rebind-button" onClick={() => setBindingItemId(item.id)}>{t("Сменить")}</button> : null}
                   </div>
                 ) : (
                   <input
@@ -341,28 +344,28 @@ function NodeChecklistEditor({
                     }
                   />
                 )}
-                {canEdit ? <button onClick={() => updateChecklist(checklist.filter((current) => current.id !== item.id))}>Удалить</button> : null}
+                {canEdit ? <button onClick={() => updateChecklist(checklist.filter((current) => current.id !== item.id))}>{t("Удалить")}</button> : null}
               </article>
               {bindingItemId === item.id && canEdit ? (
-                <div className="checklist-document-picker" role="dialog" aria-label="Выбор документа для пункта">
-                  <strong>Укажите файл в ноде, соответствующий «{item.title}»</strong>
+                <div className="checklist-document-picker" role="dialog" aria-label={t("Выбор документа для пункта")}>
+                  <strong>{t("Укажите файл в ноде, соответствующий «{title}»", { title: item.title })}</strong>
                   {documents.length ? (
                     <div>
                       {documents.map((document) => (
                         <button key={document.id} onClick={() => bindDocument(item.id, document.id)}>
                           <FileText size={15} />
                           <span>{document.title}</span>
-                          <small>{getFileLabel(document.fileType)} · {document.version}</small>
+                          <small>{t(getFileLabel(document.fileType))} · {document.version}</small>
                         </button>
                       ))}
                     </div>
-                  ) : <p>В этой ноде пока нет файлов. Сначала положите документ в ноду.</p>}
-                  <button className="checklist-picker-cancel" onClick={() => setBindingItemId(null)}>Отмена</button>
+                  ) : <p>{t("В этой ноде пока нет файлов. Сначала положите документ в ноду.")}</p>}
+                  <button className="checklist-picker-cancel" onClick={() => setBindingItemId(null)}>{t("Отмена")}</button>
                 </div>
               ) : null}
             </div>
           );
-        }) : <p>Добавьте документы, которые должны быть получены и согласованы внутри этой ноды.</p>}
+        }) : <p>{t("Добавьте документы, которые должны быть получены и согласованы внутри этой ноды.")}</p>}
       </div>
     </section>
   );
@@ -387,6 +390,7 @@ function DocumentNodeInfo({
   onMoveDocumentNode: (documentNodeId: string, targetNodeId: string | null) => void;
   onUpdateDocumentStatus: (documentId: string, status: NodeStatus) => void;
 }) {
+  const { t, system } = useI18n();
   const document = getDocumentFromNode(node);
   const color = getFileTypeColor(document.fileType);
   const attachTargets = getLevelNodes(project, level).filter((target) =>
@@ -400,34 +404,34 @@ function DocumentNodeInfo({
       <DocumentStatusControl document={document} onChange={canApprove ? (status) => onUpdateDocumentStatus(document.id, status) : undefined} />
 
       <div className="info-grid">
-        <Metric icon={<FileText size={16} />} label="Тип файла" value={getFileLabel(document.fileType)} />
-        <Metric icon={<Clock3 size={16} />} label="Версия" value={document.version} />
-        <Metric icon={<UserRound size={16} />} label="Источник" value={document.from} wide />
-        <Metric icon={<Clock3 size={16} />} label="Обновлен" value={document.updatedAt} />
+        <Metric icon={<FileText size={16} />} label={t("Тип файла")} value={t(getFileLabel(document.fileType))} />
+        <Metric icon={<Clock3 size={16} />} label={t("Версия")} value={document.version} />
+        <Metric icon={<UserRound size={16} />} label={t("Источник")} value={system(document.from)} wide />
+        <Metric icon={<Clock3 size={16} />} label={t("Обновлен")} value={system(document.updatedAt)} />
       </div>
 
       <section className="quick-actions">
         <button onClick={() => onOpenDocument(document)}>
           <ExternalLink size={17} />
-          Открыть документ
+          {t("Открыть документ")}
         </button>
         {false && node.documentOwnerNodeId ? (
           <button onClick={() => onMoveDocumentNode(node.id, null)}>
             <ExternalLink size={17} />
-            Вынести из ноды
+            {t("Вынести из ноды")}
           </button>
         ) : null}
       </section>
 
       {node.documentOwnerNodeId && canMoveDocuments ? (
         <div className="panel-note">
-          Чтобы вынести файл из ноды, перетащите его на карте в зону «Вынести наружу». Она появляется сразу после начала перетаскивания.
+          {t("Чтобы вынести файл из ноды, перетащите его на карте в зону «Вынести наружу». Она появляется сразу после начала перетаскивания.")}
         </div>
       ) : null}
 
       {!node.documentOwnerNodeId && attachTargets.length && canMoveDocuments ? (
         <section className="document-targets">
-          <h3>Вложить вручную</h3>
+          <h3>{t("Вложить вручную")}</h3>
           {attachTargets.map((target) => (
             <button key={target.id} onClick={() => onMoveDocumentNode(node.id, target.id)}>
               <span>{target.shortCode ?? target.title}</span>
@@ -438,7 +442,7 @@ function DocumentNodeInfo({
       ) : null}
 
       <div className="panel-note">
-        Файловая нода не привязывается автоматически. Перетащите ее на раздел, чтобы положить внутрь, или вынесите обратно в бесхозные файлы.
+        {t("Файловая нода не привязывается автоматически. Перетащите ее на раздел, чтобы положить внутрь, или вынесите обратно в бесхозные файлы.")}
       </div>
     </>
   );
@@ -471,28 +475,29 @@ function ProcessInfo({
   onAttachInboxDocument: (processId: string, documentId: string) => void;
   onOpenProcessBuilder: (processId: string) => void;
 }) {
+  const { t, system } = useI18n();
   const from = project.nodes.find((node) => node.id === process.from);
   const to = project.nodes.find((node) => node.id === process.to);
   const color = getProcessRuntimeColor(process);
 
   return (
     <>
-      <PanelHeader eyebrow="Бизнес-процесс" title={process.title} status={getProcessStatusText(process.status)} statusColor={color} />
+      <PanelHeader eyebrow={t("Бизнес-процесс")} title={process.title} status={getProcessStatusText(process.status)} statusColor={color} />
 
       <section className="link-editor">
         <div className="link-endpoints">
-          <span>{from?.shortCode ?? from?.title ?? "Источник"}</span>
+          <span>{from?.shortCode ?? from?.title ?? t("Источник")}</span>
           <ArrowLeftRight size={18} />
-          <span>{to?.shortCode ?? to?.title ?? "Получатель"}</span>
+          <span>{to?.shortCode ?? to?.title ?? t("Получатель")}</span>
         </div>
 
         <label>
-          <span>Название процесса</span>
+          <span>{t("Название процесса")}</span>
           <input disabled={!canEdit} value={process.title} onChange={(event) => onProcessUpdate(process.id, { title: event.currentTarget.value })} />
         </label>
 
         <label>
-          <span>Описание / суть передачи</span>
+          <span>{t("Описание / суть передачи")}</span>
           <textarea disabled={!canEdit} value={process.description} onChange={(event) => onProcessUpdate(process.id, { description: event.currentTarget.value })} />
         </label>
 
@@ -505,27 +510,27 @@ function ProcessInfo({
               style={{ "--status-color": getProcessStatusColor(status) } as React.CSSProperties}
               onClick={() => onProcessUpdate(process.id, { status, validationAt: status === "accepted" || status === "in_work" ? "сегодня" : process.validationAt })}
             >
-              {getProcessStatusText(status)}
+              {t(getProcessStatusText(status))}
             </button>
           ))}
         </div>
 
         <div className="inline-form-grid">
           <label>
-            <span>Направление</span>
+            <span>{t("Направление")}</span>
             <select disabled={!canEdit} value={process.direction} onChange={(event) => onProcessUpdate(process.id, { direction: event.currentTarget.value as BusinessProcess["direction"] })}>
-              <option value="forward">В одну сторону</option>
-              <option value="backward">Обратно</option>
-              <option value="both">В обе стороны</option>
+              <option value="forward">{t("В одну сторону")}</option>
+              <option value="backward">{t("Обратно")}</option>
+              <option value="both">{t("В обе стороны")}</option>
             </select>
           </label>
           <label>
-            <span>Срок передачи</span>
+            <span>{t("Срок передачи")}</span>
             <input disabled={!canEdit} type="datetime-local" value={process.dueAt ?? ""} onChange={(event) => onProcessUpdate(process.id, { dueAt: event.currentTarget.value })} />
           </label>
           {process.direction === "both" ? (
             <label>
-              <span>Срок обратно</span>
+              <span>{t("Срок обратно")}</span>
               <input disabled={!canEdit} type="datetime-local" value={process.dueBackAt ?? ""} onChange={(event) => onProcessUpdate(process.id, { dueBackAt: event.currentTarget.value })} />
             </label>
           ) : null}
@@ -537,31 +542,31 @@ function ProcessInfo({
           {canDelete ? (
             <button onClick={() => onOpenProcessBuilder(process.id)}>
               <GitBranch size={17} />
-              Настроить бизнес-процесс
+              {t("Настроить бизнес-процесс")}
             </button>
           ) : null}
           {canEdit ? (
             <button onClick={() => onProcessUpdate(process.id, { status: "sent" })}>
               <Send size={17} />
-              Отправить на согласование
+              {t("Отправить на согласование")}
             </button>
           ) : null}
           {canDelete ? (
             <button className="danger" onClick={() => onDeleteProcess(process.id)}>
               <Trash2 size={17} />
-              Удалить процесс
+              {t("Удалить процесс")}
             </button>
           ) : null}
         </section>
       ) : null}
 
       <div className="info-grid">
-        <Metric icon={<UserRound size={16} />} label="От кого" value={process.sender} />
-        <Metric icon={<UserRound size={16} />} label="Кому" value={process.receiver} />
-        <Metric icon={<UserRound size={16} />} label="Согласует" value={process.approver ?? process.receiver} />
-        <Metric icon={<Clock3 size={16} />} label="Создано" value={process.createdAt} />
-        <Metric icon={<Clock3 size={16} />} label="Таймер" value={getProcessDeadlineLabel(process)} />
-        <Metric icon={<Inbox size={16} />} label="Документов" value={String(process.documents.length)} />
+        <Metric icon={<UserRound size={16} />} label={t("От кого")} value={process.sender} />
+        <Metric icon={<UserRound size={16} />} label={t("Кому")} value={process.receiver} />
+        <Metric icon={<UserRound size={16} />} label={t("Согласует")} value={process.approver ?? process.receiver} />
+        <Metric icon={<Clock3 size={16} />} label={t("Создано")} value={system(process.createdAt)} />
+        <Metric icon={<Clock3 size={16} />} label={t("Таймер")} value={system(getProcessDeadlineLabel(process))} />
+        <Metric icon={<Inbox size={16} />} label={t("Документов")} value={String(process.documents.length)} />
       </div>
 
       {canEdit ? <AttachInbox project={project} process={process} onAttachInboxDocument={onAttachInboxDocument} /> : null}
@@ -574,7 +579,7 @@ function ProcessInfo({
       />
 
       <div className="panel-note">
-        Связь здесь работает как контейнер бизнес-процесса: у нее есть статус, направление, описание, документы и история принятия в работу. Параллельные контейнеры между теми же нодами отображаются отдельными дугами.
+        {t("Связь здесь работает как контейнер бизнес-процесса: у нее есть статус, направление, описание, документы и история принятия в работу. Параллельные контейнеры между теми же нодами отображаются отдельными дугами.")}
       </div>
     </>
   );
@@ -589,6 +594,7 @@ function AttachInbox({
   process: BusinessProcess;
   onAttachInboxDocument: (processId: string, documentId: string) => void;
 }) {
+  const { t } = useI18n();
   const [selectedDocumentId, setSelectedDocumentId] = useState(project.inboxDocuments[0]?.id ?? "");
 
   useEffect(() => {
@@ -599,7 +605,7 @@ function AttachInbox({
     return (
       <section className="attach-inbox empty">
         <Inbox size={18} />
-        <span>Входящих без связи нет</span>
+        <span>{t("Входящих без связи нет")}</span>
       </section>
     );
   }
@@ -607,7 +613,7 @@ function AttachInbox({
   return (
     <section className="attach-inbox">
       <label>
-        <span>Прикрутить задание вручную</span>
+        <span>{t("Прикрутить задание вручную")}</span>
         <select value={selectedDocumentId} onChange={(event) => setSelectedDocumentId(event.currentTarget.value)}>
           {project.inboxDocuments.map((document) => (
             <option key={document.id} value={document.id}>
@@ -618,7 +624,7 @@ function AttachInbox({
       </label>
       <button onClick={() => selectedDocumentId && onAttachInboxDocument(process.id, selectedDocumentId)}>
         <Plus size={17} />
-        Прикрепить
+        {t("Прикрепить")}
       </button>
     </section>
   );
@@ -633,6 +639,7 @@ function TagsEditor({
   canEdit: boolean;
   onNodeUpdate: (nodeId: string, edit: NodeEdit) => void;
 }) {
+  const { t } = useI18n();
   const [value, setValue] = useState((node.tags ?? []).join(", "));
 
   useEffect(() => {
@@ -642,10 +649,10 @@ function TagsEditor({
   return (
     <section className="tags-editor">
       <label>
-        <span>Теги автопривязки</span>
-        <input disabled={!canEdit} value={value} onChange={(event) => setValue(event.currentTarget.value)} onBlur={() => canEdit && onNodeUpdate(node.id, { tags: value.split(",").map((tag) => tag.trim()).filter(Boolean) })} placeholder="АР, ТЗ, фасад" />
+        <span>{t("Теги автопривязки")}</span>
+        <input disabled={!canEdit} value={value} onChange={(event) => setValue(event.currentTarget.value)} onBlur={() => canEdit && onNodeUpdate(node.id, { tags: value.split(",").map((tag) => tag.trim()).filter(Boolean) })} placeholder={t("АР, ТЗ, фасад")} />
       </label>
-      <p>Если письмо или загруженный файл содержит тег, демо подсветит подходящую связь или предложит ручную привязку.</p>
+      <p>{t("Если письмо или загруженный файл содержит тег, демо подсветит подходящую связь или предложит ручную привязку.")}</p>
     </section>
   );
 }
@@ -667,6 +674,7 @@ function DocumentList({
   onRejectDocument?: (documentId: string) => void;
   onUpdateDocumentStatus?: (documentId: string, status: NodeStatus) => void;
 }) {
+  const { t, system } = useI18n();
   const [contextMenu, setContextMenu] = useState<{ documentId: string; x: number; y: number } | null>(null);
   const documentNodeByDocumentId = useMemo(
     () => new Map(documentNodes.filter((node) => node.document).map((node) => [node.document!.id, node])),
@@ -688,15 +696,15 @@ function DocumentList({
   if (!documents.length) {
     return (
       <section className="document-list">
-        <h3>{title}</h3>
-        <p>Документов пока нет.</p>
+        <h3>{t(title)}</h3>
+        <p>{t("Документов пока нет.")}</p>
       </section>
     );
   }
 
   return (
     <section className="document-list">
-      <h3>{title}</h3>
+      <h3>{t(title)}</h3>
       {documents.map((document) => (
         <article
           key={document.id}
@@ -739,7 +747,7 @@ function DocumentList({
             </span>
             <div>
               <b>{document.title}</b>
-              <small>{getFileLabel(document.fileType)} · {document.from}</small>
+              <small>{t(getFileLabel(document.fileType))} · {system(document.from)}</small>
             </div>
             <em>{document.version}</em>
           </button>
@@ -759,7 +767,7 @@ function DocumentList({
               setContextMenu(null);
             }}
           >
-            Открыть документ
+            {t("Открыть документ")}
           </button>
           {contextDocumentNode && onMoveDocumentNode ? (
             <button
@@ -768,14 +776,14 @@ function DocumentList({
                 setContextMenu(null);
               }}
             >
-              Вынести в пространство
+              {t("Вынести в пространство")}
             </button>
           ) : null}
           {onUpdateDocumentStatus ? (
             <>
-              <button onClick={() => { onUpdateDocumentStatus(contextDocument.id, "review"); setContextMenu(null); }}>На проверке</button>
-              <button onClick={() => { onUpdateDocumentStatus(contextDocument.id, "approved"); setContextMenu(null); }}>Согласовано</button>
-              <button className="danger" onClick={() => { onUpdateDocumentStatus(contextDocument.id, "comments"); setContextMenu(null); }}>Не принято</button>
+              <button onClick={() => { onUpdateDocumentStatus(contextDocument.id, "review"); setContextMenu(null); }}>{t("На проверке")}</button>
+              <button onClick={() => { onUpdateDocumentStatus(contextDocument.id, "approved"); setContextMenu(null); }}>{t("Согласовано")}</button>
+              <button className="danger" onClick={() => { onUpdateDocumentStatus(contextDocument.id, "comments"); setContextMenu(null); }}>{t("Не принято")}</button>
             </>
           ) : null}
         </div>,
@@ -792,6 +800,7 @@ function DocumentStatusControl({
   document: ProcessDocument;
   onChange?: (status: NodeStatus) => void;
 }) {
+  const { t } = useI18n();
   const color = getDocumentStatusColor(document.status);
 
   return (
@@ -801,7 +810,7 @@ function DocumentStatusControl({
     >
       <span>
         <i />
-        Статус ГИП/админ
+        {t("Статус ГИП/админ")}
       </span>
       <select
         value={document.status}
@@ -811,7 +820,7 @@ function DocumentStatusControl({
       >
         {documentStatuses.map((status) => (
           <option key={status} value={status}>
-            {getDocumentStatusLabel(status)}
+            {t(getDocumentStatusLabel(status))}
           </option>
         ))}
       </select>
@@ -830,13 +839,14 @@ function PanelHeader({
   statusColor: string;
   title: string;
 }) {
+  const { t } = useI18n();
   return (
     <header className="panel-header">
       <div className="panel-kicker">
-        <span>{eyebrow}</span>
+        <span>{t(eyebrow)}</span>
         <em style={{ color: statusColor, background: `${statusColor}16` }}>
           <i style={{ background: statusColor, boxShadow: `0 0 14px ${statusColor}` }} />
-          {status}
+          {t(status)}
         </em>
       </div>
       <h2>{title}</h2>
@@ -881,12 +891,13 @@ function ResponsibleMetric({
   onChange: (value: string) => void;
   disabled?: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <label className={clsx("metric metric-select wide", disabled && "readonly")}>
       <UserRound size={16} />
-      <span>Ответственный</span>
-      <select disabled={disabled} aria-label="Ответственный" value={value ?? ""} onChange={(event) => onChange(event.currentTarget.value)}>
-        <option value="">Не назначен</option>
+      <span>{t("Ответственный")}</span>
+      <select disabled={disabled} aria-label={t("Ответственный")} value={value ?? ""} onChange={(event) => onChange(event.currentTarget.value)}>
+        <option value="">{t("Не назначен")}</option>
         {participants.map((participant) => (
           <option key={participant.id} value={participant.name}>
             {participant.name} · {participant.position}

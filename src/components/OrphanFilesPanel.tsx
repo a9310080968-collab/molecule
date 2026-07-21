@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { ChevronDown, ChevronUp, FilePlus2, FileText, LocateFixed, Maximize2, Trash2 } from "lucide-react";
 import { getFileLabel, getFileTypeColor } from "../lib/graph";
 import type { DemoProject, ProcessDocument } from "../types";
+import { useI18n } from "../lib/i18n";
 
 type OrphanFilesPanelProps = {
   project: DemoProject;
@@ -28,6 +29,7 @@ export function OrphanFilesPanel({
   onImportFiles,
   onOpenDocument,
 }: OrphanFilesPanelProps) {
+  const { t, system } = useI18n();
   const [tag, setTag] = useState("");
   const [dropActive, setDropActive] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -87,8 +89,8 @@ export function OrphanFilesPanel({
     >
       <header>
         <div>
-          <span>Неразобранные</span>
-          <strong>Бесхозные файлы · {files.length}</strong>
+          <span>{t("Неразобранные")}</span>
+          <strong>{t("Бесхозные файлы · {count}", { count: files.length })}</strong>
         </div>
         <div className="orphan-header-actions">
           {!collapsed && canUploadFiles ? (
@@ -96,12 +98,12 @@ export function OrphanFilesPanel({
               <input
                 value={tag}
                 onChange={(event) => setTag(event.currentTarget.value)}
-                placeholder="Тег, например АР"
-                aria-label="Тег для случайного файла"
+                placeholder={t("Тег, например АР")}
+                aria-label={t("Тег для случайного файла")}
               />
               <button onClick={addFile}>
                 <FilePlus2 size={16} />
-                Добавить файл
+                {t("Добавить файл")}
               </button>
             </div>
           ) : null}
@@ -111,8 +113,8 @@ export function OrphanFilesPanel({
               setCollapsed((current) => !current);
               setContextMenu(null);
             }}
-            aria-label={collapsed ? "Развернуть бесхозные файлы" : "Свернуть бесхозные файлы"}
-            title={collapsed ? "Развернуть" : "Свернуть"}
+            aria-label={collapsed ? t("Развернуть бесхозные файлы") : t("Свернуть бесхозные файлы")}
+            title={collapsed ? t("Развернуть") : t("Свернуть")}
           >
             {collapsed ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
           </button>
@@ -145,18 +147,18 @@ export function OrphanFilesPanel({
                     event.dataTransfer.effectAllowed = "move";
                   }}
                   onClick={() => canUploadFiles ? onMaterializeInboxDocument(document.id) : onOpenDocument(document)}
-                  title={canUploadFiles ? "Перетащите на рабочую область или нажмите, чтобы вынести файл на карту" : "Открыть документ"}
+                  title={canUploadFiles ? t("Перетащите на рабочую область или нажмите, чтобы вынести файл на карту") : t("Открыть документ")}
                 >
                   <span style={{ color }}>
                     <FileText size={16} />
                   </span>
                   <div>
                     <b>{document.title}</b>
-                    <small>{getFileLabel(document.fileType)} · {document.updatedAt}{document.isNew ? " · новое" : ""}</small>
+                    <small>{t(getFileLabel(document.fileType))} · {system(document.updatedAt)}{document.isNew ? ` · ${t("новое")}` : ""}</small>
                   </div>
                   <LocateFixed size={15} />
                 </button>
-                <button className="orphan-open-action" onClick={() => onOpenDocument(document)} aria-label="Открыть документ">
+                <button className="orphan-open-action" onClick={() => onOpenDocument(document)} aria-label={t("Открыть документ")}>
                   <Maximize2 size={15} />
                 </button>
               </article>
@@ -164,7 +166,7 @@ export function OrphanFilesPanel({
           })}
         </div>
       ) : !collapsed ? (
-        <p>{canUploadFiles ? "Нет бесхозных файлов. Перетащите сюда файл с компьютера или отправьте тестовый файл из интеграций." : "Бесхозных файлов нет."}</p>
+        <p>{canUploadFiles ? t("Нет бесхозных файлов. Перетащите сюда файл с компьютера или отправьте тестовый файл из интеграций.") : t("Бесхозных файлов нет.")}</p>
       ) : null}
       {contextMenu && contextDocument ? createPortal(
         <div
@@ -181,7 +183,7 @@ export function OrphanFilesPanel({
               }}
             >
               <LocateFixed size={15} />
-              Вынести на карту
+              {t("Вынести на карту")}
             </button>
           ) : null}
           <button
@@ -191,7 +193,7 @@ export function OrphanFilesPanel({
             }}
           >
             <Maximize2 size={15} />
-            Открыть файл
+            {t("Открыть файл")}
           </button>
           {canDeleteDocuments ? (
             <button
@@ -202,7 +204,7 @@ export function OrphanFilesPanel({
               }}
             >
               <Trash2 size={15} />
-              Удалить файл
+              {t("Удалить файл")}
             </button>
           ) : null}
         </div>,

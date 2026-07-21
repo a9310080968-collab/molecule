@@ -2,6 +2,7 @@ import { Camera, FolderOpen, KeyRound, LogOut, Mail, MessageCircle, RefreshCw, S
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DemoAccess } from "../lib/demoAccess";
 import type { DemoProject, DemoUserRole, IntegrationProvider, UserIntegration, ProjectParticipant } from "../types";
+import { useI18n } from "../lib/i18n";
 
 type PersonalIntegrationsModalProps = {
   project: DemoProject;
@@ -62,6 +63,7 @@ export function PersonalIntegrationsModal({
   onImportTestFile,
   onImportFiles,
 }: PersonalIntegrationsModalProps) {
+  const { t, system } = useI18n();
   const telegramInputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
@@ -178,14 +180,14 @@ export function PersonalIntegrationsModal({
           <div>
             <span>
               <ShieldCheck size={18} />
-              Личный кабинет
+              {t("Личный кабинет")}
             </span>
             <h2>{user.name}</h2>
             <p>
-              {access.label} · {access.scopeLabel}
+              {t(access.label)} · {t(access.scopeLabel)}
             </p>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Закрыть настройки">
+          <button className="icon-button" onClick={onClose} aria-label={t("Закрыть настройки")}>
             <X size={20} />
           </button>
         </header>
@@ -193,15 +195,15 @@ export function PersonalIntegrationsModal({
         <section className="integration-summary">
           <article>
             <strong>{connectedCount}</strong>
-            <span>подключено</span>
+            <span>{t("подключено")}</span>
           </article>
           <article>
             <strong>{project.inboxDocuments.length}</strong>
-            <span>во входящих</span>
+            <span>{t("во входящих")}</span>
           </article>
           <article>
-            <strong>{isPrivileged ? "Все" : "Свои"}</strong>
-            <span>{isPrivileged ? "файлы видны админу/ГИП" : "видимость по владельцу"}</span>
+            <strong>{isPrivileged ? t("Все") : t("Свои")}</strong>
+            <span>{isPrivileged ? t("файлы видны админу/ГИП") : t("видимость по владельцу")}</span>
           </article>
         </section>
 
@@ -210,36 +212,36 @@ export function PersonalIntegrationsModal({
             <div className="section-title">
               <UserRoundCog size={18} />
               <div>
-                <h3>Демо-роль</h3>
+                <h3>{t("Демо-роль")}</h3>
                 <p>{user.position} · {user.email}</p>
               </div>
             </div>
-            <div className="personal-role-switch" role="group" aria-label="Демо-роль пользователя">
+            <div className="personal-role-switch" role="group" aria-label={t("Демо-роль пользователя")}>
               {demoRoles.map((item) => (
                 <button
                   key={item}
                   className={item === role ? "active" : ""}
                   onClick={() => onRoleChange(item)}
                 >
-                  {getDemoRoleLabel(item)}
+                  {t(getDemoRoleLabel(item))}
                 </button>
               ))}
             </div>
             <button className="personal-logout" onClick={onLogout}>
               <LogOut size={16} />
-              Выйти
+              {t("Выйти")}
             </button>
           </section>
 
           <section className="personal-profile-settings">
             <div className="personal-profile-avatar">
-              {avatarUrl ? <img src={avatarUrl} alt="Аватар пользователя" /> : <span>{getInitials(profileName)}</span>}
+              {avatarUrl ? <img src={avatarUrl} alt={t("Аватар пользователя")} /> : <span>{getInitials(profileName)}</span>}
               <button onClick={() => avatarInputRef.current?.click()}>
                 <Camera size={16} />
-                Выбрать фото
+                {t("Выбрать фото")}
               </button>
               {avatarUrl ? (
-                <button className="danger" onClick={() => setAvatarUrl("")} aria-label="Удалить аватар">
+                <button className="danger" onClick={() => setAvatarUrl("")} aria-label={t("Удалить аватар")}>
                   <Trash2 size={15} />
                 </button>
               ) : null}
@@ -253,15 +255,15 @@ export function PersonalIntegrationsModal({
             </div>
             <div className="personal-profile-fields">
               <label>
-                <span>Имя пользователя</span>
+                <span>{t("Имя пользователя")}</span>
                 <input value={profileName} onChange={(event) => setProfileName(event.currentTarget.value)} />
               </label>
               <label>
-                <span>Логин / рабочая почта</span>
+                <span>{t("Логин / рабочая почта")}</span>
                 <input type="email" value={profileEmail} onChange={(event) => setProfileEmail(event.currentTarget.value)} />
               </label>
               <label>
-                <span>Телефон</span>
+                <span>{t("Телефон")}</span>
                 <input value={profilePhone} onChange={(event) => setProfilePhone(event.currentTarget.value)} />
               </label>
             </div>
@@ -271,7 +273,7 @@ export function PersonalIntegrationsModal({
               disabled={!profileName.trim() || !profileEmail.trim()}
             >
               <Save size={16} />
-              Сохранить профиль
+              {t("Сохранить профиль")}
             </button>
           </section>
 
@@ -279,29 +281,29 @@ export function PersonalIntegrationsModal({
             <div className="section-title">
               <KeyRound size={18} />
               <div>
-                <h3>Безопасность</h3>
-                <p>Пароль демо-аккаунта</p>
+                <h3>{t("Безопасность")}</h3>
+                <p>{t("Пароль демо-аккаунта")}</p>
               </div>
             </div>
             <div className="personal-password-fields">
               <label>
-                <span>Текущий пароль</span>
+                <span>{t("Текущий пароль")}</span>
                 <input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.currentTarget.value)} />
               </label>
               <label>
-                <span>Новый пароль</span>
+                <span>{t("Новый пароль")}</span>
                 <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.currentTarget.value)} />
               </label>
               <label>
-                <span>Повторите пароль</span>
+                <span>{t("Повторите пароль")}</span>
                 <input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.currentTarget.value)} />
               </label>
             </div>
             <div className="personal-security-actions">
-              {securityError ? <span>{securityError}</span> : <span>Демо: пароль не отправляется на сервер.</span>}
+              {securityError ? <span>{t(securityError)}</span> : <span>{t("Демо: пароль не отправляется на сервер.")}</span>}
               <button onClick={handlePasswordChange}>
                 <Save size={16} />
-                Обновить пароль
+                {t("Обновить пароль")}
               </button>
             </div>
           </section>
@@ -310,8 +312,8 @@ export function PersonalIntegrationsModal({
             <div className="section-title">
               <Mail size={18} />
               <div>
-                <h3>Почтовые сервисы</h3>
-                <p>Outlook, Яндекс и Gmail подключаются каждым пользователем в личных настройках.</p>
+                <h3>{t("Почтовые сервисы")}</h3>
+                <p>{t("Outlook, Яндекс и Gmail подключаются каждым пользователем в личных настройках.")}</p>
               </div>
             </div>
             <div className="integration-cards">
@@ -323,13 +325,13 @@ export function PersonalIntegrationsModal({
                     <header>
                       <span>
                         <Icon size={17} />
-                        {providerLabels[provider]}
+                        {t(providerLabels[provider])}
                       </span>
-                      <em className={integration.status}>{getStatusLabel(integration.status)}</em>
+                      <em className={integration.status}>{t(getStatusLabel(integration.status))}</em>
                     </header>
-                    <p>{providerDescriptions[provider]}</p>
+                    <p>{t(providerDescriptions[provider])}</p>
                     <label>
-                      <span>Рабочий аккаунт</span>
+                      <span>{t("Рабочий аккаунт")}</span>
                       <input
                         value={accounts[provider] ?? ""}
                         onChange={(event) => setAccounts((current) => ({ ...current, [provider]: event.currentTarget.value }))}
@@ -338,14 +340,14 @@ export function PersonalIntegrationsModal({
                     </label>
                     <footer>
                       {integration.status === "connected" ? (
-                        <button onClick={() => handleDisconnect(provider)}>Отключить</button>
+                        <button onClick={() => handleDisconnect(provider)}>{t("Отключить")}</button>
                       ) : (
-                        <button onClick={() => handleConnect(provider)}>Подключить демо</button>
+                        <button onClick={() => handleConnect(provider)}>{t("Подключить демо")}</button>
                       )}
                       {access.canUploadFiles ? (
                         <button className="ghost-action" onClick={() => onImportDemo(provider, user.id)}>
                           <RefreshCw size={15} />
-                          Сканировать демо
+                          {t("Сканировать демо")}
                         </button>
                       ) : null}
                     </footer>
@@ -357,7 +359,7 @@ export function PersonalIntegrationsModal({
                         onImportTestFile={(mode) => onImportTestFile(provider, user.id, mode, testTags[provider])}
                       />
                     ) : null}
-                    {integration.lastSyncAt ? <small>Последняя проверка: {integration.lastSyncAt}</small> : null}
+                    {integration.lastSyncAt ? <small>{t("Последняя проверка: {time}", { time: system(integration.lastSyncAt) })}</small> : null}
                   </article>
                 );
               })}
@@ -368,8 +370,8 @@ export function PersonalIntegrationsModal({
             <div className="section-title">
               <FolderOpen size={18} />
               <div>
-                <h3>Папки мессенджеров и файлов</h3>
-                <p>Выберите папку Telegram Desktop или рабочую папку. Файлы читаются с датой изменения и в реестре выводятся от новых к старым.</p>
+                <h3>{t("Папки мессенджеров и файлов")}</h3>
+                <p>{t("Выберите папку Telegram Desktop или рабочую папку. Файлы читаются с датой изменения и в реестре выводятся от новых к старым.")}</p>
               </div>
             </div>
             <div className="integration-cards folder-integration-cards">
@@ -382,18 +384,18 @@ export function PersonalIntegrationsModal({
                     <header>
                       <span>
                         <Icon size={17} />
-                        {providerLabels[provider]}
+                        {t(providerLabels[provider])}
                       </span>
-                      <em className={integration.status}>{getStatusLabel(integration.status)}</em>
+                      <em className={integration.status}>{t(getStatusLabel(integration.status))}</em>
                     </header>
-                    <p>{providerDescriptions[provider]}</p>
-                    <div className="folder-path-preview">{integration.folderPath ?? "Папка не выбрана"}</div>
+                    <p>{t(providerDescriptions[provider])}</p>
+                    <div className="folder-path-preview">{integration.folderPath ?? t("Папка не выбрана")}</div>
                     <footer>
-                      {access.canUploadFiles ? <button onClick={() => inputRef.current?.click()}>Выбрать папку</button> : null}
+                      {access.canUploadFiles ? <button onClick={() => inputRef.current?.click()}>{t("Выбрать папку")}</button> : null}
                       {access.canUploadFiles ? (
                         <button className="ghost-action" onClick={() => onImportDemo(provider, user.id)}>
                           <RefreshCw size={15} />
-                          Сканировать демо
+                          {t("Сканировать демо")}
                         </button>
                       ) : null}
                     </footer>
@@ -413,7 +415,7 @@ export function PersonalIntegrationsModal({
                       onChange={(event) => handleFolderSelect(provider, event.currentTarget.files)}
                       {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
                     />
-                    {integration.lastSyncAt ? <small>Последняя проверка: {integration.lastSyncAt}</small> : null}
+                    {integration.lastSyncAt ? <small>{t("Последняя проверка: {time}", { time: system(integration.lastSyncAt) })}</small> : null}
                   </article>
                 );
               })}
@@ -450,19 +452,20 @@ function IntegrationTestActions({
   onTagChange: (value: string) => void;
   onImportTestFile: (mode: "tagged" | "untagged") => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="integration-demo-actions">
       <label className="integration-tag-control">
-        <span>Тег в имени файла</span>
+        <span>{t("Тег в имени файла")}</span>
         <input
           value={tag}
           onChange={(event) => onTagChange(event.currentTarget.value)}
-          placeholder="АР / КР / ПЗ"
-          aria-label={`Тег тестового файла ${providerLabels[provider]}`}
+          placeholder={t("АР / КР / ПЗ")}
+          aria-label={t("Тег тестового файла {provider}", { provider: t(providerLabels[provider]) })}
         />
       </label>
-      <button onClick={() => onImportTestFile("tagged")}>Прислать с тегом</button>
-      <button className="ghost-action" onClick={() => onImportTestFile("untagged")}>Прислать без тега</button>
+      <button onClick={() => onImportTestFile("tagged")}>{t("Прислать с тегом")}</button>
+      <button className="ghost-action" onClick={() => onImportTestFile("untagged")}>{t("Прислать без тега")}</button>
     </div>
   );
 }

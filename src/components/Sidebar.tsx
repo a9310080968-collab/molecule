@@ -17,6 +17,7 @@ import { useState } from "react";
 import { getNodeById } from "../lib/graph";
 import type { DemoAccess } from "../lib/demoAccess";
 import type { DemoProject, ProcessDocument, ProcessStatus } from "../types";
+import { useI18n } from "../lib/i18n";
 
 export type SidebarMenuId =
   | "map"
@@ -70,6 +71,7 @@ export function Sidebar({
   onOpenDocument,
   onClose,
 }: SidebarProps) {
+  const { t } = useI18n();
   const [expandedStatus, setExpandedStatus] = useState<ProcessStatus | null>(null);
 
   return (
@@ -78,7 +80,7 @@ export function Sidebar({
         <div className="project-switch">
           <LayoutDashboard size={20} />
           <div>
-            <span>Текущий проект</span>
+            <span>{t("Текущий проект")}</span>
             <strong>{project.address}</strong>
           </div>
         </div>
@@ -96,9 +98,9 @@ export function Sidebar({
                 }}
               >
                 <Icon size={19} />
-                <span>{item.label}</span>
+                <span>{t(item.label)}</span>
                 {item.id === "chat" && chatUnreadCount > 0 ? (
-                  <b className="nav-unread-badge" aria-label={`Новых сообщений: ${chatUnreadCount}`}>{chatUnreadCount}</b>
+                  <b className="nav-unread-badge" aria-label={t("Новых сообщений: {count}", { count: chatUnreadCount })}>{chatUnreadCount}</b>
                 ) : null}
               </button>
             );
@@ -106,7 +108,7 @@ export function Sidebar({
         </nav>
 
         <section className="review-card">
-          <h2>Контейнеры связей</h2>
+          <h2>{t("Контейнеры связей")}</h2>
           {connectionStatuses.map((item) => {
             const matchingProcesses = project.processes.filter((process) => process.status === item.status);
             const expanded = expandedStatus === item.status;
@@ -118,7 +120,7 @@ export function Sidebar({
                   aria-expanded={expanded}
                 >
                   <span className={item.tone} />
-                  <p>{item.label}</p>
+                  <p>{t(item.label)}</p>
                   <b>{matchingProcesses.length}</b>
                   <ChevronDown size={15} />
                 </button>
@@ -137,7 +139,7 @@ export function Sidebar({
                             }}
                           >
                             <strong>{process.title}</strong>
-                            <small>{process.documents.length} файлов</small>
+                            <small>{process.documents.length} {t("файлов")}</small>
                           </button>
                           <div className="connection-object-links">
                             {fromNode ? (
@@ -146,7 +148,7 @@ export function Sidebar({
                                   onSelectNode(fromNode.id);
                                   onClose();
                                 }}
-                                title="Перейти к исходной ноде"
+                                title={t("Перейти к исходной ноде")}
                               >
                                 <GitBranch size={13} />
                                 {fromNode.shortCode ?? fromNode.title}
@@ -158,7 +160,7 @@ export function Sidebar({
                                   onSelectNode(toNode.id);
                                   onClose();
                                 }}
-                                title="Перейти к целевой ноде"
+                                title={t("Перейти к целевой ноде")}
                               >
                                 <GitBranch size={13} />
                                 {toNode.shortCode ?? toNode.title}
@@ -180,7 +182,7 @@ export function Sidebar({
                           </div>
                         </article>
                       );
-                    }) : <p className="connection-list-empty">Нет контейнеров с этим статусом.</p>}
+                    }) : <p className="connection-list-empty">{t("Нет контейнеров с этим статусом.")}</p>}
                   </div>
                 ) : null}
               </div>
@@ -189,10 +191,10 @@ export function Sidebar({
         </section>
 
         <p className="hint">
-          Двойной клик по разделу проваливает внутрь его молекулы. Наведите на ноду и нажмите плюс, чтобы вручную построить бизнес-процесс. Клик по линии открывает контейнер передачи документов.
+          {t("Двойной клик по разделу проваливает внутрь его молекулы. Наведите на ноду и нажмите плюс, чтобы вручную построить бизнес-процесс. Клик по линии открывает контейнер передачи документов.")}
         </p>
       </aside>
-      {isOpen ? <button className="mobile-scrim" aria-label="Закрыть меню" onClick={onClose} /> : null}
+      {isOpen ? <button className="mobile-scrim" aria-label={t("Закрыть меню")} onClick={onClose} /> : null}
     </>
   );
 }

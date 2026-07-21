@@ -2,6 +2,7 @@ import { ExternalLink, FileSpreadsheet, FileText, FolderOpen, X } from "lucide-r
 import { getFileLabel, getFileTypeColor } from "../lib/graph";
 import { nodeStatusLabels } from "../data/mockProject";
 import type { ProcessDocument } from "../types";
+import { useI18n } from "../lib/i18n";
 
 type DocumentModalProps = {
   document: ProcessDocument | null;
@@ -10,6 +11,7 @@ type DocumentModalProps = {
 };
 
 export function DocumentModal({ document, onShowInFolder, onClose }: DocumentModalProps) {
+  const { t, system } = useI18n();
   if (!document) {
     return null;
   }
@@ -23,11 +25,11 @@ export function DocumentModal({ document, onShowInFolder, onClose }: DocumentMod
           <div>
             <span style={{ color: accentColor }}>
               <FileText size={18} />
-              {getFileLabel(document.fileType)}
+              {t(getFileLabel(document.fileType))}
             </span>
             <h2>{document.title}</h2>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Закрыть просмотр">
+          <button className="icon-button" onClick={onClose} aria-label={t("Закрыть просмотр")}>
             <X size={20} />
           </button>
         </header>
@@ -36,14 +38,14 @@ export function DocumentModal({ document, onShowInFolder, onClose }: DocumentMod
 
         <footer>
           <span>{document.version}</span>
-          <span>{nodeStatusLabels[document.status]}</span>
-          <span>{document.updatedAt}</span>
+          <span>{t(nodeStatusLabels[document.status])}</span>
+          <span>{system(document.updatedAt)}</span>
           <button disabled={!document.fileUrl} onClick={() => document.fileUrl ? window.open(document.fileUrl, "_blank", "noopener,noreferrer") : undefined}>
-            Открыть документ
+            {t("Открыть документ")}
             <ExternalLink size={17} />
           </button>
           <button onClick={() => onShowInFolder(document)}>
-            Показать в папке
+            {t("Показать в папке")}
             <FolderOpen size={17} />
           </button>
         </footer>
@@ -53,6 +55,7 @@ export function DocumentModal({ document, onShowInFolder, onClose }: DocumentMod
 }
 
 function DocumentPreview({ document }: { document: ProcessDocument }) {
+  const { t, system } = useI18n();
   if (document.fileType === "pdf" && document.fileUrl) {
     return (
       <div className="document-preview live-preview">
@@ -67,7 +70,7 @@ function DocumentPreview({ document }: { document: ProcessDocument }) {
         <div className="sheet-preview real-sheet-preview">
           <FileSpreadsheet size={28} />
           <b>{document.title}</b>
-          <span>{document.size ?? "Демо-таблица"}</span>
+          <span>{document.size ? system(document.size) : t("Демо-таблица")}</span>
           <table>
             <tbody>
               {document.previewRows.map((row, rowIndex) => (
@@ -88,7 +91,7 @@ function DocumentPreview({ document }: { document: ProcessDocument }) {
       <div className="document-preview">
         <div className="preview-page docx-preview-page">
           <p>{document.title}</p>
-          <h3>{paragraphs[0] ?? "Документ"}</h3>
+          <h3>{paragraphs[0] ?? t("Документ")}</h3>
           {paragraphs.slice(1).map((paragraph) => (
             <span key={paragraph}>{paragraph}</span>
           ))}
@@ -111,7 +114,7 @@ function DocumentPreview({ document }: { document: ProcessDocument }) {
         <div className="sheet-preview">
           <FileSpreadsheet size={34} />
           <b>{document.title}</b>
-          <span>{document.size ?? "Демо-таблица"}</span>
+          <span>{document.size ? system(document.size) : t("Демо-таблица")}</span>
           <div>
             {Array.from({ length: 24 }).map((_, index) => <i key={index} />)}
           </div>
@@ -124,9 +127,9 @@ function DocumentPreview({ document }: { document: ProcessDocument }) {
     <div className="document-preview">
       <div className="preview-page">
         <p>{document.title}</p>
-        <h3>{document.previewText ? document.previewText.split("\n")[0] : document.fileUrl ? "Файл загружен в демо" : "Демонстрационный просмотр документа"}</h3>
+        <h3>{document.previewText ? document.previewText.split("\n")[0] : document.fileUrl ? t("Файл загружен в демо") : t("Демонстрационный просмотр документа")}</h3>
         <span>
-          {document.previewText ?? "В рабочей версии здесь будет отображаться PDF/DOCX/XLSX-превью, история передачи по контейнеру связи, комментарии и решения валидации."}
+          {document.previewText ?? t("В рабочей версии здесь будет отображаться PDF/DOCX/XLSX-превью, история передачи по контейнеру связи, комментарии и решения валидации.")}
         </span>
         <div className="preview-lines">
           <i />
