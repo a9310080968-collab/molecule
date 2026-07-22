@@ -313,6 +313,7 @@ function WorkspaceContent({
       project={project}
       projectTemplates={projectTemplates}
       onCreateTemplate={onCreateTemplate}
+      canViewProjectSettings={access.canViewProjectSettings}
       fontScale={fontScale}
       interfaceScale={interfaceScale}
       onFontScaleChange={onFontScaleChange}
@@ -325,6 +326,7 @@ function SettingsWorkspace({
   project,
   projectTemplates,
   onCreateTemplate,
+  canViewProjectSettings,
   fontScale,
   interfaceScale,
   onFontScaleChange,
@@ -333,6 +335,7 @@ function SettingsWorkspace({
   project: DemoProject;
   projectTemplates: ProjectTemplate[];
   onCreateTemplate: (title: string, description: string) => ProjectTemplate | undefined;
+  canViewProjectSettings: boolean;
   fontScale: number;
   interfaceScale: number;
   onFontScaleChange: (scale: number) => void;
@@ -428,74 +431,78 @@ function SettingsWorkspace({
         </label>
       </section>
 
-      <section className="template-settings-card">
-        <div className="section-title">
-          <FolderPlus size={18} />
-          <div>
-            <h3>{t("Шаблоны проектов")}</h3>
-            <p>{t("Шаблоны создаются здесь, отдельно от конструктора нового проекта.")}</p>
-          </div>
-        </div>
-        <div className="template-settings-form">
-          <label>
-            <span>{t("Название шаблона")}</span>
-            <input value={title} onChange={(event) => setTitle(event.currentTarget.value)} />
-          </label>
-          <label>
-            <span>{t("Описание")}</span>
-            <textarea value={description} onChange={(event) => setDescription(event.currentTarget.value)} />
-          </label>
-          <button className="settings-open-button" onClick={saveTemplate}>
-            {t("Сохранить текущий проект как шаблон")}
-          </button>
-        </div>
-      </section>
+      {canViewProjectSettings ? (
+        <>
+          <section className="template-settings-card">
+            <div className="section-title">
+              <FolderPlus size={18} />
+              <div>
+                <h3>{t("Шаблоны проектов")}</h3>
+                <p>{t("Шаблоны создаются здесь, отдельно от конструктора нового проекта.")}</p>
+              </div>
+            </div>
+            <div className="template-settings-form">
+              <label>
+                <span>{t("Название шаблона")}</span>
+                <input value={title} onChange={(event) => setTitle(event.currentTarget.value)} />
+              </label>
+              <label>
+                <span>{t("Описание")}</span>
+                <textarea value={description} onChange={(event) => setDescription(event.currentTarget.value)} />
+              </label>
+              <button className="settings-open-button" onClick={saveTemplate}>
+                {t("Сохранить текущий проект как шаблон")}
+              </button>
+            </div>
+          </section>
 
-      <section className="template-settings-card">
-        <div className="section-title">
-          <FileStack size={18} />
-          <div>
-            <h3>{t("Доступные шаблоны")}</h3>
-            <p>{t("Эти шаблоны доступны в форме создания нового проекта.")}</p>
-          </div>
-        </div>
-        <div className="settings-template-list">
-          {projectTemplates.map((template) => (
-            <article key={template.id}>
-              <strong>{t(template.title)}</strong>
-              <span>{t(template.description)}</span>
-              <em>{formatTemplateStats(template.nodes.length, template.levels.length, t(template.sourceProjectTitle), language)}</em>
+          <section className="template-settings-card">
+            <div className="section-title">
+              <FileStack size={18} />
+              <div>
+                <h3>{t("Доступные шаблоны")}</h3>
+                <p>{t("Эти шаблоны доступны в форме создания нового проекта.")}</p>
+              </div>
+            </div>
+            <div className="settings-template-list">
+              {projectTemplates.map((template) => (
+                <article key={template.id}>
+                  <strong>{t(template.title)}</strong>
+                  <span>{t(template.description)}</span>
+                  <em>{formatTemplateStats(template.nodes.length, template.levels.length, t(template.sourceProjectTitle), language)}</em>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <div className="workspace-grid settings-grid">
+            <article className="workspace-row">
+              <b>{t("Цвет")}</b>
+              <div>
+                <strong>{t("Цвет нод фиксирован правилами")}</strong>
+                <span>{t("Согласованные разделы получают спокойный янтарный акцент, остальные остаются серыми.")}</span>
+              </div>
+              <em>{t("без палитры")}</em>
             </article>
-          ))}
-        </div>
-      </section>
-
-      <div className="workspace-grid settings-grid">
-      <article className="workspace-row">
-        <b>{t("Цвет")}</b>
-        <div>
-          <strong>{t("Цвет нод фиксирован правилами")}</strong>
-          <span>{t("Согласованные разделы получают спокойный янтарный акцент, остальные остаются серыми.")}</span>
-        </div>
-        <em>{t("без палитры")}</em>
-      </article>
-      <article className="workspace-row">
-        <b>{t("Связи")}</b>
-        <div>
-          <strong>{t("Только ручное построение")}</strong>
-          <span>{t("Нода → плюс → вторая нода. Автоматического прилипания больше нет.")}</span>
-        </div>
-        <em>{t("процесс")}</em>
-      </article>
-      <article className="workspace-row">
-        <b>{t("Теги")}</b>
-        <div>
-          <strong>{t("Почта и мессенджер могут предложить связь")}</strong>
-          <span>{t("Если тегов нет, задание прикручивается вручную из входящих.")}</span>
-        </div>
-        <em>{t("демо")}</em>
-      </article>
-    </div>
+            <article className="workspace-row">
+              <b>{t("Связи")}</b>
+              <div>
+                <strong>{t("Только ручное построение")}</strong>
+                <span>{t("Нода → плюс → вторая нода. Автоматического прилипания больше нет.")}</span>
+              </div>
+              <em>{t("процесс")}</em>
+            </article>
+            <article className="workspace-row">
+              <b>{t("Теги")}</b>
+              <div>
+                <strong>{t("Почта и мессенджер могут предложить связь")}</strong>
+                <span>{t("Если тегов нет, задание прикручивается вручную из входящих.")}</span>
+              </div>
+              <em>{t("демо")}</em>
+            </article>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

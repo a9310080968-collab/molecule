@@ -202,6 +202,6 @@ export function Sidebar({
 function isMenuVisible(menu: SidebarMenuId, access: DemoAccess) {
   if (menu === "checks") return access.canViewChecks;
   if (menu === "participants") return access.canViewParticipants;
-  if (menu === "settings") return access.canViewProjectSettings;
+  if (menu === "settings") return true;
   return true;
 }
