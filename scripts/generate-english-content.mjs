@@ -46,6 +46,7 @@ const exact = new Map([
   ["Адрес не указан", "Address not specified"],
   ["Уточнение_ХЗ.xlsx", "Clarification_request.xlsx"],
   ["Согласовано", "Approved"],
+  ["Экспертиза: не пройдена", "Expert review: not completed"],
   ["На проверке", "Under review"],
   ["Есть замечания", "Changes requested"],
   ["Не проверено", "Not reviewed"],
@@ -159,12 +160,12 @@ function protectKnownValues(source) {
 
 async function translateText(source) {
   if (exact.has(source)) {
-    return exact.get(source);
+    return normalizeEngineeringCodes(exact.get(source));
   }
 
   const { prepared, restores } = protectKnownValues(source);
   if (!cyrillicPattern.test(prepared)) {
-    return restoreValues(prepared, restores);
+    return normalizeEngineeringCodes(restoreValues(prepared, restores));
   }
 
   const url = new URL("https://translate.googleapis.com/translate_a/single");
@@ -183,7 +184,7 @@ async function translateText(source) {
       }
       const payload = await response.json();
       const translated = payload[0].map((part) => part[0]).join("");
-      return restoreValues(translated, restores);
+      return normalizeEngineeringCodes(restoreValues(translated, restores));
     } catch (error) {
       lastError = error;
       await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
@@ -195,6 +196,10 @@ async function translateText(source) {
 
 function restoreValues(source, restores) {
   return restores.reduce((result, [token, value]) => result.split(token).join(value), source);
+}
+
+function normalizeEngineeringCodes(value) {
+  return value.replace(/\b(?:KZh|KJ|QOL)(?=\d)/g, "RC");
 }
 
 function escapeRegExp(value) {

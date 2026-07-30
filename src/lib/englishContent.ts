@@ -32,6 +32,15 @@ const transliteration: Record<string, string> = {
   х: "kh", ц: "ts", ч: "ch", ш: "sh", щ: "shch", ъ: "", ы: "y", ь: "", э: "e", ю: "yu", я: "ya",
 };
 
+const cyrillicPattern = /[А-Яа-яЁё]/;
+const contentFragments = Object.entries(englishContent)
+  .filter(([source]) => cyrillicPattern.test(source))
+  .sort(([left], [right]) => right.length - left.length);
+const legacyTransliteratedFragments = contentFragments
+  .map(([source, target]) => [transliterateCyrillic(source), target] as const)
+  .filter(([source, target]) => source.length >= 5 && source !== target)
+  .sort(([left], [right]) => right.length - left.length);
+
 const roleLikePersonNames = new Map([
   ["Lead Architect", "Emily Clark"],
   ["Lead designer", "Michael Reed"],
@@ -68,7 +77,7 @@ export function getEnglishContentTranslation(value: string) {
     : undefined;
 }
 
-export function toEnglishContent(value: string) {
+export function toEnglishContent(value: string, upgradeLegacyTransliteration = false) {
   const corrected = legacyEnglishCorrections.get(value);
   if (corrected) {
     return corrected;
@@ -84,18 +93,30 @@ export function toEnglishContent(value: string) {
     normalized = normalized.split(source).join(target);
   });
 
+  if (cyrillicPattern.test(normalized)) {
+    contentFragments.forEach(([source, target]) => {
+      normalized = normalized.split(source).join(target);
+    });
+  } else if (upgradeLegacyTransliteration) {
+    legacyTransliteratedFragments.forEach(([source, target]) => {
+      normalized = normalized.split(source).join(target);
+    });
+    normalized = normalized.replace(/\bGIP\b/g, "LPE");
+  }
+
   normalized = normalized
+    .replace(/\b(?:KZh|KJ|QOL)(?=\d)/g, "RC")
     .replace(/^сегодня(?=\b|,)/i, "today")
     .replace(/^завтра(?=\b|,)/i, "tomorrow")
     .replace(/^вчера(?=\b|,)/i, "yesterday")
     .replace(/^только что$/i, "just now");
 
-  return normalized.replace(/[А-Яа-яЁё]/g, (letter) => transliteration[letter] ?? "");
+  return transliterateCyrillic(normalized);
 }
 
 export function toEnglishData<T>(value: T): T {
   if (typeof value === "string") {
-    return toEnglishContent(value) as T;
+    return toEnglishContent(value, true) as T;
   }
   if (Array.isArray(value)) {
     return value.map((item) => toEnglishData(item)) as T;
@@ -112,6 +133,10 @@ export function toEnglishData<T>(value: T): T {
   return Object.fromEntries(
     Object.entries(value).map(([key, item]) => [key, toEnglishData(item)]),
   ) as T;
+}
+
+function transliterateCyrillic(value: string) {
+  return value.replace(/[А-Яа-яЁё]/g, (letter) => transliteration[letter] ?? "");
 }
 
 export function normalizeProjectPeople(project: DemoProject): DemoProject {
