@@ -43,6 +43,7 @@ import {
 } from "./lib/projectMutations";
 import { createBlankProjectTemplate, createDefaultProjectTemplate, createProjectFromTemplate, createTemplateFromProject } from "./lib/projectTemplates";
 import { buildRoleProject, canEditNode, canEditProcess, demoAccessByRole, resolveDemoUser } from "./lib/demoAccess";
+import { normalizeProjectPeople, normalizeTemplatePeople, toEnglishData } from "./lib/englishContent";
 import { useI18n } from "./lib/i18n";
 import type {
   BusinessProcess,
@@ -113,7 +114,16 @@ function getPersistedState() {
 
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    cachedPersistedState = raw ? JSON.parse(raw) as PersistedAppState : null;
+    if (!raw) {
+      cachedPersistedState = null;
+    } else {
+      const state = toEnglishData(JSON.parse(raw) as PersistedAppState);
+      cachedPersistedState = {
+        ...state,
+        projects: state.projects.map(normalizeProjectPeople),
+        projectTemplates: state.projectTemplates?.map(normalizeTemplatePeople) ?? [],
+      };
+    }
   } catch {
     cachedPersistedState = null;
   }
@@ -164,13 +174,13 @@ function mergeDemoNotifications(savedNotifications: DemoNotification[] | undefin
 export default function App() {
   const { t } = useI18n();
   const persistedState = getPersistedState();
-  const defaultTemplates = useMemo(() => [
+  const defaultTemplates = useMemo(() => toEnglishData([
     createBlankProjectTemplate(),
     createDefaultProjectTemplate(),
     { ...createTemplateFromProject(demoProjects[0], "ЖК Рога и копыта / ТЗ с готовыми БП", "Структура по приложенному ТЗ: ИРД, РД, разделы, подразделы, участники и готовые бизнес-процессы."), id: "template-demo-roga-kopyta" },
     { ...createTemplateFromProject(demoProjects[1], "Жилой комплекс / полный комплект", "Структура разделов, внутренних уровней и контейнеров связи без рабочих документов."), id: "template-demo-sirius" },
     { ...createTemplateFromProject(demoProjects[2], "Компактный офисный проект", "Легкая структура для небольшого объекта с ИРД, АР, КР, ЭОМ и сметой."), id: "template-demo-vega" },
-  ], []);
+  ]).map(normalizeTemplatePeople), []);
   const initialProjects = mergeDemoProjects(persistedState?.projects, demoProjects);
   const savedHasPrimaryDemo = Boolean(persistedState?.projects?.some((project) => project.id === demoProjects[0]?.id));
   const preferredActiveProjectId = savedHasPrimaryDemo ? persistedState?.activeProjectId : demoProjects[0]?.id;
@@ -358,7 +368,11 @@ export default function App() {
     if (record) {
       recordHistory();
     }
-    setProjects((current) => current.map((project) => (project.id === activeProjectId ? updater(project) : project)));
+    setProjects((current) => current.map((project) =>
+      project.id === activeProjectId
+        ? normalizeProjectPeople(toEnglishData(updater(project)))
+        : project,
+    ));
   }
 
   function saveLevelPositions(levelId: string, positions: Record<string, Vec2>, record = true) {
@@ -405,10 +419,10 @@ export default function App() {
     }
 
     recordHistory();
-    const project = applyProjectTeam(
+    const project = normalizeProjectPeople(toEnglishData(applyProjectTeam(
       createProjectFromTemplate(template, title || t("Проект {count}", { count: projects.length + 1 }), address || t("Адрес не указан")),
       teamMembers,
-    );
+    )));
     const defaultLevel = getDefaultLevel(project);
     setProjects((current) => [...current, project]);
     setActiveProjectId(project.id);
@@ -537,11 +551,11 @@ export default function App() {
     if (!requireAccess(access.canManageProjects)) {
       return;
     }
-    const template = createTemplateFromProject(
+    const template = normalizeTemplatePeople(toEnglishData(createTemplateFromProject(
       activeProject,
       title || t("{project}: шаблон", { project: activeProject.title }),
       description || t("Структура проекта без рабочих документов."),
-    );
+    )));
     setProjectTemplates((current) => [template, ...current]);
     showToast(t("Шаблон «{title}» сохранен.", { title: template.title }));
     return template;
@@ -1854,13 +1868,13 @@ export default function App() {
 
   function pushNotification(notification: Omit<DemoNotification, "id" | "projectId" | "time" | "unread">) {
     setNotifications((current) => [
-      {
+      toEnglishData({
         ...notification,
         id: `notif-${Date.now()}`,
         projectId: activeProject.id,
         time: "только что",
         unread: true,
-      },
+      }),
       ...current,
     ].slice(0, 10));
   }

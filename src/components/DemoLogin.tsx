@@ -18,7 +18,7 @@ const roleIcons = {
 };
 
 export function DemoLogin({ accounts, initialRole, onLogin }: DemoLoginProps) {
-  const { language, t } = useI18n();
+  const { t } = useI18n();
   const [role, setRole] = useState<DemoUserRole>(initialRole);
   const [email, setEmail] = useState(accounts[initialRole]?.email ?? "");
   const [password, setPassword] = useState("demo");
@@ -93,7 +93,7 @@ export function DemoLogin({ accounts, initialRole, onLogin }: DemoLoginProps) {
           </label>
           <button className="demo-login-submit" type="submit" disabled={!account || !email.trim() || !password}>
             <LogIn size={17} />
-            {t("Войти как {role}", { role: t(demoAccessByRole[role].label).toLocaleLowerCase(language === "en" ? "en-US" : "ru-RU") })}
+            {t("Войти как {role}", { role: t(demoAccessByRole[role].label).toLocaleLowerCase("en-US") })}
           </button>
         </form>
       </main>

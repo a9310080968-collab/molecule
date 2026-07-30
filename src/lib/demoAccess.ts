@@ -20,8 +20,8 @@ export type DemoAccess = {
 export const demoAccessByRole: Record<DemoUserRole, DemoAccess> = {
   employee: {
     role: "employee",
-    label: "Сотрудник",
-    scopeLabel: "Свои разделы и задания",
+    label: "Employee",
+    scopeLabel: "Assigned sections and tasks",
     canViewAll: false,
     canEditAssignedWork: true,
     canEditStructure: false,
@@ -36,8 +36,8 @@ export const demoAccessByRole: Record<DemoUserRole, DemoAccess> = {
   },
   gip: {
     role: "gip",
-    label: "ГИП",
-    scopeLabel: "Все разделы и согласования",
+    label: "Lead Project Engineer",
+    scopeLabel: "All sections and approvals",
     canViewAll: true,
     canEditAssignedWork: true,
     canEditStructure: true,
@@ -52,8 +52,8 @@ export const demoAccessByRole: Record<DemoUserRole, DemoAccess> = {
   },
   director: {
     role: "director",
-    label: "Директор",
-    scopeLabel: "Все проекты и сотрудники",
+    label: "Director",
+    scopeLabel: "All projects and employees",
     canViewAll: true,
     canEditAssignedWork: false,
     canEditStructure: false,
@@ -71,17 +71,17 @@ export const demoAccessByRole: Record<DemoUserRole, DemoAccess> = {
 export function resolveDemoUser(project: DemoProject, role: DemoUserRole) {
   const participants = project.participants.filter((participant) => participant.status !== "blocked");
   if (role === "employee") {
-    return participants.find((participant) => participant.name === "Анна Лебедева")
+    return participants.find((participant) => participant.name === "Alisa Bishop")
       ?? participants.find((participant) => !["admin", "gip", "observer"].includes(participant.role))
       ?? participants[0];
   }
   if (role === "gip") {
-    return participants.find((participant) => participant.name === "Иванов И.И.")
+    return participants.find((participant) => participant.name === "John Smith")
       ?? participants.find((participant) => participant.role === "gip" || participant.role === "admin")
       ?? participants[0];
   }
-  return participants.find((participant) => participant.name === "Петр Генеральный")
-    ?? participants.find((participant) => /директор/i.test(participant.position))
+  return participants.find((participant) => participant.name === "Matthew Brown")
+    ?? participants.find((participant) => /director/i.test(participant.position))
     ?? participants.find((participant) => participant.role === "admin")
     ?? participants[0];
 }

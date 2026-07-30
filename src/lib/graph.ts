@@ -124,7 +124,7 @@ export function getNodeCompletion(node: ProjectNode) {
 }
 
 export function getStatusText(status?: ProjectNode["status"]) {
-  return status ? nodeStatusLabels[status] : "Без статуса";
+  return status ? nodeStatusLabels[status] : "No status";
 }
 
 export function getProcessStatusText(status: ProcessStatus) {
@@ -191,12 +191,12 @@ export function parseDeadline(value?: string) {
 
   const now = new Date();
   const timeMatch = text.match(/(\d{1,2}):(\d{2})/);
-  if (/сегодня/i.test(text) && timeMatch) {
+  if (/(?:сегодня|today)/i.test(text) && timeMatch) {
     const date = new Date(now);
     date.setHours(Number(timeMatch[1]), Number(timeMatch[2]), 0, 0);
     return date;
   }
-  if (/завтра/i.test(text) && timeMatch) {
+  if (/(?:завтра|tomorrow)/i.test(text) && timeMatch) {
     const date = new Date(now);
     date.setDate(date.getDate() + 1);
     date.setHours(Number(timeMatch[1]), Number(timeMatch[2]), 0, 0);
@@ -214,19 +214,19 @@ export function parseDeadline(value?: string) {
 
 export function formatDeadlineDistance(value?: string) {
   const deadline = parseDeadline(value);
-  if (!deadline) return value || "без срока";
+  if (!deadline) return value || "no deadline";
 
   const diffMs = deadline.getTime() - Date.now();
   const absHours = Math.abs(diffMs) / 36e5;
-  const prefix = diffMs < 0 ? "просрочено " : "осталось ";
+  const prefix = diffMs < 0 ? "overdue by " : "remaining ";
 
   if (absHours < 1) {
-    return `${prefix}${Math.max(1, Math.round(absHours * 60))} мин`;
+    return `${prefix}${Math.max(1, Math.round(absHours * 60))} min`;
   }
   if (absHours < 48) {
-    return `${prefix}${Math.round(absHours)} ч`;
+    return `${prefix}${Math.round(absHours)} h`;
   }
-  return `${prefix}${Math.round(absHours / 24)} д`;
+  return `${prefix}${Math.round(absHours / 24)} d`;
 }
 
 function normalizeYear(year: number) {
@@ -247,7 +247,7 @@ export function getNodeVisualTone(node: ProjectNode) {
     return {
       fill: "#7f8798",
       glow: "#35d9ff",
-      label: "Центральная нода",
+      label: "Central node",
     };
   }
 
@@ -255,7 +255,7 @@ export function getNodeVisualTone(node: ProjectNode) {
     return {
       fill: "#d7bb78",
       glow: "#ffe2a4",
-      label: "Согласовано",
+      label: "Approved",
     };
   }
 
@@ -263,7 +263,7 @@ export function getNodeVisualTone(node: ProjectNode) {
     return {
       fill: "#8f91a0",
       glow: "#ff9a6c",
-      label: "Есть замечания",
+      label: "Changes requested",
     };
   }
 
@@ -271,19 +271,19 @@ export function getNodeVisualTone(node: ProjectNode) {
     return {
       fill: "#929caf",
       glow: "#35d9ff",
-      label: "На проверке",
+      label: "Under review",
     };
   }
 
   return {
     fill: "#747d91",
     glow: "#9aa5bd",
-    label: "Не согласовано",
+    label: "Not approved",
   };
 }
 
 export function getFileLabel(fileType?: FileType) {
-  if (!fileType || fileType === "unknown") return "Файл";
+  if (!fileType || fileType === "unknown") return "File";
   if (fileType === "docx") return "DOC/DOCX";
   if (fileType === "xlsx") return "XLS/XLSX";
   if (fileType === "pptx") return "PPT/PPTX";
@@ -351,7 +351,7 @@ export function getAllDocuments(project: DemoProject) {
     })),
   );
 
-  return [...processDocs, ...project.inboxDocuments.map((document) => ({ ...document, processId: "", processTitle: "Входящие без связи" }))];
+  return [...processDocs, ...project.inboxDocuments.map((document) => ({ ...document, processId: "", processTitle: "Unassigned incoming" }))];
 }
 
 export function getAllVisibleDocuments(project: DemoProject) {
@@ -375,13 +375,13 @@ export function getAllVisibleDocuments(project: DemoProject) {
       return {
         ...document,
         processId: "",
-        processTitle: node.documentOwnerNodeId ? `Внутри ноды: ${getNodeById(project, node.documentOwnerNodeId)?.title ?? "раздел"}` : "Бесхозный файл",
+        processTitle: node.documentOwnerNodeId ? `Inside node: ${getNodeById(project, node.documentOwnerNodeId)?.title ?? "section"}` : "Unassigned file",
       };
     });
 
   const inboxDocs = project.inboxDocuments
     .filter((document) => !seen.has(document.id))
-    .map((document) => ({ ...document, processId: "", processTitle: "Входящие без связи" }));
+    .map((document) => ({ ...document, processId: "", processTitle: "Unassigned incoming" }));
 
   return [...processDocs, ...nodeDocs, ...inboxDocs];
 }
@@ -455,8 +455,8 @@ export function createDocumentFromName(name: string, source: ProcessDocument["so
     fileType,
     version: "v1",
     status: "draft",
-    from: source === "mail" ? "Почта" : source === "chat" ? "Мессенджер" : "Импорт",
-    updatedAt: "только что",
+    from: source === "mail" ? "Mail" : source === "chat" ? "Messenger" : "Import",
+    updatedAt: "just now",
     source,
     fileUrl: fileUrl ?? getDemoFileUrl(fileType),
     fileText: fileText ?? preview.text,
@@ -474,7 +474,7 @@ export function createDocumentNode(projectId: string, levelId: string, document:
     type: "document",
     title: document.title,
     shortCode: getFileLabel(document.fileType),
-    description: ownerNodeId ? "Файл находится внутри ноды раздела." : "Бесхозный файл. Перетащите его в раздел, чтобы разобрать.",
+    description: ownerNodeId ? "The file is stored inside a section node." : "Unassigned file. Drag it into a section to organize it.",
     status: document.status,
     responsible: document.from,
     updatedAt: document.updatedAt,
@@ -491,8 +491,8 @@ export function getDocumentFromNode(node: ProjectNode): ProcessDocument {
     fileType: node.fileType ?? "unknown",
     version: "v1",
     status: node.status ?? "draft",
-    from: node.responsible ?? "Документ",
-    updatedAt: node.updatedAt ?? "сегодня",
+    from: node.responsible ?? "Document",
+    updatedAt: node.updatedAt ?? "today",
     source: "manual",
   };
 }
@@ -509,8 +509,8 @@ export function inferFileType(name: string): FileType {
 }
 
 export function formatBytes(bytes: number) {
-  if (!bytes) return "0 Б";
-  const units = ["Б", "КБ", "МБ", "ГБ"];
+  if (!bytes) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
   const power = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
   return `${(bytes / 1024 ** power).toFixed(power === 0 ? 0 : 1)} ${units[power]}`;
 }
@@ -530,11 +530,11 @@ function buildDocumentPreview(title: string, fileType: FileType): { text?: strin
   if (fileType === "xlsx") {
     return {
       rows: [
-        ["Раздел", "Документ", "Версия", "Статус", "Ответственный"],
-        ["АР", "План 1 этажа", "v4", "На проверке", "Анна Лебедева"],
-        ["КР", "Расчет нагрузок", "v2", "Есть замечания", "Игорь Мельников"],
-        ["ПЗ", "ТЭП", "v1", "В работе", "Мария Соколова"],
-        ["ОВ/ВК", "Сводка стояков", "v1", "Принято", "Роман Фадеев"],
+        ["Section", "Document", "Version", "Status", "Responsible"],
+        ["AR", "First-floor plan", "v4", "Under review", "Alisa Bishop"],
+        ["KR", "Load calculation", "v2", "Changes requested", "Ian Miller"],
+        ["PZ", "Technical and economic indicators", "v1", "In progress", "Maria Stone"],
+        ["HVAC/WS", "Riser summary", "v1", "Accepted", "Ryan Fields"],
       ],
     };
   }
@@ -544,14 +544,14 @@ function buildDocumentPreview(title: string, fileType: FileType): { text?: strin
       text: [
         title,
         "",
-        "1. Назначение документа",
-        "Документ фиксирует исходные требования, ответственных участников и состав данных для передачи в бизнес-процесс.",
+        "1. Document purpose",
+        "This document records the initial requirements, responsible participants, and data package for the business process.",
         "",
-        "2. Проверяемые материалы",
-        "В пакет входят актуальная версия файла, комментарий исполнителя, срок согласования и список обязательных полей.",
+        "2. Review materials",
+        "The package includes the current file version, the assignee's comment, the approval deadline, and the required fields.",
         "",
-        "3. Результат",
-        "После проверки ГИП принимает документ, возвращает его с замечаниями или переводит задачу в статус частичного согласования.",
+        "3. Result",
+        "After review, the lead project engineer accepts the document, returns it with comments, or marks the task as partially approved.",
       ].join("\n"),
     };
   }
@@ -560,8 +560,8 @@ function buildDocumentPreview(title: string, fileType: FileType): { text?: strin
     return {
       text: [
         title,
-        "Демонстрационный PDF-лист",
-        "На листе показаны рамка документа, штамп, зона согласования и перечень изменений. В продовой версии здесь отображается реальный PDF.",
+        "Demo PDF sheet",
+        "The sheet shows the document frame, title block, approval area, and change log. The production version displays the actual PDF here.",
       ].join("\n"),
     };
   }
@@ -603,7 +603,7 @@ function getProcessSearchText(process: BusinessProcess, project: DemoProject) {
     process.approver,
     process.dueAt,
     process.tag,
-    process.requiredFields?.map((field) => `${field.label} ${field.required ? "обязательное" : "необязательное"}`).join(" "),
+    process.requiredFields?.map((field) => `${field.label} ${field.required ? "required" : "optional"}`).join(" "),
     from?.title,
     from?.shortCode,
     to?.title,
@@ -625,7 +625,7 @@ function getProcessSearchText(process: BusinessProcess, project: DemoProject) {
 
 function normalizeText(value: string) {
   return value
-    .toLocaleLowerCase("ru-RU")
+    .toLocaleLowerCase("en-US")
     .replace(/ё/g, "е")
     .replace(/\s+/g, " ")
     .trim();

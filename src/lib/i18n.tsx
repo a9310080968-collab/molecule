@@ -1,9 +1,8 @@
-import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, type ReactNode, useContext, useEffect, useMemo } from "react";
+import { getEnglishContentTranslation, toEnglishContent } from "./englishContent";
 
-export type Language = "ru" | "en";
+export type Language = "en";
 export type TranslationParams = Record<string, string | number>;
-
-const LANGUAGE_STORAGE_KEY = "molecule-ui-language";
 
 const english: Record<string, string> = {
   "Молекула": "Molecule",
@@ -194,10 +193,6 @@ const english: Record<string, string> = {
   "Подключено": "Connected",
   "Нужно разрешение": "Permission required",
   "Не подключено": "Not connected",
-  "Язык интерфейса": "Interface language",
-  "Язык применяется сразу и сохраняется для этого браузера.": "The language is applied immediately and saved for this browser.",
-  "Русский": "Russian",
-  "Английский": "English",
   "Масштаб интерфейса": "Interface scale",
   "Размеры текста и рабочих панелей сохраняются для этого браузера.": "Text and workspace panel sizes are saved for this browser.",
   "Размер текста": "Text size",
@@ -615,7 +610,6 @@ const english: Record<string, string> = {
 
 type I18nContextValue = {
   language: Language;
-  setLanguage: (language: Language) => void;
   t: (source: string, params?: TranslationParams) => string;
   system: (value: string | undefined) => string;
 };
@@ -623,29 +617,19 @@ type I18nContextValue = {
 const I18nContext = createContext<I18nContextValue | null>(null);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguage] = useState<Language>(() => {
-    if (typeof window === "undefined") {
-      return "ru";
-    }
-    const requestedLanguage = new URLSearchParams(window.location.search).get("lang");
-    if (requestedLanguage === "ru" || requestedLanguage === "en") {
-      return requestedLanguage;
-    }
-    return window.localStorage.getItem(LANGUAGE_STORAGE_KEY) === "en" ? "en" : "ru";
-  });
+  const language: Language = "en";
 
   useEffect(() => {
-    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
-    document.documentElement.lang = language;
-    document.title = language === "en" ? "2D documentation map | Molecule" : "2D-карта документации | Молекула";
-  }, [language]);
+    window.localStorage.removeItem("molecule-ui-language");
+    document.documentElement.lang = "en";
+    document.title = "2D documentation map | Molecule";
+  }, []);
 
   const value = useMemo<I18nContextValue>(() => ({
     language,
-    setLanguage,
     t: (source, params) => translate(source, language, params),
     system: (text) => localizeSystemText(text, language),
-  }), [language]);
+  }), []);
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
@@ -659,7 +643,7 @@ export function useI18n() {
 }
 
 export function translate(source: string, language: Language, params?: TranslationParams) {
-  const template = language === "en" ? english[source] ?? source : source;
+  const template = english[source] ?? getEnglishContentTranslation(source) ?? toEnglishContent(source);
   if (!params) {
     return template;
   }
@@ -670,11 +654,15 @@ export function translate(source: string, language: Language, params?: Translati
 }
 
 export function localizeSystemText(value: string | undefined, language: Language): string {
-  if (!value || language === "ru") {
-    return value ?? "";
+  if (!value) {
+    return "";
   }
   if (english[value]) {
     return english[value];
+  }
+  const contentTranslation = getEnglishContentTranslation(value);
+  if (contentTranslation) {
+    return contentTranslation;
   }
 
   const deadlineDescription = value.match(/^(.*): ([→←]) (.+)\. Передает: (.*); получает: (.*); согласует: (.*)\.$/);
@@ -734,7 +722,7 @@ export function localizeSystemText(value: string | undefined, language: Language
     return `${fileSize[1]} ${units[fileSize[2].toUpperCase()] ?? fileSize[2]}`;
   }
 
-  return value
+  const normalized = value
     .replace(/(просрочено|осталось) (\d+) (мин|ч|д)/gi, (_, state: string, count: string, sourceUnit: string) => {
       const unit = sourceUnit.toLowerCase() === "мин" ? "min" : sourceUnit.toLowerCase() === "ч" ? "h" : "d";
       return `${state.toLowerCase() === "просрочено" ? "overdue by" : "remaining"} ${count} ${unit}`;
@@ -743,4 +731,5 @@ export function localizeSystemText(value: string | undefined, language: Language
     .replace(/^сегодня(?=\b|,)/i, "today")
     .replace(/^завтра(?=\b|,)/i, "tomorrow")
     .replace(/^вчера(?=\b|,)/i, "yesterday");
+  return toEnglishContent(normalized);
 }

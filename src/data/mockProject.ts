@@ -11,23 +11,24 @@ import type {
   ProjectParticipant,
   ProjectNode,
 } from "../types";
+import { normalizeProjectPeople, toEnglishData } from "../lib/englishContent";
 import { createRogaProject } from "./rogaProject";
 
-export const nodeStatusLabels: Record<NodeStatus, string> = {
+export const nodeStatusLabels: Record<NodeStatus, string> = toEnglishData({
   approved: "Согласовано",
   review: "На проверке",
   comments: "Есть замечания",
   unchecked: "Не проверено",
   draft: "Черновик",
-};
+});
 
-export const processStatusLabels: Record<ProcessStatus, string> = {
+export const processStatusLabels: Record<ProcessStatus, string> = toEnglishData({
   draft: "Черновик процесса",
   sent: "Отправлено на проверку",
   in_work: "Принято в работу",
   rejected: "Не принято",
   accepted: "Принято",
-};
+});
 
 export const processStatusColors: Record<ProcessStatus, string> = {
   draft: "#8b93a6",
@@ -37,13 +38,13 @@ export const processStatusColors: Record<ProcessStatus, string> = {
   accepted: "#2ed8a3",
 };
 
-export const demoProjects: DemoProject[] = [
+export const demoProjects: DemoProject[] = toEnglishData([
   createRogaProject(),
   createSiriusProject(),
   createVegaProject(),
-];
+] satisfies DemoProject[]).map(normalizeProjectPeople);
 
-export const initialNotifications: DemoNotification[] = [
+export const initialNotifications: DemoNotification[] = toEnglishData([
   {
     id: "notif-roga-gp-ar-deadline",
     projectId: "project-roga-kopyta",
@@ -88,7 +89,7 @@ export const initialNotifications: DemoNotification[] = [
     time: "вчера, 17:40",
     unread: false,
   },
-];
+] satisfies DemoNotification[]);
 
 function createSiriusProject(): DemoProject {
   const projectId = "project-sirius";

@@ -1,6 +1,7 @@
 import type { BusinessProcess, DemoProject, MapLevel, NodeChecklistItem, ProjectNode, ProjectParticipant, ProjectTemplate } from "../types";
+import { normalizeProjectPeople, normalizeTemplatePeople, toEnglishData } from "./englishContent";
 
-const NOW = "только что";
+const NOW = "just now";
 
 export function createBlankProjectTemplate(): ProjectTemplate {
   const projectId = "template-blank";
@@ -28,7 +29,7 @@ export function createBlankProjectTemplate(): ProjectTemplate {
     templateNode(projectId, rootLevelId, "node-template-blank-3", "section", "Блок 3", "Б3", "Соедините блоки вручную через плюс на ноде.", "unchecked", undefined, ["Б3"], starterChecklist("node-template-blank-3")),
   ];
 
-  return {
+  return normalizeTemplatePeople(toEnglishData({
     id: "template-blank-project",
     title: "Пустой проект / конструктор",
     description: "Минимальный старт: центральная нода и три редактируемых бизнес-блока без документов и процессов.",
@@ -37,7 +38,7 @@ export function createBlankProjectTemplate(): ProjectTemplate {
     levels,
     nodes,
     processes: [],
-  };
+  }));
 }
 
 export function createDefaultProjectTemplate(): ProjectTemplate {
@@ -123,7 +124,7 @@ export function createDefaultProjectTemplate(): ProjectTemplate {
     templateNode(projectId, krLevelId, "node-template-kr-gip", "package", "Пакет ГИП", "ГИП", "Передача КР на проверку.", "unchecked"),
   ];
 
-  return {
+  return normalizeTemplatePeople(toEnglishData({
     id: "template-base-project",
     title: "Базовый проект документации",
     description: "Стартовый шаблон с ИРД, основными разделами и несколькими внутренними уровнями.",
@@ -132,7 +133,7 @@ export function createDefaultProjectTemplate(): ProjectTemplate {
     levels,
     nodes,
     processes: [],
-  };
+  }));
 }
 
 export function createTemplateFromProject(project: DemoProject, title: string, description: string): ProjectTemplate {
@@ -160,7 +161,7 @@ export function createTemplateFromProject(project: DemoProject, title: string, d
     source: "manual" as const,
   }));
 
-  return {
+  return normalizeTemplatePeople(toEnglishData({
     id: `template-${Date.now()}-${Math.round(Math.random() * 10000)}`,
     title: title.trim() || `${project.title}: шаблон`,
     description: description.trim() || "Структура проекта без рабочих документов.",
@@ -169,7 +170,7 @@ export function createTemplateFromProject(project: DemoProject, title: string, d
     levels,
     nodes,
     processes,
-  };
+  }));
 }
 
 export function createProjectFromTemplate(template: ProjectTemplate, title: string, address: string): DemoProject {
@@ -226,7 +227,7 @@ export function createProjectFromTemplate(template: ProjectTemplate, title: stri
     documents: [],
   }));
 
-  return {
+  return normalizeProjectPeople(toEnglishData({
     id: projectId,
     title: title.trim() || "Новый проект",
     address: address.trim() || "Адрес не указан",
@@ -248,7 +249,7 @@ export function createProjectFromTemplate(template: ProjectTemplate, title: stri
         time: NOW,
       },
     ],
-  };
+  }));
 }
 
 function createDefaultParticipants(projectId: string): ProjectParticipant[] {

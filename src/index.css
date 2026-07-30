@@ -2905,52 +2905,6 @@ button {
   gap: 9px;
 }
 
-.language-settings-card {
-  grid-template-columns: minmax(220px, 1fr) minmax(260px, 0.8fr);
-  align-items: center;
-}
-
-.language-switch {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 5px;
-  padding: 4px;
-  border: 1px solid rgba(171, 205, 255, 0.12);
-  border-radius: 8px;
-  background: rgba(4, 10, 22, 0.56);
-}
-
-.language-switch button {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 8px;
-  align-items: center;
-  min-height: 42px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: rgba(226, 237, 255, 0.68);
-  cursor: pointer;
-  font: inherit;
-  font-size: var(--fs-12);
-  font-weight: 820;
-  padding: 0 12px;
-}
-
-.language-switch button span {
-  overflow: hidden;
-  font-weight: 650;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.language-switch button.active {
-  border-color: rgba(115, 226, 255, 0.24);
-  background: rgba(31, 211, 255, 0.1);
-  color: #e6fcff;
-}
-
 .appearance-setting-row {
   display: grid;
   grid-template-columns: 22px minmax(180px, 1fr) minmax(140px, 240px) 48px;
@@ -7286,10 +7240,6 @@ button {
     right: 18px;
     bottom: calc(42vh + 34px);
     left: 18px;
-  }
-
-  .language-settings-card {
-    grid-template-columns: 1fr;
   }
 
   .project-chat-launcher {

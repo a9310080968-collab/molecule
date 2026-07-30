@@ -1,7 +1,7 @@
 import { createDocumentNode, getDefaultLevel, getDocumentFromNode, getLevelById, getNodeById } from "./graph";
 import type { DemoProject, MapLevel, ProcessDocument, ProjectNode } from "../types";
 
-const NOW = "только что";
+const NOW = "just now";
 
 export function appendUnique(ids: string[], id: string) {
   return ids.includes(id) ? ids : [...ids, id];
@@ -43,7 +43,7 @@ export function ensureNodeLevel(project: DemoProject, nodeId: string): { project
     id: levelId,
     projectId: project.id,
     title: node.shortCode ? `${node.shortCode} / ${node.title}` : node.title,
-    subtitle: "Рабочий уровень ноды: документы, проверка, замечания и передача заданий",
+    subtitle: "Node workspace: documents, reviews, comments, and task transfers",
     centralNodeId: node.id,
     nodeIds: [node.id, ...childNodeIds, ...ownedDocumentIds],
     parentLevelId: parentLevel.id,
@@ -142,7 +142,7 @@ export function putDocumentIntoNode(
               ...node,
               levelId: prepared.levelId,
               documentOwnerNodeId: targetNode.id,
-              description: "Файл находится внутри ноды раздела.",
+              description: "The file is stored inside a section node.",
               status: "review",
               updatedAt: NOW,
               document,
@@ -180,7 +180,7 @@ export function removeDocumentFromNode(project: DemoProject, documentNodeId: str
               ...node,
               levelId: destinationLevelId,
               documentOwnerNodeId: undefined,
-              description: "Бесхозный файл. Перетащите его в раздел, чтобы разобрать.",
+              description: "Unassigned file. Drag it into a section to organize it.",
               status: "draft",
               updatedAt: NOW,
               document,
@@ -208,10 +208,10 @@ function createLevelId(nodeId: string) {
 function createDefaultLevelNodes(projectId: string, levelId: string, parentNode: ProjectNode): ProjectNode[] {
   const base = parentNode.id.replace(/^node-/, "");
   return [
-    createInnerNode(projectId, levelId, `node-${base}-inbox`, "package", "Документы на проверку", "Вход", "Файлы, которые сотрудники положили внутрь ноды.", "review", parentNode.responsible),
-    createInnerNode(projectId, levelId, `node-${base}-work`, "subsection", "Рабочие материалы", "Работа", "Черновики, расчеты и материалы в работе.", "draft", parentNode.responsible),
-    createInnerNode(projectId, levelId, `node-${base}-accepted`, "package", "Согласовано", "OK", "Документы, которые прошли проверку.", "approved", parentNode.responsible),
-    createInnerNode(projectId, levelId, `node-${base}-comments`, "package", "Замечания", "Зам", "Возвраты, замечания и файлы на доработку.", "comments", parentNode.responsible),
+    createInnerNode(projectId, levelId, `node-${base}-inbox`, "package", "Documents for review", "Inbox", "Files placed inside the node by project participants.", "review", parentNode.responsible),
+    createInnerNode(projectId, levelId, `node-${base}-work`, "subsection", "Working materials", "Work", "Drafts, calculations, and work-in-progress materials.", "draft", parentNode.responsible),
+    createInnerNode(projectId, levelId, `node-${base}-accepted`, "package", "Approved", "OK", "Documents that have passed review.", "approved", parentNode.responsible),
+    createInnerNode(projectId, levelId, `node-${base}-comments`, "package", "Comments", "Rev", "Returned files, comments, and materials requiring revision.", "comments", parentNode.responsible),
   ];
 }
 

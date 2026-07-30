@@ -1161,7 +1161,7 @@ function ProcessPath({
   onOpenDetails: () => void;
   onOpenContextMenu: (clientX: number, clientY: number) => void;
 }) {
-  const { language, t } = useI18n();
+  const { t } = useI18n();
   if (!from || !to || !fromNode || !toNode || !processes.length) {
     return null;
   }
@@ -1262,10 +1262,10 @@ function ProcessPath({
             </span>
             <b>
               {overview
-                ? formatTaskCount(taskCount, language)
+                ? formatTaskCount(taskCount)
                 : `${fromNode.shortCode ?? fromNode.title} ↔ ${toNode.shortCode ?? toNode.title}`}
             </b>
-            {!overview ? <em>{formatTaskCount(taskCount, language)}</em> : null}
+            {!overview ? <em>{formatTaskCount(taskCount)}</em> : null}
             {detailed ? (
               <small>
                 {representative.title} · {t("{count} файлов", { count: representative.documents.length })} · {t(getProcessStatusText(representative.status))}
@@ -1342,15 +1342,8 @@ function getProcessRouteLabel(group: ProcessGroup, nodeMap: Map<string, ProjectN
   return `${from?.shortCode ?? from?.title ?? t("Источник")} ↔ ${to?.shortCode ?? to?.title ?? t("Получатель")}`;
 }
 
-function formatTaskCount(value: number, language: "ru" | "en") {
-  if (language === "en") {
-    return `${value} ${value === 1 ? "task" : "tasks"}`;
-  }
-  const mod10 = value % 10;
-  const mod100 = value % 100;
-  if (mod10 === 1 && mod100 !== 11) return `${value} задание`;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${value} задания`;
-  return `${value} заданий`;
+function formatTaskCount(value: number) {
+  return `${value} ${value === 1 ? "task" : "tasks"}`;
 }
 
 function buildInitialPositions(nodes: ProjectNode[], levelId: string, centralNodeId: string) {

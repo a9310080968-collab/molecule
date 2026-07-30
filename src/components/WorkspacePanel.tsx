@@ -8,7 +8,6 @@ import {
   FileStack,
   FilePlus2,
   FolderPlus,
-  Globe2,
   MessageCircle,
   Phone,
   Send,
@@ -341,7 +340,7 @@ function SettingsWorkspace({
   onFontScaleChange: (scale: number) => void;
   onInterfaceScaleChange: (scale: number) => void;
 }) {
-  const { language, setLanguage, t } = useI18n();
+  const { t } = useI18n();
   const [title, setTitle] = useState(() => `${project.title}: ${t("шаблон")}`);
   const [description, setDescription] = useState(() => t("Структура проекта без рабочих документов."));
 
@@ -356,7 +355,7 @@ function SettingsWorkspace({
         ? t("Структура проекта без рабочих документов.")
         : current,
     );
-  }, [language, project.title, t]);
+  }, [project.title, t]);
 
   function saveTemplate() {
     const template = onCreateTemplate(title, description);
@@ -369,26 +368,6 @@ function SettingsWorkspace({
 
   return (
     <div className="settings-workspace">
-      <section className="template-settings-card language-settings-card">
-        <div className="section-title">
-          <Globe2 size={18} />
-          <div>
-            <h3>{t("Язык интерфейса")}</h3>
-            <p>{t("Язык применяется сразу и сохраняется для этого браузера.")}</p>
-          </div>
-        </div>
-        <div className="language-switch" role="group" aria-label={t("Язык интерфейса")}>
-          <button className={language === "ru" ? "active" : ""} onClick={() => setLanguage("ru")}>
-            RU
-            <span>{t("Русский")}</span>
-          </button>
-          <button className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")}>
-            EN
-            <span>{t("Английский")}</span>
-          </button>
-        </div>
-      </section>
-
       <section className="template-settings-card appearance-settings-card">
         <div className="section-title">
           <Scaling size={18} />
@@ -469,7 +448,7 @@ function SettingsWorkspace({
                 <article key={template.id}>
                   <strong>{t(template.title)}</strong>
                   <span>{t(template.description)}</span>
-                  <em>{formatTemplateStats(template.nodes.length, template.levels.length, t(template.sourceProjectTitle), language)}</em>
+                  <em>{formatTemplateStats(template.nodes.length, template.levels.length, t(template.sourceProjectTitle))}</em>
                 </article>
               ))}
             </div>
@@ -507,22 +486,8 @@ function SettingsWorkspace({
   );
 }
 
-function formatTemplateStats(nodes: number, levels: number, source: string, language: "ru" | "en") {
-  if (language === "en") {
-    return `${nodes} ${nodes === 1 ? "node" : "nodes"} · ${levels} ${levels === 1 ? "level" : "levels"} · ${source}`;
-  }
-  return `${formatRussianCount(nodes, ["нода", "ноды", "нод"])} · ${formatRussianCount(levels, ["уровень", "уровня", "уровней"])} · ${source}`;
-}
-
-function formatRussianCount(value: number, forms: [string, string, string]) {
-  const mod10 = value % 10;
-  const mod100 = value % 100;
-  const form = mod10 === 1 && mod100 !== 11
-    ? forms[0]
-    : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
-      ? forms[1]
-      : forms[2];
-  return `${value} ${form}`;
+function formatTemplateStats(nodes: number, levels: number, source: string) {
+  return `${nodes} ${nodes === 1 ? "node" : "nodes"} · ${levels} ${levels === 1 ? "level" : "levels"} · ${source}`;
 }
 
 function TasksWorkspace({
