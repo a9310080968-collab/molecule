@@ -5,6 +5,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: molecule-production-demo
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -28,6 +32,29 @@ jobs:
         run: npm run build
         env:
           GITHUB_PAGES: "true"
+
+      - name: Write deployment version
+        run: |
+          printf '{"sha":"%s","deployedAt":"%s"}\n' \
+            "$GITHUB_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            > dist/version.json
+
+      - name: Deploy to mlcule.com
+        env:
+          SSHPASS: ${{ secrets.REG_RU_SSH_PASSWORD }}
+          REG_RU_SSH_HOST: ${{ secrets.REG_RU_SSH_HOST }}
+          REG_RU_SSH_USER: ${{ secrets.REG_RU_SSH_USER }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y sshpass
+
+          SSH_TARGET="${REG_RU_SSH_USER}@${REG_RU_SSH_HOST}"
+          SSH_OPTIONS="-o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30"
+          DEPLOY_DIR="www/mlcule.com/molecule"
+
+          sshpass -e ssh ${SSH_OPTIONS} "${SSH_TARGET}" \
+            "mkdir -p '${DEPLOY_DIR}' && find '${DEPLOY_DIR}' -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +"
+          sshpass -e scp ${SSH_OPTIONS} -r dist/. "${SSH_TARGET}:${DEPLOY_DIR}/"
 
       - name: Publish to gh-pages
         run: |
