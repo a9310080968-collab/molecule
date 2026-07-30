@@ -627,6 +627,10 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     if (typeof window === "undefined") {
       return "ru";
     }
+    const requestedLanguage = new URLSearchParams(window.location.search).get("lang");
+    if (requestedLanguage === "ru" || requestedLanguage === "en") {
+      return requestedLanguage;
+    }
     return window.localStorage.getItem(LANGUAGE_STORAGE_KEY) === "en" ? "en" : "ru";
   });
 
