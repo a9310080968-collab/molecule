@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Atom,
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
@@ -11,8 +12,11 @@ import {
   Clock3,
   GitBranch,
   LayoutDashboard,
+  Maximize2,
   Menu,
+  Minus,
   Network,
+  Plus,
   Search,
   Sparkles,
   Target,
@@ -22,6 +26,12 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import {
+  mapKindLabels,
+  processMaps,
+  type ProcessMapMode,
+  type ProcessMapNode,
+} from "./data/processMolecule";
 import {
   employees,
   financeCategories,
@@ -38,7 +48,7 @@ import {
   type Team,
 } from "./data/tsumPrototype";
 
-type ViewId = "overview" | "teams" | "people" | "processes" | "finance" | "opportunities";
+type ViewId = "overview" | "teams" | "people" | "processes" | "molecule" | "finance" | "opportunities";
 type PeopleFilter = "all" | EmployeeStatus | "critical";
 
 const navItems: Array<{ id: ViewId; label: string; mobileLabel: string; icon: typeof LayoutDashboard }> = [
@@ -46,6 +56,7 @@ const navItems: Array<{ id: ViewId; label: string; mobileLabel: string; icon: ty
   { id: "teams", label: "Команды", mobileLabel: "Команды", icon: Network },
   { id: "people", label: "88 сотрудников", mobileLabel: "Люди", icon: Users },
   { id: "processes", label: "Процессы", mobileLabel: "Процессы", icon: GitBranch },
+  { id: "molecule", label: "Молекула процессов", mobileLabel: "Карта", icon: Atom },
   { id: "finance", label: "Расходы", mobileLabel: "Расходы", icon: WalletCards },
   { id: "opportunities", label: "Оптимизация", mobileLabel: "Шансы", icon: Sparkles },
 ];
@@ -70,6 +81,11 @@ const pageMeta: Record<ViewId, { eyebrow: string; title: string; description: st
     eyebrow: "Сквозные процессы",
     title: "Как работа движется между командами",
     description: "Маршруты, владельцы, ожидание и последствия для других каналов.",
+  },
+  molecule: {
+    eyebrow: "Molecule process map",
+    title: "Работа департамента как живая система",
+    description: "Переключайте слои и двигайтесь от команды или сотрудника к процессу, ресурсу, результату и KPI.",
   },
   finance: {
     eyebrow: "Маркетинговые расходы",
@@ -182,6 +198,7 @@ function App() {
             <PeopleScreen filter={peopleFilter} onFilter={setPeopleFilter} onOpenEmployee={openEmployee} />
           )}
           {view === "processes" && <ProcessesScreen />}
+          {view === "molecule" && <MoleculeScreen />}
           {view === "finance" && <FinanceScreen onOpenTeam={openTeam} onOpenOpportunity={openOpportunity} />}
           {view === "opportunities" && <OpportunitiesScreen onOpenOpportunity={openOpportunity} />}
 
@@ -587,6 +604,152 @@ function ProcessesScreen() {
       </section>
     </div>
   );
+}
+
+function MoleculeScreen() {
+  const [mode, setMode] = useState<ProcessMapMode>("department");
+  const [selectedId, setSelectedId] = useState(processMaps.department.defaultSelectedId);
+  const [zoom, setZoom] = useState(1);
+  const mapScrollRef = useRef<HTMLDivElement | null>(null);
+  const map = processMaps[mode];
+  const selectedNode = map.nodes.find((node) => node.id === selectedId) ?? map.nodes[0];
+
+  useEffect(() => {
+    const element = mapScrollRef.current;
+    if (!element) return;
+    const frame = window.requestAnimationFrame(() => {
+      element.scrollLeft = Math.max(0, (element.scrollWidth - element.clientWidth) / 2);
+      element.scrollTop = 0;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [mode, zoom]);
+
+  function selectMode(nextMode: ProcessMapMode) {
+    setMode(nextMode);
+    setSelectedId(processMaps[nextMode].defaultSelectedId);
+    setZoom(1);
+  }
+
+  return (
+    <div className="screen-stack molecule-screen">
+      <section className="molecule-principle">
+        <div><Atom size={22} /><span>Основная единица MOLECULE</span></div>
+        <div className="molecule-chain">
+          {["Сотрудник", "Функция", "Процесс", "Задача", "Ресурс", "Результат", "KPI"].map((item, index, items) => (
+            <span key={item}><strong>{item}</strong>{index < items.length - 1 && <ArrowRight size={13} />}</span>
+          ))}
+        </div>
+        <p>Каждый узел открывает владельца, затраченный ресурс и влияние на результат — именно в логике ТЗ заказчика.</p>
+      </section>
+
+      <div className="molecule-mode-tabs" role="tablist" aria-label="Слои карты процессов">
+        <button className={mode === "department" ? "active" : ""} onClick={() => selectMode("department")}><Network size={17} /><span><strong>Департамент</strong><small>12 команд и их вклад</small></span></button>
+        <button className={mode === "fashion" ? "active" : ""} onClick={() => selectMode("fashion")}><BriefcaseBusiness size={17} /><span><strong>Fashion production</strong><small>Полный цикл съемки</small></span></button>
+        <button className={mode === "approval" ? "active" : ""} onClick={() => selectMode("approval")}><Clock3 size={17} /><span><strong>Согласование SMS</strong><small>Факт и целевой маршрут</small></span></button>
+      </div>
+
+      <section className="molecule-workspace">
+        <header className="molecule-workspace-header">
+          <div><span>{map.rootLabel}</span><h2>{map.title}</h2><p>{map.subtitle}</p></div>
+          <div className="molecule-zoom" aria-label="Масштаб карты">
+            <button aria-label="Уменьшить" disabled={zoom <= 0.85} onClick={() => setZoom((current) => Math.max(0.85, Number((current - 0.15).toFixed(2))))}><Minus size={16} /></button>
+            <span>{Math.round(zoom * 100)}%</span>
+            <button aria-label="Увеличить" disabled={zoom >= 1.3} onClick={() => setZoom((current) => Math.min(1.3, Number((current + 0.15).toFixed(2))))}><Plus size={16} /></button>
+            <button aria-label="По размеру" onClick={() => setZoom(1)}><Maximize2 size={15} /></button>
+          </div>
+        </header>
+
+        <div className="molecule-layout">
+          <div className="molecule-canvas-panel">
+            <div className="molecule-scroll" ref={mapScrollRef}>
+              <div
+                className="molecule-surface"
+                style={{ width: `${zoom * 100}%`, minWidth: `${860 * zoom}px`, height: `${620 * zoom}px` }}
+              >
+                <svg className="molecule-edges" viewBox="0 0 1000 620" preserveAspectRatio="none" aria-hidden="true">
+                  {map.edges.map((edge) => {
+                    const from = map.nodes.find((node) => node.id === edge.from);
+                    const to = map.nodes.find((node) => node.id === edge.to);
+                    if (!from || !to) return null;
+                    const midX = (from.x + to.x) / 2;
+                    const midY = (from.y + to.y) / 2;
+                    return (
+                      <g key={`${edge.from}-${edge.to}`} className={`map-edge map-edge--${edge.tone} ${edge.dashed ? "is-dashed" : ""}`}>
+                        <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} />
+                        <circle cx={to.x} cy={to.y} r="3.5" />
+                        {edge.label && <text x={midX} y={midY - 7} textAnchor="middle">{edge.label}</text>}
+                      </g>
+                    );
+                  })}
+                </svg>
+
+                {map.nodes.map((node) => (
+                  <button
+                    key={node.id}
+                    className={`molecule-node molecule-node--${node.kind} status-${node.status} ${selectedNode.id === node.id ? "selected" : ""}`}
+                    style={{ left: `${node.x / 10}%`, top: `${node.y / 6.2}%` }}
+                    onClick={() => setSelectedId(node.id)}
+                    aria-label={`${mapKindLabels[node.kind]}: ${node.label}`}
+                  >
+                    <span className="molecule-node-kind">{mapKindLabels[node.kind]}</span>
+                    <strong>{node.label}</strong>
+                    <small>{node.metric ?? node.caption}</small>
+                    {node.status === "risk" || node.status === "waiting" ? <i><CircleAlert size={12} /></i> : null}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="molecule-legend">
+              <span><i className="legend-primary" />Рабочая связь</span>
+              <span><i className="legend-risk" />Проблема / ожидание</span>
+              <span><i className="legend-positive" />Целевой маршрут</span>
+              <small>Нажмите на любой узел</small>
+            </div>
+          </div>
+
+          <MapNodeInspector node={selectedNode} />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function MapNodeInspector({ node }: { node: ProcessMapNode }) {
+  const signal = node.status === "risk" || node.status === "waiting";
+  return (
+    <aside className="map-inspector">
+      <header>
+        <span>{mapKindLabels[node.kind]}</span>
+        <em className={`status-${node.status}`}>{mapNodeStatusLabel(node.status)}</em>
+      </header>
+      <h3>{node.label}</h3>
+      <p>{node.description}</p>
+      <div className="map-inspector-owner"><span>Владелец</span><strong>{node.owner}</strong></div>
+      <dl>
+        <div><dt>Затраченный ресурс</dt><dd>{node.resource}</dd></div>
+        <div><dt>Фактический результат</dt><dd>{node.result}</dd></div>
+        <div><dt>KPI / влияние</dt><dd>{node.kpi}</dd></div>
+      </dl>
+      <section>
+        <span>Связь с бизнес-результатом</span>
+        <div className="map-inspector-chain">
+          {node.chain.map((item, index) => <span key={`${node.id}-${item}`}>{index > 0 && <ArrowDownRight size={13} />}<strong>{item}</strong></span>)}
+        </div>
+      </section>
+      {signal && <div className="map-inspector-signal"><Sparkles size={16} /><p>MOLECULE выделяет этот узел как проверяемую возможность оптимизации, а не как готовое кадровое решение.</p></div>}
+    </aside>
+  );
+}
+
+function mapNodeStatusLabel(status: ProcessMapNode["status"]) {
+  return {
+    normal: "В норме",
+    active: "В работе",
+    done: "Завершено",
+    waiting: "Ожидает",
+    queued: "В очереди",
+    risk: "Сигнал",
+  }[status];
 }
 
 function stepStatusLabel(status: Process["steps"][number]["status"]) {
