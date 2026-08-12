@@ -1,6 +1,6 @@
 import { employees, teamById, teams, type Employee, type Team } from "./tsumPrototype";
 
-export type EmployeeWorkTaskStatus = "active" | "blocked" | "done" | "looped" | "overdue";
+export type EmployeeWorkTaskStatus = "active" | "blocked" | "done" | "looped" | "overdue" | "not_started" | "in_progress" | "review" | "accepted" | "rejected";
 export type WorkAlarmSeverity = "critical" | "warning" | "info";
 
 export type EmployeeWorkTask = {
@@ -21,7 +21,7 @@ export type EmployeeWorkTask = {
 
 export type EmployeeWorkAlarm = {
   id: string;
-  type: "no_tasks" | "loop_no_deadline" | "no_deadline" | "wrong_assigner" | "overdue" | "blocked" | "overload";
+  type: "no_tasks" | "loop_no_deadline" | "no_deadline" | "wrong_assigner" | "overdue" | "blocked" | "overload" | "rejected";
   severity: WorkAlarmSeverity;
   title: string;
   description: string;
@@ -160,7 +160,7 @@ export function diagnoseEmployeeTasks(employee: Employee, managerName: string, t
         id: `${task.id}-loop`, type: "loop_no_deadline", severity: "critical", taskId: task.id,
         title: "Задача зациклена и не имеет дедлайна", description: `${task.title}: ${task.loopPath ?? "маршрут повторяется"}. Нужен владелец решения и крайний срок.`,
       });
-    } else if (!task.deadline && task.status !== "done") {
+    } else if (!task.deadline && task.status !== "done" && task.status !== "accepted") {
       alarms.push({
         id: `${task.id}-deadline`, type: "no_deadline", severity: "warning", taskId: task.id,
         title: "У задачи нет дедлайна", description: `${task.title} нельзя проверить на своевременность и включить в прогноз загрузки.`,
@@ -182,6 +182,12 @@ export function diagnoseEmployeeTasks(employee: Employee, managerName: string, t
       alarms.push({
         id: `${task.id}-blocked`, type: "blocked", severity: "warning", taskId: task.id,
         title: "Задача заблокирована", description: `${task.title}: прогресс ${task.progress}%, требуется решение владельца процесса.`,
+      });
+    }
+    if (task.status === "rejected") {
+      alarms.push({
+        id: `${task.id}-rejected`, type: "rejected", severity: "warning", taskId: task.id,
+        title: "Результат задачи не принят", description: `${task.title}: руководитель вернул результат исполнителю на доработку.`,
       });
     }
   }
@@ -222,7 +228,7 @@ export const employeeMapKindLabels: Record<EmployeeMapNodeKind, string> = {
 export function buildEmployeeWorkMap(profile: EmployeeWorkProfile, tasks: EmployeeWorkTask[], alarms: EmployeeWorkAlarm[]): EmployeeWorkMap {
   const visibleTasks = tasks.slice(0, 3);
   const interactionIds = Array.from(new Set(tasks.flatMap((task) => task.teamIds).filter((id) => id !== profile.team.id))).slice(0, 3);
-  const primaryResult = tasks.find((task) => task.status === "done") ?? tasks[0];
+  const primaryResult = tasks.find((task) => task.status === "done" || task.status === "accepted") ?? tasks[0];
   const nodes: EmployeeMapNode[] = [
     {
       id: "manager", kind: "manager", label: profile.managerName, caption: profile.managerRole, metric: "Ставит и приоритизирует задачи", x: 500, y: 65, status: "active",
@@ -241,7 +247,7 @@ export function buildEmployeeWorkMap(profile: EmployeeWorkProfile, tasks: Employ
 
   visibleTasks.forEach((task, index) => nodes.push({
     id: `task-${task.id}`, kind: "task", label: task.title, caption: `Поставил: ${task.assignedBy}`, metric: task.deadline ? `до ${formatTaskDate(task.deadline)}` : "нет дедлайна", x: 845, y: 145 + index * 155,
-    status: task.status === "done" ? "done" : task.status === "active" ? "active" : "risk", description: `${task.workFunction}. ${task.result}.`,
+    status: task.status === "done" || task.status === "accepted" ? "done" : ["active", "not_started", "in_progress", "review"].includes(task.status) ? "active" : "risk", description: `${task.workFunction}. ${task.result}.`,
   }));
 
   interactionIds.forEach((teamId, index) => {
@@ -255,7 +261,7 @@ export function buildEmployeeWorkMap(profile: EmployeeWorkProfile, tasks: Employ
 
   if (tasks.length > 0) {
     nodes.push(
-      { id: "result", kind: "result", label: primaryResult?.result ?? "Результат ожидается", caption: "Результат работы", metric: `${tasks.filter((task) => task.status === "done").length} завершено`, x: 850, y: 550, status: primaryResult?.status === "done" ? "done" : "queued", description: primaryResult?.result ?? "Результат будет зафиксирован после выполнения задач." },
+      { id: "result", kind: "result", label: primaryResult?.result ?? "Результат ожидается", caption: "Результат работы", metric: `${tasks.filter((task) => task.status === "done" || task.status === "accepted").length} завершено`, x: 850, y: 550, status: primaryResult?.status === "done" || primaryResult?.status === "accepted" ? "done" : "queued", description: primaryResult?.result ?? "Результат будет зафиксирован после выполнения задач." },
       { id: "kpi", kind: "kpi", label: primaryResult?.kpi ?? profile.employee.businessImpact, caption: "Влияние на бизнес", metric: profile.employee.businessImpact, x: 760, y: 65, status: "normal", description: `Работа сотрудника связана с результатом: ${profile.employee.businessImpact}.` },
     );
   }
@@ -272,8 +278,8 @@ export function buildEmployeeWorkMap(profile: EmployeeWorkProfile, tasks: Employ
   profile.functions.forEach((_, index) => edges.push({ from: "employee", to: `function-${index}`, label: index === 0 ? "выполняет" : undefined, tone: "work" }));
   visibleTasks.forEach((task, index) => {
     edges.push({ from: "manager", to: `task-${task.id}`, label: index === 0 ? "поставил" : undefined, tone: task.assignedByIsManager ? "manager" : "risk", dashed: !task.assignedByIsManager });
-    edges.push({ from: `task-${task.id}`, to: "employee", label: task.status === "looped" ? "цикл" : undefined, tone: task.status === "looped" || task.status === "overdue" ? "risk" : "work", dashed: task.status === "looped" });
-    if (nodes.some((node) => node.id === "result")) edges.push({ from: `task-${task.id}`, to: "result", tone: task.status === "done" ? "result" : "work", dashed: task.status !== "done" });
+    edges.push({ from: `task-${task.id}`, to: "employee", label: task.status === "looped" ? "цикл" : undefined, tone: ["looped", "overdue", "blocked", "rejected"].includes(task.status) ? "risk" : "work", dashed: task.status === "looped" });
+    if (nodes.some((node) => node.id === "result")) edges.push({ from: `task-${task.id}`, to: "result", tone: task.status === "done" || task.status === "accepted" ? "result" : "work", dashed: task.status !== "done" && task.status !== "accepted" });
   });
   interactionIds.forEach((teamId, index) => edges.push({ from: "employee", to: `team-${teamId}`, label: index === 0 ? "взаимодействует" : undefined, tone: "interaction" }));
   if (nodes.some((node) => node.id === "result")) edges.push({ from: "result", to: "kpi", label: "влияет", tone: "result" });
