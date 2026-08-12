@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Atom,
-  ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
   BarChart3,
-  BriefcaseBusiness,
   Check,
   ChevronRight,
   CircleAlert,
-  Clock3,
   GitBranch,
   LayoutDashboard,
   Maximize2,
@@ -27,11 +24,15 @@ import {
   Zap,
 } from "lucide-react";
 import {
-  mapKindLabels,
-  processMaps,
-  type ProcessMapMode,
-  type ProcessMapNode,
-} from "./data/processMolecule";
+  buildEmployeeWorkMap,
+  diagnoseEmployeeTasks,
+  employeeMapKindLabels,
+  employeeWorkProfiles,
+  formatTaskDate,
+  type EmployeeMapNode,
+  type EmployeeWorkAlarm,
+  type EmployeeWorkTask,
+} from "./data/employeeWorkMap";
 import {
   employees,
   financeCategories,
@@ -83,9 +84,9 @@ const pageMeta: Record<ViewId, { eyebrow: string; title: string; description: st
     description: "Маршруты, владельцы, ожидание и последствия для других каналов.",
   },
   molecule: {
-    eyebrow: "Molecule process map",
-    title: "Работа департамента как живая система",
-    description: "Переключайте слои и двигайтесь от команды или сотрудника к процессу, ресурсу, результату и KPI.",
+    eyebrow: "Employee work map",
+    title: "Карта работы конкретного сотрудника",
+    description: "Выберите человека, чтобы увидеть его задачи, постановщика, функции, взаимодействия и управленческие алармы.",
   },
   finance: {
     eyebrow: "Маркетинговые расходы",
@@ -607,12 +608,56 @@ function ProcessesScreen() {
 }
 
 function MoleculeScreen() {
-  const [mode, setMode] = useState<ProcessMapMode>("department");
-  const [selectedId, setSelectedId] = useState(processMaps.department.defaultSelectedId);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState("employee-27");
+  const [query, setQuery] = useState("");
+  const [teamFilter, setTeamFilter] = useState("all");
+  const [listFilter, setListFilter] = useState<"all" | "alarms" | "no_tasks" | "loop">("all");
+  const [taskOverrides, setTaskOverrides] = useState<Record<string, EmployeeWorkTask[]>>({});
+  const [selectedNodeId, setSelectedNodeId] = useState("employee");
   const [zoom, setZoom] = useState(1);
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [taskTitle, setTaskTitle] = useState("");
+  const [taskDeadline, setTaskDeadline] = useState("2026-08-19");
+  const [collaborationTeamId, setCollaborationTeamId] = useState("editorial");
   const mapScrollRef = useRef<HTMLDivElement | null>(null);
-  const map = processMaps[mode];
-  const selectedNode = map.nodes.find((node) => node.id === selectedId) ?? map.nodes[0];
+
+  const profile = employeeWorkProfiles.find((item) => item.employee.id === selectedEmployeeId) ?? employeeWorkProfiles[0];
+  const tasks = taskOverrides[profile.employee.id] ?? profile.tasks;
+  const alarms = diagnoseEmployeeTasks(profile.employee, profile.managerName, tasks);
+  const map = useMemo(() => buildEmployeeWorkMap(profile, tasks, alarms), [profile, tasks, alarms]);
+  const selectedNode = map.nodes.find((node) => node.id === selectedNodeId) ?? map.nodes.find((node) => node.id === "employee") ?? map.nodes[0];
+  const selectedTask = selectedNode.kind === "task" ? tasks.find((task) => `task-${task.id}` === selectedNode.id) : undefined;
+
+  function tasksForProfile(item: (typeof employeeWorkProfiles)[number]) {
+    return taskOverrides[item.employee.id] ?? item.tasks;
+  }
+
+  function alarmsForProfile(item: (typeof employeeWorkProfiles)[number]) {
+    return diagnoseEmployeeTasks(item.employee, item.managerName, tasksForProfile(item));
+  }
+
+  const profileStats = useMemo(() => employeeWorkProfiles.map((item) => ({
+    profile: item,
+    tasks: taskOverrides[item.employee.id] ?? item.tasks,
+    alarms: diagnoseEmployeeTasks(item.employee, item.managerName, taskOverrides[item.employee.id] ?? item.tasks),
+  })), [taskOverrides]);
+
+  const visibleProfiles = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase("ru-RU");
+    return profileStats.filter(({ profile: item, alarms: itemAlarms }) => {
+      const matchesSearch = !normalizedQuery || `${item.employee.name} ${item.employee.role} ${item.team.shortTitle}`.toLocaleLowerCase("ru-RU").includes(normalizedQuery);
+      const matchesTeam = teamFilter === "all" || item.team.id === teamFilter;
+      const matchesList = listFilter === "all"
+        || (listFilter === "alarms" && itemAlarms.length > 0)
+        || (listFilter === "no_tasks" && itemAlarms.some((alarm) => alarm.type === "no_tasks"))
+        || (listFilter === "loop" && itemAlarms.some((alarm) => alarm.type === "loop_no_deadline"));
+      return matchesSearch && matchesTeam && matchesList;
+    });
+  }, [listFilter, profileStats, query, teamFilter]);
+
+  const noTaskCount = profileStats.filter(({ alarms: itemAlarms }) => itemAlarms.some((alarm) => alarm.type === "no_tasks")).length;
+  const loopCount = profileStats.filter(({ alarms: itemAlarms }) => itemAlarms.some((alarm) => alarm.type === "loop_no_deadline")).length;
+  const alarmCount = profileStats.filter(({ alarms: itemAlarms }) => itemAlarms.length > 0).length;
 
   useEffect(() => {
     const element = mapScrollRef.current;
@@ -622,134 +667,250 @@ function MoleculeScreen() {
       element.scrollTop = 0;
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [mode, zoom]);
+  }, [selectedEmployeeId, zoom]);
 
-  function selectMode(nextMode: ProcessMapMode) {
-    setMode(nextMode);
-    setSelectedId(processMaps[nextMode].defaultSelectedId);
+  function selectEmployee(employeeId: string) {
+    const nextProfile = employeeWorkProfiles.find((item) => item.employee.id === employeeId);
+    if (!nextProfile) return;
+    setSelectedEmployeeId(employeeId);
+    setSelectedNodeId("employee");
+    setCollaborationTeamId(nextProfile.team.id);
     setZoom(1);
   }
 
+  function openTaskModal() {
+    setTaskTitle("");
+    setTaskDeadline("2026-08-19");
+    setCollaborationTeamId(profile.team.id);
+    setTaskModalOpen(true);
+  }
+
+  function assignTask() {
+    if (!taskTitle.trim() || !taskDeadline) return;
+    const task: EmployeeWorkTask = {
+      id: `${profile.employee.id}-manual-${Date.now()}`,
+      title: taskTitle.trim(),
+      assignedBy: profile.managerName,
+      assignedByRole: profile.managerRole,
+      assignedByIsManager: true,
+      deadline: taskDeadline,
+      status: "active",
+      progress: 0,
+      teamIds: collaborationTeamId === profile.team.id ? [profile.team.id] : [profile.team.id, collaborationTeamId],
+      workFunction: profile.functions[0],
+      result: "Ожидается",
+      kpi: "Будет определен после завершения",
+    };
+    setTaskOverrides((current) => ({ ...current, [profile.employee.id]: [task, ...tasks] }));
+    setSelectedNodeId(`task-${task.id}`);
+    setTaskModalOpen(false);
+  }
+
   return (
-    <div className="screen-stack molecule-screen">
-      <section className="molecule-principle">
-        <div><Atom size={22} /><span>Основная единица MOLECULE</span></div>
-        <div className="molecule-chain">
-          {["Сотрудник", "Функция", "Процесс", "Задача", "Ресурс", "Результат", "KPI"].map((item, index, items) => (
-            <span key={item}><strong>{item}</strong>{index < items.length - 1 && <ArrowRight size={13} />}</span>
-          ))}
+    <div className="screen-stack employee-molecule-screen">
+      <section className="employee-map-principle">
+        <div className="employee-map-principle-copy">
+          <span><Atom size={20} />Персональная молекула работы</span>
+          <h2>Сначала человек — затем его реальная работа</h2>
+          <p>Карта не показывает абстрактный процесс. Она собирается вокруг выбранного сотрудника: кто поставил задачи, что он делает, с кем взаимодействует и где руководителю нужно вмешаться.</p>
         </div>
-        <p>Каждый узел открывает владельца, затраченный ресурс и влияние на результат — именно в логике ТЗ заказчика.</p>
+        <div className="employee-map-health">
+          <div><strong>{noTaskCount}</strong><span>без задач</span></div>
+          <div><strong>{loopCount}</strong><span>зациклено без срока</span></div>
+          <div><strong>{alarmCount}</strong><span>сотрудников с алармами</span></div>
+        </div>
       </section>
 
-      <div className="molecule-mode-tabs" role="tablist" aria-label="Слои карты процессов">
-        <button className={mode === "department" ? "active" : ""} onClick={() => selectMode("department")}><Network size={17} /><span><strong>Департамент</strong><small>12 команд и их вклад</small></span></button>
-        <button className={mode === "fashion" ? "active" : ""} onClick={() => selectMode("fashion")}><BriefcaseBusiness size={17} /><span><strong>Fashion production</strong><small>Полный цикл съемки</small></span></button>
-        <button className={mode === "approval" ? "active" : ""} onClick={() => selectMode("approval")}><Clock3 size={17} /><span><strong>Согласование SMS</strong><small>Факт и целевой маршрут</small></span></button>
+      <div className="employee-map-layout">
+        <aside className="employee-picker" aria-label="Выбор сотрудника">
+          <header><span>Сотрудники</span><strong>{visibleProfiles.length} из {employeeWorkProfiles.length}</strong></header>
+          <label className="employee-picker-search">
+            <Search size={15} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Имя или должность" />
+          </label>
+          <select className="employee-picker-team" value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)} aria-label="Фильтр по отделу">
+            <option value="all">Все отделы</option>
+            {teams.map((team) => <option key={team.id} value={team.id}>{team.shortTitle}</option>)}
+          </select>
+          <div className="employee-picker-filters" aria-label="Фильтр по сигналам">
+            <button className={listFilter === "all" ? "active" : ""} onClick={() => setListFilter("all")}>Все</button>
+            <button className={listFilter === "alarms" ? "active" : ""} onClick={() => setListFilter("alarms")}>Алармы</button>
+            <button className={listFilter === "no_tasks" ? "active" : ""} onClick={() => setListFilter("no_tasks")}>Без задач</button>
+            <button className={listFilter === "loop" ? "active" : ""} onClick={() => setListFilter("loop")}>Цикл</button>
+          </div>
+          <div className="employee-picker-list">
+            {visibleProfiles.map(({ profile: item, tasks: itemTasks, alarms: itemAlarms }) => {
+              const firstAlarm = itemAlarms[0];
+              return (
+                <button
+                  key={item.employee.id}
+                  data-employee-id={item.employee.id}
+                  className={`employee-picker-row ${item.employee.id === selectedEmployeeId ? "selected" : ""}`}
+                  onClick={() => selectEmployee(item.employee.id)}
+                >
+                  <span className="employee-picker-avatar">{item.employee.initials}</span>
+                  <span className="employee-picker-copy">
+                    <strong>{item.employee.name}</strong>
+                    <small>{item.employee.role}</small>
+                    <em>{item.team.shortTitle} · {item.employee.utilization}%</em>
+                  </span>
+                  <span className={`employee-picker-signal ${firstAlarm ? `severity-${firstAlarm.severity}` : "is-clear"}`}>
+                    {firstAlarm?.type === "no_tasks" ? "Нет задач" : firstAlarm?.type === "loop_no_deadline" ? "Цикл" : itemAlarms.length ? `${itemAlarms.length}` : `${itemTasks.length}`}
+                  </span>
+                </button>
+              );
+            })}
+            {visibleProfiles.length === 0 && <div className="employee-picker-empty">Сотрудники по фильтру не найдены.</div>}
+          </div>
+        </aside>
+
+        <main className="employee-workspace">
+          <header className="employee-workspace-header">
+            <div className="employee-workspace-person">
+              <span className="employee-workspace-avatar">{profile.employee.initials}</span>
+              <div><span>{profile.team.shortTitle}</span><h2>{profile.employee.name}</h2><p>{profile.employee.role} · руководитель: {profile.managerName}</p></div>
+            </div>
+            <div className="employee-workspace-actions">
+              <div className={`employee-workspace-alarm ${alarms.length ? "has-alarm" : "is-clear"}`}><CircleAlert size={16} /><span>{alarms.length ? `${alarms.length} аларма` : "Нет алармов"}</span></div>
+              <button className="assign-task-button" onClick={openTaskModal}><Plus size={16} />Поставить задачу</button>
+            </div>
+          </header>
+
+          <div className="employee-map-toolbar">
+            <div><span><i className="legend-manager" />Постановка</span><span><i className="legend-work" />Работа</span><span><i className="legend-interaction" />Взаимодействие</span><span><i className="legend-risk" />Аларм</span></div>
+            <div className="employee-map-zoom" aria-label="Масштаб карты">
+              <button aria-label="Уменьшить" disabled={zoom <= 0.85} onClick={() => setZoom((current) => Math.max(0.85, Number((current - 0.15).toFixed(2))))}><Minus size={15} /></button>
+              <span>{Math.round(zoom * 100)}%</span>
+              <button aria-label="Увеличить" disabled={zoom >= 1.3} onClick={() => setZoom((current) => Math.min(1.3, Number((current + 0.15).toFixed(2))))}><Plus size={15} /></button>
+              <button aria-label="По размеру" onClick={() => setZoom(1)}><Maximize2 size={14} /></button>
+            </div>
+          </div>
+
+          <div className="employee-map-scroll" ref={mapScrollRef}>
+            <div className="employee-map-surface" style={{ width: `${zoom * 100}%`, minWidth: `${900 * zoom}px`, height: `${620 * zoom}px` }}>
+              <svg className="employee-map-edges" viewBox="0 0 1000 620" preserveAspectRatio="none" aria-hidden="true">
+                {map.edges.map((edge) => {
+                  const from = map.nodes.find((node) => node.id === edge.from);
+                  const to = map.nodes.find((node) => node.id === edge.to);
+                  if (!from || !to) return null;
+                  return (
+                    <g key={`${edge.from}-${edge.to}-${edge.label ?? "edge"}`} className={`employee-map-edge employee-map-edge--${edge.tone} ${edge.dashed ? "is-dashed" : ""}`}>
+                      <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} />
+                      <circle cx={to.x} cy={to.y} r="4" />
+                      {edge.label && <text x={(from.x + to.x) / 2} y={(from.y + to.y) / 2 - 8} textAnchor="middle">{edge.label}</text>}
+                    </g>
+                  );
+                })}
+              </svg>
+              {map.nodes.map((node) => (
+                <button
+                  key={node.id}
+                  className={`employee-map-node employee-map-node--${node.kind} status-${node.status} ${selectedNode.id === node.id ? "selected" : ""}`}
+                  style={{ left: `${node.x / 10}%`, top: `${node.y / 6.2}%` }}
+                  onClick={() => setSelectedNodeId(node.id)}
+                  aria-label={`${employeeMapKindLabels[node.kind]}: ${node.label}`}
+                >
+                  <span>{employeeMapKindLabels[node.kind]}</span>
+                  <strong>{node.label}</strong>
+                  <small>{node.metric}</small>
+                  {node.status === "risk" && <i><CircleAlert size={12} /></i>}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <EmployeeNodeInspector node={selectedNode} task={selectedTask} profile={profile} alarms={alarms} taskCount={tasks.length} />
+
+          <div className="employee-work-lower">
+            <section className="work-alarm-panel">
+              <header><div><span>Автодиагностика</span><h3>Алармы руководителю</h3></div><em className={alarms.length ? "has-alarm" : "is-clear"}>{alarms.length || "OK"}</em></header>
+              {alarms.length === 0 ? (
+                <div className="work-alarm-clear"><Check size={18} /><div><strong>Критичных отклонений нет</strong><p>Есть задачи, постановщик и дедлайны определены.</p></div></div>
+              ) : (
+                <div className="work-alarm-list">
+                  {alarms.map((alarm) => (
+                    <button key={alarm.id} className={`work-alarm-row severity-${alarm.severity}`} onClick={() => setSelectedNodeId(alarm.taskId ? `task-${alarm.taskId}` : "alarm")}>
+                      <CircleAlert size={17} /><span><strong>{alarm.title}</strong><small>{alarm.description}</small></span><em>{alarmSeverityLabel(alarm.severity)}</em>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="employee-task-register">
+              <header><div><span>Рабочий план</span><h3>Задачи сотрудника</h3></div><strong>{tasks.length}</strong></header>
+              {tasks.length === 0 ? (
+                <div className="employee-task-empty"><CircleAlert size={18} /><p>Задач нет. Руководителю нужно сформировать рабочий план.</p><button onClick={openTaskModal}><Plus size={14} />Поставить первую задачу</button></div>
+              ) : (
+                <div className="employee-task-list">
+                  {tasks.map((task) => (
+                    <button key={task.id} className={`employee-task-row status-${task.status}`} onClick={() => setSelectedNodeId(`task-${task.id}`)}>
+                      <span className="employee-task-status"><i />{taskStatusLabel(task.status)}</span>
+                      <strong>{task.title}</strong>
+                      <small>Поставил: {task.assignedBy}{task.assignedByIsManager ? " · руководитель" : " · не подтверждено руководителем"}</small>
+                      <div><em>{task.deadline ? `до ${formatTaskDate(task.deadline)}` : "Нет дедлайна"}</em><span>{task.progress}%</span></div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        </main>
       </div>
 
-      <section className="molecule-workspace">
-        <header className="molecule-workspace-header">
-          <div><span>{map.rootLabel}</span><h2>{map.title}</h2><p>{map.subtitle}</p></div>
-          <div className="molecule-zoom" aria-label="Масштаб карты">
-            <button aria-label="Уменьшить" disabled={zoom <= 0.85} onClick={() => setZoom((current) => Math.max(0.85, Number((current - 0.15).toFixed(2))))}><Minus size={16} /></button>
-            <span>{Math.round(zoom * 100)}%</span>
-            <button aria-label="Увеличить" disabled={zoom >= 1.3} onClick={() => setZoom((current) => Math.min(1.3, Number((current + 0.15).toFixed(2))))}><Plus size={16} /></button>
-            <button aria-label="По размеру" onClick={() => setZoom(1)}><Maximize2 size={15} /></button>
-          </div>
-        </header>
-
-        <div className="molecule-layout">
-          <div className="molecule-canvas-panel">
-            <div className="molecule-scroll" ref={mapScrollRef}>
-              <div
-                className="molecule-surface"
-                style={{ width: `${zoom * 100}%`, minWidth: `${860 * zoom}px`, height: `${620 * zoom}px` }}
-              >
-                <svg className="molecule-edges" viewBox="0 0 1000 620" preserveAspectRatio="none" aria-hidden="true">
-                  {map.edges.map((edge) => {
-                    const from = map.nodes.find((node) => node.id === edge.from);
-                    const to = map.nodes.find((node) => node.id === edge.to);
-                    if (!from || !to) return null;
-                    const midX = (from.x + to.x) / 2;
-                    const midY = (from.y + to.y) / 2;
-                    return (
-                      <g key={`${edge.from}-${edge.to}`} className={`map-edge map-edge--${edge.tone} ${edge.dashed ? "is-dashed" : ""}`}>
-                        <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} />
-                        <circle cx={to.x} cy={to.y} r="3.5" />
-                        {edge.label && <text x={midX} y={midY - 7} textAnchor="middle">{edge.label}</text>}
-                      </g>
-                    );
-                  })}
-                </svg>
-
-                {map.nodes.map((node) => (
-                  <button
-                    key={node.id}
-                    className={`molecule-node molecule-node--${node.kind} status-${node.status} ${selectedNode.id === node.id ? "selected" : ""}`}
-                    style={{ left: `${node.x / 10}%`, top: `${node.y / 6.2}%` }}
-                    onClick={() => setSelectedId(node.id)}
-                    aria-label={`${mapKindLabels[node.kind]}: ${node.label}`}
-                  >
-                    <span className="molecule-node-kind">{mapKindLabels[node.kind]}</span>
-                    <strong>{node.label}</strong>
-                    <small>{node.metric ?? node.caption}</small>
-                    {node.status === "risk" || node.status === "waiting" ? <i><CircleAlert size={12} /></i> : null}
-                  </button>
-                ))}
-              </div>
+      {taskModalOpen && (
+        <div className="task-assignment-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setTaskModalOpen(false)}>
+          <form className="task-assignment-modal" onSubmit={(event) => { event.preventDefault(); assignTask(); }} aria-modal="true" role="dialog" aria-labelledby="task-modal-title">
+            <header><div><span>Новая задача</span><h2 id="task-modal-title">Поставить задачу сотруднику</h2></div><button type="button" aria-label="Закрыть" onClick={() => setTaskModalOpen(false)}><X size={18} /></button></header>
+            <div className="task-assignment-person"><span>{profile.employee.initials}</span><div><strong>{profile.employee.name}</strong><small>{profile.employee.role}</small></div></div>
+            <div className="task-assignment-manager"><Check size={16} /><p><span>Постановщик</span><strong>{profile.managerName} · {profile.managerRole}</strong></p></div>
+            <label><span>Что нужно сделать</span><input autoFocus value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} placeholder="Например, подготовить отчет кампании" /></label>
+            <div className="task-assignment-fields">
+              <label><span>Дедлайн</span><input type="date" min="2026-08-12" value={taskDeadline} onChange={(event) => setTaskDeadline(event.target.value)} /></label>
+              <label><span>Взаимодействие</span><select value={collaborationTeamId} onChange={(event) => setCollaborationTeamId(event.target.value)}>{teams.map((team) => <option key={team.id} value={team.id}>{team.shortTitle}</option>)}</select></label>
             </div>
-            <div className="molecule-legend">
-              <span><i className="legend-primary" />Рабочая связь</span>
-              <span><i className="legend-risk" />Проблема / ожидание</span>
-              <span><i className="legend-positive" />Целевой маршрут</span>
-              <small>Нажмите на любой узел</small>
-            </div>
-          </div>
-
-          <MapNodeInspector node={selectedNode} />
+            <p className="task-assignment-rule"><CircleAlert size={15} />MOLECULE требует постановщика-руководителя и дедлайн. Иначе задача попадет в управленческие алармы.</p>
+            <footer><button type="button" onClick={() => setTaskModalOpen(false)}>Отмена</button><button type="submit" disabled={!taskTitle.trim() || !taskDeadline}><Plus size={15} />Поставить задачу</button></footer>
+          </form>
         </div>
-      </section>
+      )}
     </div>
   );
 }
 
-function MapNodeInspector({ node }: { node: ProcessMapNode }) {
-  const signal = node.status === "risk" || node.status === "waiting";
+function EmployeeNodeInspector({ node, task, profile, alarms, taskCount }: { node: EmployeeMapNode; task?: EmployeeWorkTask; profile: (typeof employeeWorkProfiles)[number]; alarms: EmployeeWorkAlarm[]; taskCount: number }) {
   return (
-    <aside className="map-inspector">
-      <header>
-        <span>{mapKindLabels[node.kind]}</span>
-        <em className={`status-${node.status}`}>{mapNodeStatusLabel(node.status)}</em>
-      </header>
+    <aside className={`employee-node-inspector status-${node.status}`}>
+      <div><span>{employeeMapKindLabels[node.kind]}</span><em>{employeeNodeStatusLabel(node.status)}</em></div>
       <h3>{node.label}</h3>
       <p>{node.description}</p>
-      <div className="map-inspector-owner"><span>Владелец</span><strong>{node.owner}</strong></div>
-      <dl>
-        <div><dt>Затраченный ресурс</dt><dd>{node.resource}</dd></div>
-        <div><dt>Фактический результат</dt><dd>{node.result}</dd></div>
-        <div><dt>KPI / влияние</dt><dd>{node.kpi}</dd></div>
-      </dl>
-      <section>
-        <span>Связь с бизнес-результатом</span>
-        <div className="map-inspector-chain">
-          {node.chain.map((item, index) => <span key={`${node.id}-${item}`}>{index > 0 && <ArrowDownRight size={13} />}<strong>{item}</strong></span>)}
-        </div>
-      </section>
-      {signal && <div className="map-inspector-signal"><Sparkles size={16} /><p>MOLECULE выделяет этот узел как проверяемую возможность оптимизации, а не как готовое кадровое решение.</p></div>}
+      {task ? (
+        <dl>
+          <div><dt>Поставил</dt><dd>{task.assignedBy}<small>{task.assignedByIsManager ? "Руководитель подтвердил приоритет" : "Нет подтверждения руководителя"}</small></dd></div>
+          <div><dt>Дедлайн</dt><dd>{formatTaskDate(task.deadline)}<small>{task.status === "looped" ? task.loopPath : `${task.progress}% выполнено`}</small></dd></div>
+          <div><dt>Взаимодействует</dt><dd>{task.teamIds.map((id) => teamById(id)?.shortTitle).filter(Boolean).join(" · ")}</dd></div>
+          <div><dt>Результат / KPI</dt><dd>{task.result}<small>{task.kpi}</small></dd></div>
+        </dl>
+      ) : (
+        <dl>
+          <div><dt>Руководитель</dt><dd>{profile.managerName}<small>{profile.managerRole}</small></dd></div>
+          <div><dt>Рабочий срез</dt><dd>{taskCount} задач в плане<small>{alarms.length ? `${alarms.length} отклонения требуют внимания` : "Отклонений не найдено"}</small></dd></div>
+        </dl>
+      )}
     </aside>
   );
 }
 
-function mapNodeStatusLabel(status: ProcessMapNode["status"]) {
-  return {
-    normal: "В норме",
-    active: "В работе",
-    done: "Завершено",
-    waiting: "Ожидает",
-    queued: "В очереди",
-    risk: "Сигнал",
-  }[status];
+function employeeNodeStatusLabel(status: EmployeeMapNode["status"]) {
+  return { normal: "Связь", active: "В работе", done: "Завершено", queued: "Ожидается", risk: "Аларм" }[status];
+}
+
+function taskStatusLabel(status: EmployeeWorkTask["status"]) {
+  return { active: "В работе", blocked: "Блок", done: "Готово", looped: "Цикл", overdue: "Просрочено" }[status];
+}
+
+function alarmSeverityLabel(severity: EmployeeWorkAlarm["severity"]) {
+  return { critical: "Критично", warning: "Внимание", info: "Инфо" }[severity];
 }
 
 function stepStatusLabel(status: Process["steps"][number]["status"]) {
