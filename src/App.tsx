@@ -1,27 +1,27 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  Activity,
   Atom,
-  ArrowRight,
-  ArrowUpRight,
   BarChart3,
+  BriefcaseBusiness,
   Check,
   ChevronRight,
   CircleAlert,
+  Clock3,
+  Focus,
   GitBranch,
-  LayoutDashboard,
+  ListTodo,
   Maximize2,
-  Menu,
   Minus,
   Network,
   Plus,
   Search,
   Sparkles,
   Target,
-  TrendingUp,
-  Users,
+  UserRound,
+  UsersRound,
   WalletCards,
   X,
-  Zap,
 } from "lucide-react";
 import {
   buildEmployeeWorkMap,
@@ -31,614 +31,51 @@ import {
   formatTaskDate,
   type EmployeeMapNode,
   type EmployeeWorkAlarm,
+  type EmployeeWorkProfile,
   type EmployeeWorkTask,
 } from "./data/employeeWorkMap";
-import {
-  employees,
-  financeCategories,
-  formatMoney,
-  opportunities,
-  processes,
-  teamById,
-  teams,
-  type Direction,
-  type Employee,
-  type EmployeeStatus,
-  type Opportunity,
-  type Process,
-  type Team,
-} from "./data/tsumPrototype";
+import { teamById, teams, type Team } from "./data/tsumPrototype";
 
-type ViewId = "overview" | "teams" | "people" | "processes" | "molecule" | "finance" | "opportunities";
-type PeopleFilter = "all" | EmployeeStatus | "critical";
+type WorkspaceWindow = "employees" | "analytics" | "optimization" | "tasks" | "cost" | "process" | "node" | "create-task" | null;
 
-const navItems: Array<{ id: ViewId; label: string; mobileLabel: string; icon: typeof LayoutDashboard }> = [
-  { id: "overview", label: "Обзор", mobileLabel: "Обзор", icon: LayoutDashboard },
-  { id: "teams", label: "Команды", mobileLabel: "Команды", icon: Network },
-  { id: "people", label: "88 сотрудников", mobileLabel: "Люди", icon: Users },
-  { id: "processes", label: "Процессы", mobileLabel: "Процессы", icon: GitBranch },
-  { id: "molecule", label: "Молекула процессов", mobileLabel: "Карта", icon: Atom },
-  { id: "finance", label: "Расходы", mobileLabel: "Расходы", icon: WalletCards },
-  { id: "opportunities", label: "Оптимизация", mobileLabel: "Шансы", icon: Sparkles },
-];
-
-const pageMeta: Record<ViewId, { eyebrow: string; title: string; description: string }> = {
-  overview: {
-    eyebrow: "Marketing department",
-    title: "Что сейчас происходит внутри маркетинга?",
-    description: "Живая управленческая карта людей, функций, процессов, расходов и результата.",
-  },
-  teams: {
-    eyebrow: "12 команд",
-    title: "Структура и эффективность отделов",
-    description: "Сравните загрузку, скорость, бюджет и вклад каждой команды.",
-  },
-  people: {
-    eyebrow: "88 сотрудников",
-    title: "Кто чем занят и где теряется емкость",
-    description: "Фактическая загрузка, функции, зависимости и связь с бизнес-результатом.",
-  },
-  processes: {
-    eyebrow: "Сквозные процессы",
-    title: "Как работа движется между командами",
-    description: "Маршруты, владельцы, ожидание и последствия для других каналов.",
-  },
-  molecule: {
-    eyebrow: "Контроль работы",
-    title: "Работа сотрудника",
-    description: "Выберите человека. Система сразу покажет главное отклонение и подскажет следующее действие.",
-  },
-  finance: {
-    eyebrow: "Маркетинговые расходы",
-    title: "Сколько, на что и с каким результатом",
-    description: "Бюджет, прогноз, отдача и затраты, которые требуют управленческого внимания.",
-  },
-  opportunities: {
-    eyebrow: "8 возможностей",
-    title: "Где система видит потенциал оптимизации",
-    description: "Не готовое кадровое решение, а проверяемые гипотезы с фактами и ожидаемым эффектом.",
-  },
+type OpportunityCard = {
+  id: string;
+  title: string;
+  evidence: string;
+  effect: string;
+  action: string;
+  tone: "critical" | "warning" | "positive";
 };
 
-const kpis = [
-  { value: "88", label: "сотрудников", note: "в 12 командах", tone: "ink", action: "people" as const },
-  { value: "68%", label: "средняя загрузка", note: "−4 п.п. к плану", tone: "neutral", action: "people" as const },
-  { value: "17", label: "загружены < 50%", note: "3,6 FTE емкости", tone: "warning", action: "underloaded" as const },
-  { value: "11", label: "перегружены", note: "риск выгорания", tone: "danger", action: "overloaded" as const },
-  { value: "14", label: "дублей функций", note: "между 7 командами", tone: "warning", action: "duplicates" as const },
-  { value: "9", label: "узких мест", note: "в активных процессах", tone: "danger", action: "processes" as const },
-  { value: "23", label: "ждут согласования", note: "в среднем 19 часов", tone: "neutral", action: "processes" as const },
-  { value: "6", label: "задач у топ-менеджмента", note: "операционный уровень", tone: "danger", action: "sms" as const },
-  { value: "8", label: "зон оптимизации", note: "₽26,8 млн потенциала", tone: "accent", action: "opportunities" as const },
-];
+const surfaceWidth = 1160;
+const surfaceHeight = 640;
 
 function App() {
-  const [view, setView] = useState<ViewId>("overview");
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [peopleFilter, setPeopleFilter] = useState<PeopleFilter>("all");
-  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
-  const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>(null);
-
-  const selectedTeam = selectedTeamId ? teamById(selectedTeamId) ?? null : null;
-  const selectedEmployee = selectedEmployeeId ? employees.find((employee) => employee.id === selectedEmployeeId) ?? null : null;
-  const selectedOpportunity = selectedOpportunityId ? opportunities.find((item) => item.id === selectedOpportunityId) ?? null : null;
-
-  function navigate(next: ViewId) {
-    setView(next);
-    setMobileMenuOpen(false);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  function openTeam(id: string) {
-    setSelectedEmployeeId(null);
-    setSelectedOpportunityId(null);
-    setSelectedTeamId(id);
-  }
-
-  function openEmployee(id: string) {
-    setSelectedTeamId(null);
-    setSelectedOpportunityId(null);
-    setSelectedEmployeeId(id);
-  }
-
-  function openOpportunity(id: string) {
-    setSelectedTeamId(null);
-    setSelectedEmployeeId(null);
-    setSelectedOpportunityId(id);
-  }
-
-  function closeDetail() {
-    setSelectedTeamId(null);
-    setSelectedEmployeeId(null);
-    setSelectedOpportunityId(null);
-  }
-
-  function handleKpiAction(action: (typeof kpis)[number]["action"]) {
-    if (action === "underloaded" || action === "overloaded") {
-      setPeopleFilter(action);
-      navigate("people");
-      return;
-    }
-    if (action === "duplicates") {
-      navigate("opportunities");
-      openOpportunity("duplicates");
-      return;
-    }
-    if (action === "sms") {
-      navigate("processes");
-      return;
-    }
-    navigate(action);
-  }
-
-  return (
-    <div className="app-shell">
-      <DesktopSidebar view={view} onNavigate={navigate} />
-
-      {mobileMenuOpen && (
-        <button className="mobile-scrim" aria-label="Закрыть меню" onClick={() => setMobileMenuOpen(false)} />
-      )}
-
-      <main className="main-shell">
-        <Topbar onOpenMenu={() => setMobileMenuOpen(true)} />
-
-        <div className="page-wrap">
-          <PageHeader view={view} />
-
-          {view === "overview" && (
-            <OverviewScreen
-              onKpiAction={handleKpiAction}
-              onNavigate={navigate}
-              onOpenTeam={openTeam}
-              onOpenOpportunity={openOpportunity}
-            />
-          )}
-          {view === "teams" && <TeamsScreen onOpenTeam={openTeam} />}
-          {view === "people" && (
-            <PeopleScreen filter={peopleFilter} onFilter={setPeopleFilter} onOpenEmployee={openEmployee} />
-          )}
-          {view === "processes" && <ProcessesScreen />}
-          {view === "molecule" && <MoleculeScreen />}
-          {view === "finance" && <FinanceScreen onOpenTeam={openTeam} onOpenOpportunity={openOpportunity} />}
-          {view === "opportunities" && <OpportunitiesScreen onOpenOpportunity={openOpportunity} />}
-
-          <footer className="prototype-footer">
-            <span>MOLECULE × TSUM MARKETING</span>
-            <p>Все данные и оргструктура демонстрационные. Система показывает факты и возможности, решение принимает руководитель.</p>
-          </footer>
-        </div>
-      </main>
-
-      <MobileNavigation view={view} onNavigate={navigate} />
-
-      {mobileMenuOpen && (
-        <div className="mobile-menu-sheet">
-          <div className="brand-lockup brand-lockup--mobile">
-            <strong>ЦУМ</strong><i /> <span>MOLECULE</span>
-          </div>
-          <button className="icon-button" aria-label="Закрыть меню" onClick={() => setMobileMenuOpen(false)}><X size={20} /></button>
-          <nav>
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button key={item.id} className={view === item.id ? "active" : ""} onClick={() => navigate(item.id)}>
-                  <Icon size={19} /><span>{item.label}</span><ChevronRight size={17} />
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-      )}
-
-      {(selectedTeam || selectedEmployee || selectedOpportunity) && (
-        <>
-          <button className="detail-scrim" aria-label="Закрыть детали" onClick={closeDetail} />
-          <aside className="detail-drawer">
-            <button className="drawer-close" aria-label="Закрыть" onClick={closeDetail}><X size={20} /></button>
-            {selectedTeam && <TeamDetail team={selectedTeam} onOpenEmployee={openEmployee} />}
-            {selectedEmployee && <EmployeeDetail employee={selectedEmployee} onOpenTeam={openTeam} />}
-            {selectedOpportunity && <OpportunityDetail opportunity={selectedOpportunity} />}
-          </aside>
-        </>
-      )}
-    </div>
-  );
-}
-
-function DesktopSidebar({ view, onNavigate }: { view: ViewId; onNavigate: (view: ViewId) => void }) {
-  return (
-    <aside className="desktop-sidebar">
-      <div className="brand-lockup">
-        <strong>ЦУМ</strong><i /><span>MOLECULE</span>
-      </div>
-      <div className="sidebar-context">
-        <span>Рабочее пространство</span>
-        <strong>Marketing</strong>
-        <small>Демо-прототип · август 2026</small>
-      </div>
-      <nav>
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <button key={item.id} className={view === item.id ? "active" : ""} onClick={() => onNavigate(item.id)}>
-              <Icon size={18} /><span>{item.label}</span>
-              {item.id === "opportunities" && <em>8</em>}
-            </button>
-          );
-        })}
-      </nav>
-      <div className="sidebar-signal">
-        <span className="signal-dot" />
-        <div><strong>Данные обновлены</strong><small>сегодня в 09:42</small></div>
-      </div>
-      <div className="sidebar-profile">
-        <span>ВС</span>
-        <div><strong>Виктория Соколова</strong><small>Директор по маркетингу</small></div>
-      </div>
-    </aside>
-  );
-}
-
-function Topbar({ onOpenMenu }: { onOpenMenu: () => void }) {
-  return (
-    <header className="topbar">
-      <button className="mobile-menu-button" aria-label="Открыть меню" onClick={onOpenMenu}><Menu size={20} /></button>
-      <div className="topbar-search"><Search size={17} /><span>Найти сотрудника, функцию или процесс</span><kbd>⌘ K</kbd></div>
-      <div className="topbar-actions">
-        <span className="demo-badge">DEMO</span>
-        <button className="period-button">Август 2026 <ChevronRight size={15} /></button>
-      </div>
-    </header>
-  );
-}
-
-function PageHeader({ view }: { view: ViewId }) {
-  const meta = pageMeta[view];
-  return (
-    <header className="page-header">
-      <span>{meta.eyebrow}</span>
-      <h1>{meta.title}</h1>
-      <p>{meta.description}</p>
-    </header>
-  );
-}
-
-type KpiAction = (typeof kpis)[number]["action"];
-
-function OverviewScreen({
-  onKpiAction,
-  onNavigate,
-  onOpenTeam,
-  onOpenOpportunity,
-}: {
-  onKpiAction: (action: KpiAction) => void;
-  onNavigate: (view: ViewId) => void;
-  onOpenTeam: (id: string) => void;
-  onOpenOpportunity: (id: string) => void;
-}) {
-  return (
-    <div className="screen-stack">
-      <section className="executive-hero">
-        <div className="executive-copy">
-          <span className="hero-kicker"><Sparkles size={14} /> Executive pulse</span>
-          <h2>Емкость есть, но она распределена не там, где возникает нагрузка.</h2>
-          <p>Редакция и in-store недозагружены, production и управление работают выше устойчивого уровня. Основной резерв — не сокращение, а перераспределение функций и более короткие маршруты решений.</p>
-          <button onClick={() => { onNavigate("opportunities"); onOpenOpportunity("capacity"); }}>
-            Посмотреть объяснение <ArrowRight size={17} />
-          </button>
-        </div>
-        <div className="hero-score">
-          <span>Индекс операционной эффективности</span>
-          <strong>72</strong>
-          <div><i style={{ width: "72%" }} /></div>
-          <small><ArrowUpRight size={14} /> +3 пункта к июлю</small>
-        </div>
-      </section>
-
-      <section className="kpi-grid" aria-label="Ключевые показатели">
-        {kpis.map((kpi) => (
-          <button key={kpi.label} className={`kpi-card kpi-card--${kpi.tone}`} onClick={() => onKpiAction(kpi.action)}>
-            <strong>{kpi.value}</strong>
-            <span>{kpi.label}</span>
-            <small>{kpi.note}</small>
-            <ArrowUpRight className="kpi-arrow" size={16} />
-          </button>
-        ))}
-      </section>
-
-      <section className="overview-columns">
-        <div className="section-card attention-card">
-          <SectionHeading eyebrow="Требует решения" title="Три сигнала с наибольшим влиянием" action="Все процессы" onAction={() => onNavigate("processes")} />
-          <div className="attention-list">
-            <button onClick={() => onNavigate("processes")}>
-              <span className="attention-index">01</span>
-              <div><strong>31 час задача ждет решения генерального директора</strong><small>SMS private sale · можно решить на уровне маркетинга</small></div>
-              <ChevronRight size={18} />
-            </button>
-            <button onClick={() => { onNavigate("opportunities"); onOpenOpportunity("capacity"); }}>
-              <span className="attention-index">02</span>
-              <div><strong>Перекос загрузки эквивалентен 3,6 полной позиции</strong><small>17 сотрудников &lt; 50% · 11 сотрудников &gt; 90%</small></div>
-              <ChevronRight size={18} />
-            </button>
-            <button onClick={() => { onNavigate("opportunities"); onOpenOpportunity("agencies"); }}>
-              <span className="attention-index">03</span>
-              <div><strong>7 контрактов пересекаются со штатными функциями</strong><small>Потенциал уточнения расходов · ₽11,4 млн в год</small></div>
-              <ChevronRight size={18} />
-            </button>
-          </div>
-        </div>
-
-        <div className="section-card opportunity-preview">
-          <SectionHeading eyebrow="Optimization opportunity" title="Ближайший быстрый эффект" />
-          <button className="opportunity-feature" onClick={() => onOpenOpportunity("approval")}>
-            <span>01</span>
-            <h3>Матрица решений для операционных коммуникаций</h3>
-            <p>Освободить до 620 часов руководителей в год без изменения численности.</p>
-            <div><strong>94%</strong><small>уверенность модели</small><ArrowRight size={18} /></div>
-          </button>
-        </div>
-      </section>
-
-      <section className="org-section">
-        <SectionHeading eyebrow="Живая карта департамента" title="12 команд · 88 сотрудников" action="Сравнить команды" onAction={() => onNavigate("teams")} />
-        <div className="direction-grid">
-          <DirectionColumn direction="online" onOpenTeam={onOpenTeam} />
-          <DirectionColumn direction="offline" onOpenTeam={onOpenTeam} />
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function SectionHeading({ eyebrow, title, action, onAction }: { eyebrow: string; title: string; action?: string; onAction?: () => void }) {
-  return (
-    <header className="section-heading">
-      <div><span>{eyebrow}</span><h2>{title}</h2></div>
-      {action && onAction && <button onClick={onAction}>{action}<ArrowRight size={16} /></button>}
-    </header>
-  );
-}
-
-function DirectionColumn({ direction, onOpenTeam }: { direction: Direction; onOpenTeam: (id: string) => void }) {
-  const directionTeams = teams.filter((team) => team.direction === direction);
-  const count = directionTeams.reduce((sum, team) => sum + team.count, 0);
-  const avgLoad = Math.round(directionTeams.reduce((sum, team) => sum + team.utilization * team.count, 0) / count);
-  return (
-    <div className="direction-column">
-      <header>
-        <div><span>{direction === "online" ? "01" : "02"}</span><strong>{direction === "online" ? "Онлайн-маркетинг" : "Офлайн, бренды и события"}</strong></div>
-        <small>{count} сотрудников · {avgLoad}% загрузка</small>
-      </header>
-      <div className="team-mini-grid">
-        {directionTeams.map((team) => (
-          <button key={team.id} className={team.utilization > 85 || team.utilization < 58 ? "has-signal" : ""} onClick={() => onOpenTeam(team.id)}>
-            <span className="team-mini-number">{String(teams.indexOf(team) + 1).padStart(2, "0")}</span>
-            <div><strong>{team.shortTitle}</strong><small>{team.count} чел. · {team.processes} процессов</small></div>
-            <div className="team-mini-load"><span>{team.utilization}%</span><i><b style={{ width: `${Math.min(team.utilization, 100)}%` }} /></i></div>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function TeamsScreen({ onOpenTeam }: { onOpenTeam: (id: string) => void }) {
-  const [direction, setDirection] = useState<"all" | Direction>("all");
-  const visibleTeams = direction === "all" ? teams : teams.filter((team) => team.direction === direction);
-  return (
-    <div className="screen-stack">
-      <section className="summary-strip">
-        <SummaryMetric label="Общий бюджет" value="₽39,4 млн / мес." note="+6% к плану" />
-        <SummaryMetric label="Активные процессы" value="149" note="23 ожидают решения" />
-        <SummaryMetric label="Выполнение в срок" value="79%" note="цель 90%" />
-        <SummaryMetric label="Вклад с понятным KPI" value="74%" note="+8 п.п. за квартал" />
-      </section>
-      <section className="section-card teams-board">
-        <div className="board-toolbar">
-          <div className="segmented-control">
-            <button className={direction === "all" ? "active" : ""} onClick={() => setDirection("all")}>Все</button>
-            <button className={direction === "online" ? "active" : ""} onClick={() => setDirection("online")}>Онлайн</button>
-            <button className={direction === "offline" ? "active" : ""} onClick={() => setDirection("offline")}>Офлайн</button>
-          </div>
-          <span>{visibleTeams.length} команд</span>
-        </div>
-        <div className="team-card-grid">
-          {visibleTeams.map((team, index) => <TeamCard key={team.id} team={team} number={teams.indexOf(team) + 1 || index + 1} onOpen={() => onOpenTeam(team.id)} />)}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function SummaryMetric({ label, value, note }: { label: string; value: string; note: string }) {
-  return <div><span>{label}</span><strong>{value}</strong><small>{note}</small></div>;
-}
-
-function TeamCard({ team, number, onOpen }: { team: Team; number: number; onOpen: () => void }) {
-  const loadTone = team.utilization > 85 ? "high" : team.utilization < 58 ? "low" : "normal";
-  return (
-    <button className="team-card" onClick={onOpen}>
-      <header><span>{String(number).padStart(2, "0")}</span><em>{team.direction === "online" ? "Online" : "Offline"}</em></header>
-      <h3>{team.title}</h3>
-      <p>{team.functions.slice(0, 3).join(" · ")}</p>
-      <div className="team-card-primary">
-        <div><strong>{team.count}</strong><span>сотрудников</span></div>
-        <div><strong className={`load-${loadTone}`}>{team.utilization}%</strong><span>загрузка</span></div>
-      </div>
-      <div className="team-progress"><i><b style={{ width: `${Math.min(team.utilization, 100)}%` }} /></i><span>{team.onTime}% в срок</span></div>
-      <dl>
-        <div><dt>Процессы</dt><dd>{team.processes}</dd></div>
-        <div><dt>Задачи</dt><dd>{team.tasks}</dd></div>
-        <div><dt>Бюджет</dt><dd>₽{formatMoney(team.budget)} млн</dd></div>
-        <div><dt>Проблемы</dt><dd className={team.issues > 2 ? "metric-alert" : ""}>{team.issues}</dd></div>
-      </dl>
-      <footer><span>Вклад в результат</span><strong>{team.impact}%</strong><ArrowUpRight size={17} /></footer>
-    </button>
-  );
-}
-
-function PeopleScreen({ filter, onFilter, onOpenEmployee }: { filter: PeopleFilter; onFilter: (filter: PeopleFilter) => void; onOpenEmployee: (id: string) => void }) {
-  const [query, setQuery] = useState("");
-  const [teamFilter, setTeamFilter] = useState("all");
-  const visibleEmployees = useMemo(() => employees.filter((employee) => {
-    const matchesFilter = filter === "all" || (filter === "critical" ? employee.dependencies >= 8 : employee.status === filter);
-    const matchesTeam = teamFilter === "all" || employee.teamId === teamFilter;
-    const haystack = `${employee.name} ${employee.role} ${teamById(employee.teamId)?.title}`.toLowerCase();
-    return matchesFilter && matchesTeam && haystack.includes(query.toLowerCase());
-  }), [filter, query, teamFilter]);
-
-  return (
-    <div className="screen-stack">
-      <section className="people-pulse">
-        <div><span>Устойчивая загрузка</span><strong>60 сотрудников</strong><small>68% департамента</small></div>
-        <div className="pulse-visual" aria-label="Распределение загрузки">
-          <span className="pulse-low" style={{ width: "19%" }}>17</span>
-          <span className="pulse-normal" style={{ width: "68%" }}>60</span>
-          <span className="pulse-high" style={{ width: "13%" }}>11</span>
-        </div>
-        <div className="pulse-legend"><span><i className="low" />Ниже 50%</span><span><i className="normal" />50–90%</span><span><i className="high" />Выше 90%</span></div>
-      </section>
-
-      <section className="section-card people-board">
-        <div className="people-toolbar">
-          <label className="search-field"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Имя, роль или команда" /></label>
-          <select value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)} aria-label="Фильтр по команде">
-            <option value="all">Все команды</option>
-            {teams.map((team) => <option key={team.id} value={team.id}>{team.shortTitle}</option>)}
-          </select>
-        </div>
-        <div className="people-filters">
-          <FilterButton active={filter === "all"} onClick={() => onFilter("all")} label="Все" count={88} />
-          <FilterButton active={filter === "underloaded"} onClick={() => onFilter("underloaded")} label="Недозагружены" count={17} />
-          <FilterButton active={filter === "overloaded"} onClick={() => onFilter("overloaded")} label="Перегружены" count={11} />
-          <FilterButton active={filter === "critical"} onClick={() => onFilter("critical")} label="Критические зависимости" count={employees.filter((employee) => employee.dependencies >= 8).length} />
-        </div>
-        <div className="people-result-count">Показано {visibleEmployees.length} из 88</div>
-        <div className="employee-table">
-          <div className="employee-table-head"><span>Сотрудник</span><span>Команда</span><span>Стоимость / мес.</span><span>Работа</span><span>Загрузка</span><span>В срок</span><span>Зависимости</span></div>
-          {visibleEmployees.map((employee) => <EmployeeRow key={employee.id} employee={employee} onOpen={() => onOpenEmployee(employee.id)} />)}
-        </div>
-        {visibleEmployees.length === 0 && <div className="empty-result"><Search size={22} /><strong>Ничего не найдено</strong><span>Измените запрос или фильтр.</span></div>}
-      </section>
-    </div>
-  );
-}
-
-function FilterButton({ active, onClick, label, count }: { active: boolean; onClick: () => void; label: string; count: number }) {
-  return <button className={active ? "active" : ""} onClick={onClick}><span>{label}</span><em>{count}</em></button>;
-}
-
-function EmployeeRow({ employee, onOpen }: { employee: Employee; onOpen: () => void }) {
-  const team = teamById(employee.teamId);
-  return (
-    <button className="employee-row" onClick={onOpen}>
-      <span className="employee-identity"><i>{employee.initials}</i><span><strong>{employee.name}</strong><small>{employee.role}</small></span></span>
-      <span className="employee-team"><strong>{team?.shortTitle}</strong><small>{employee.businessImpact}</small></span>
-      <span className="employee-cost">₽{employee.cost} тыс.</span>
-      <span className="employee-work"><strong>{employee.processes}</strong><small>процессов · {employee.tasks} задач</small></span>
-      <span className={`employee-load status-${employee.status}`}><strong>{employee.utilization}%</strong><i><b style={{ width: `${Math.min(employee.utilization, 100)}%` }} /></i></span>
-      <span className="employee-ontime">{employee.onTime}%</span>
-      <span className="employee-dependencies"><strong>{employee.dependencies}</strong><ChevronRight size={16} /></span>
-    </button>
-  );
-}
-
-function ProcessesScreen() {
-  const [selectedId, setSelectedId] = useState(processes[0].id);
-  const [selectedStep, setSelectedStep] = useState(3);
-  const selected = processes.find((process) => process.id === selectedId) ?? processes[0];
-  const activeStep = selected.steps[selectedStep] ?? selected.steps[0];
-
-  function selectProcess(id: string) {
-    setSelectedId(id);
-    setSelectedStep(id === "sms-approval" ? 3 : 7);
-  }
-
-  return (
-    <div className="screen-stack">
-      <section className="process-summary-grid">
-        <SummaryMetric label="Активные процессы" value="149" note="по 12 командам" />
-        <SummaryMetric label="Ожидают решения" value="23" note="19 часов в среднем" />
-        <SummaryMetric label="Узкие места" value="9" note="4 повторяются ежемесячно" />
-        <SummaryMetric label="Потери времени" value="1 340 ч" note="оценка за квартал" />
-      </section>
-
-      <section className="process-picker">
-        {processes.map((process) => (
-          <button key={process.id} className={selected.id === process.id ? "active" : ""} onClick={() => selectProcess(process.id)}>
-            <span className={`process-state process-state--${process.status}`}>{process.status === "risk" ? "Требует решения" : "В работе"}</span>
-            <h3>{process.title}</h3><p>{process.summary}</p>
-            <footer><span>{process.progress}% завершено</span><ArrowRight size={17} /></footer>
-          </button>
-        ))}
-      </section>
-
-      <section className="section-card process-detail-board">
-        <header className="process-board-header">
-          <div><span>{selected.kicker}</span><h2>{selected.title}</h2><p>{selected.summary}</p></div>
-          <div className="process-result"><span>Результат</span><strong>{selected.result}</strong><small>Бюджет {selected.budget}</small></div>
-        </header>
-
-        <div className="process-route">
-          {selected.steps.map((step, index) => (
-            <button key={`${selected.id}-${step.title}`} className={`${step.status} ${selectedStep === index ? "selected" : ""}`} onClick={() => setSelectedStep(index)}>
-              <span>{step.status === "done" ? <Check size={15} /> : String(index + 1).padStart(2, "0")}</span>
-              <strong>{step.title}</strong><small>{step.owner}</small>
-            </button>
-          ))}
-        </div>
-
-        <div className="step-inspector">
-          <div className="step-owner"><span>Выбранный этап</span><h3>{activeStep.title}</h3><p>{activeStep.owner}</p></div>
-          <div><span>Время на этапе</span><strong>{activeStep.duration}</strong></div>
-          <div><span>Статус</span><strong className={`step-status step-status--${activeStep.status}`}>{stepStatusLabel(activeStep.status)}</strong></div>
-          <div className="step-note"><span>Сигнал MOLECULE</span><strong>{activeStep.note ?? "Отклонений от целевого маршрута не обнаружено."}</strong></div>
-        </div>
-
-        <div className="process-consumers">
-          <span>{selected.id === "fashion-shoot" ? "Куда расходится результат" : "Кого затрагивает ожидание"}</span>
-          <div>
-            {selected.teamIds.map((teamId) => <em key={teamId}>{teamById(teamId)?.shortTitle}</em>)}
-          </div>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function MoleculeScreen() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("employee-27");
-  const [teamFilter, setTeamFilter] = useState("all");
-  const [viewMode, setViewMode] = useState<"summary" | "map" | "tasks">("summary");
   const [taskOverrides, setTaskOverrides] = useState<Record<string, EmployeeWorkTask[]>>({});
-  const [selectedNodeId, setSelectedNodeId] = useState("employee");
+  const [activeWindow, setActiveWindow] = useState<WorkspaceWindow>(null);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [activeNodeId, setActiveNodeId] = useState("employee");
   const [zoom, setZoom] = useState(1);
-  const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDeadline, setTaskDeadline] = useState("2026-08-19");
   const [collaborationTeamId, setCollaborationTeamId] = useState("editorial");
-  const mapScrollRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLDivElement | null>(null);
 
   const profile = employeeWorkProfiles.find((item) => item.employee.id === selectedEmployeeId) ?? employeeWorkProfiles[0];
   const tasks = taskOverrides[profile.employee.id] ?? profile.tasks;
-  const alarms = diagnoseEmployeeTasks(profile.employee, profile.managerName, tasks);
+  const alarms = useMemo(() => diagnoseEmployeeTasks(profile.employee, profile.managerName, tasks), [profile, tasks]);
   const map = useMemo(() => buildEmployeeWorkMap(profile, tasks, alarms), [profile, tasks, alarms]);
-  const selectedNode = map.nodes.find((node) => node.id === selectedNodeId) ?? map.nodes.find((node) => node.id === "employee") ?? map.nodes[0];
-  const selectedTask = selectedNode.kind === "task" ? tasks.find((task) => `task-${task.id}` === selectedNode.id) : undefined;
-  const employeeOptions = teamFilter === "all" ? employeeWorkProfiles : employeeWorkProfiles.filter((item) => item.team.id === teamFilter);
-  const activeTaskCount = tasks.filter((task) => task.status !== "done").length;
-  const primaryAlarm = alarms.find((alarm) => alarm.severity === "critical") ?? alarms[0];
-  const interactionTeams = Array.from(new Set(tasks.flatMap((task) => task.teamIds)))
-    .map((teamId) => teamById(teamId))
-    .filter((team): team is Team => Boolean(team));
+  const activeTask = activeTaskId ? tasks.find((task) => task.id === activeTaskId) : undefined;
+  const activeNode = map.nodes.find((node) => node.id === activeNodeId) ?? map.nodes[0];
+  const opportunities = useMemo(() => buildOpportunities(profile, tasks, alarms), [profile, tasks, alarms]);
 
   useEffect(() => {
-    const element = mapScrollRef.current;
-    if (!element) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
     const frame = window.requestAnimationFrame(() => {
-      element.scrollLeft = Math.max(0, (element.scrollWidth - element.clientWidth) / 2);
-      element.scrollTop = 0;
+      canvas.scrollLeft = Math.max(0, (canvas.scrollWidth - canvas.clientWidth) / 2);
+      canvas.scrollTop = 0;
     });
     return () => window.cancelAnimationFrame(frame);
   }, [selectedEmployeeId, zoom]);
@@ -647,24 +84,36 @@ function MoleculeScreen() {
     const nextProfile = employeeWorkProfiles.find((item) => item.employee.id === employeeId);
     if (!nextProfile) return;
     setSelectedEmployeeId(employeeId);
-    setSelectedNodeId("employee");
     setCollaborationTeamId(nextProfile.team.id);
+    setActiveWindow(null);
+    setActiveNodeId("employee");
+    setActiveTaskId(null);
     setZoom(1);
-    setViewMode("summary");
   }
 
-  function selectTeam(teamId: string) {
-    setTeamFilter(teamId);
-    if (teamId === "all" || profile.team.id === teamId) return;
-    const firstInTeam = employeeWorkProfiles.find((item) => item.team.id === teamId);
-    if (firstInTeam) selectEmployee(firstInTeam.employee.id);
+  function openProcess(taskId: string) {
+    setActiveTaskId(taskId);
+    setActiveWindow("process");
   }
 
-  function openTaskModal() {
+  function openNode(node: EmployeeMapNode) {
+    if (node.kind === "task") {
+      openProcess(node.id.replace("task-", ""));
+      return;
+    }
+    if (node.kind === "alarm") {
+      setActiveWindow("analytics");
+      return;
+    }
+    setActiveNodeId(node.id);
+    setActiveWindow("node");
+  }
+
+  function openCreateTask() {
     setTaskTitle("");
     setTaskDeadline("2026-08-19");
     setCollaborationTeamId(profile.team.id);
-    setTaskModalOpen(true);
+    setActiveWindow("create-task");
   }
 
   function assignTask() {
@@ -684,194 +133,255 @@ function MoleculeScreen() {
       kpi: "Будет определен после завершения",
     };
     setTaskOverrides((current) => ({ ...current, [profile.employee.id]: [task, ...tasks] }));
-    setSelectedNodeId(`task-${task.id}`);
-    setTaskModalOpen(false);
-    setViewMode("summary");
+    setActiveTaskId(task.id);
+    setActiveWindow("process");
   }
 
-  function showPrimaryIssue() {
-    if (primaryAlarm?.type === "no_tasks") {
-      openTaskModal();
-      return;
-    }
-    if (primaryAlarm?.taskId) setSelectedNodeId(`task-${primaryAlarm.taskId}`);
-    setViewMode("tasks");
+  function focusCanvas() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.scrollTo({ left: Math.max(0, (canvas.scrollWidth - canvas.clientWidth) / 2), top: 0, behavior: "smooth" });
   }
 
   return (
-    <div className="screen-stack employee-molecule-screen">
-      <section className="employee-simple-selector" aria-label="Выбор сотрудника">
-        <div><span>Кого проверяем?</span><p>Можно начать с отдела, затем выбрать конкретного человека.</p></div>
-        <label><span>Отдел</span><select value={teamFilter} onChange={(event) => selectTeam(event.target.value)}><option value="all">Все отделы</option>{teams.map((team) => <option key={team.id} value={team.id}>{team.shortTitle}</option>)}</select></label>
-        <label><span>Сотрудник</span><select data-testid="employee-select" value={selectedEmployeeId} onChange={(event) => selectEmployee(event.target.value)}>{employeeOptions.map((item) => <option key={item.employee.id} value={item.employee.id}>{item.employee.name} — {item.employee.role}</option>)}</select></label>
-      </section>
-
-      <main className="employee-workspace employee-workspace--simple">
-          <header className="employee-workspace-header">
-            <div className="employee-workspace-person">
-              <span className="employee-workspace-avatar">{profile.employee.initials}</span>
-              <div><span>{profile.team.shortTitle}</span><h2>{profile.employee.name}</h2><p>{profile.employee.role} · руководитель: {profile.managerName}</p></div>
-            </div>
-            <div className="employee-workspace-actions">
-              <button className="assign-task-button" onClick={openTaskModal}><Plus size={16} />Поставить задачу</button>
-            </div>
-          </header>
-
-          <section className={`executive-glance ${primaryAlarm ? "has-alarm" : "is-clear"}`}>
-            <div className="executive-glance-focus">
-              <span>{primaryAlarm ? "Требует вашего решения" : "Ситуация в норме"}</span>
-              <div className="executive-glance-title">{primaryAlarm ? <CircleAlert size={25} /> : <Check size={25} />}<h3>{primaryAlarm?.title ?? "Критичных отклонений нет"}</h3></div>
-              <p>{primaryAlarm?.description ?? "У сотрудника есть задачи, сроки и подтвержденный руководителем приоритет."}</p>
-              {primaryAlarm && <button onClick={showPrimaryIssue}>{primaryAlarm.type === "no_tasks" ? "Поставить первую задачу" : "Посмотреть все сигналы"}<ArrowRight size={16} /></button>}
-            </div>
-            <div className="executive-glance-metrics">
-              <div><span>Задачи в работе</span><strong>{activeTaskCount}</strong><small>всего {tasks.length}</small></div>
-              <div><span>Загрузка</span><strong>{profile.employee.utilization}%</strong><small>{statusLabel(profile.employee.status)}</small></div>
-              <div><span>Взаимодействия</span><strong>{interactionTeams.length}</strong><small>команд</small></div>
-            </div>
-          </section>
-
-          <nav className="employee-view-tabs" aria-label="Разделы карты сотрудника">
-            <button className={viewMode === "summary" ? "active" : ""} onClick={() => setViewMode("summary")}><span>Главное</span><small>Короткий обзор</small></button>
-            <button className={viewMode === "map" ? "active" : ""} onClick={() => setViewMode("map")}><span>Карта связей</span><small>Кто с кем работает</small></button>
-            <button className={viewMode === "tasks" ? "active" : ""} onClick={() => setViewMode("tasks")}><span>Задачи и сигналы</span><small>{countLabel(tasks.length, "задача", "задачи", "задач")} · {countLabel(alarms.length, "сигнал", "сигнала", "сигналов")}</small></button>
-          </nav>
-
-          {viewMode === "summary" && (
-            <div className="employee-simple-summary">
-              <section className="employee-current-work">
-                <header><div><span>Сейчас в работе</span><h3>Ближайшие задачи</h3></div><button onClick={() => setViewMode("tasks")}>Показать все <ArrowRight size={15} /></button></header>
-                {tasks.length === 0 ? (
-                  <div className="employee-simple-empty"><CircleAlert size={22} /><div><strong>Рабочий план не сформирован</strong><p>Назначьте сотруднику первую задачу с понятным сроком.</p></div><button onClick={openTaskModal}>Поставить задачу</button></div>
-                ) : (
-                  <div className="employee-simple-task-list">
-                    {tasks.filter((task) => task.status !== "done").slice(0, 3).map((task) => (
-                      <button key={task.id} onClick={() => { setSelectedNodeId(`task-${task.id}`); setViewMode("tasks"); }}>
-                        <span className={`simple-task-state status-${task.status}`}>{taskStatusLabel(task.status)}</span>
-                        <strong>{task.title}</strong>
-                        <small>{task.deadline ? `Срок: ${formatTaskDate(task.deadline)}` : "Срок не указан"}</small>
-                        <div><i><b style={{ width: `${task.progress}%` }} /></i><em>{task.progress}%</em></div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </section>
-
-              <aside className="employee-simple-context">
-                <section><span>Что делает сотрудник</span><div className="simple-function-list">{profile.functions.map((item, index) => <p key={item}><em>{index + 1}</em><strong>{item}</strong></p>)}</div></section>
-                <section><span>С кем взаимодействует</span><div className="simple-team-list">{interactionTeams.length ? interactionTeams.map((team) => <strong key={team.id}>{team.shortTitle}</strong>) : <p>Только внутри своей команды</p>}</div></section>
-                <section className="simple-manager-row"><span>Ответственный руководитель</span><div><i>{profile.managerName.split(" ").map((item) => item[0]).join("")}</i><p><strong>{profile.managerName}</strong><small>{profile.managerRole}</small></p></div></section>
-              </aside>
-            </div>
-          )}
-
-          {viewMode === "map" && (
-            <div className="employee-map-view">
-              <div className="employee-map-toolbar">
-                <div><span><i className="legend-manager" />Постановка</span><span><i className="legend-work" />Работа</span><span><i className="legend-interaction" />Взаимодействие</span><span><i className="legend-risk" />Проблема</span></div>
-                <div className="employee-map-zoom" aria-label="Масштаб карты">
-                  <button aria-label="Уменьшить" disabled={zoom <= 0.85} onClick={() => setZoom((current) => Math.max(0.85, Number((current - 0.15).toFixed(2))))}><Minus size={15} /></button><span>{Math.round(zoom * 100)}%</span><button aria-label="Увеличить" disabled={zoom >= 1.3} onClick={() => setZoom((current) => Math.min(1.3, Number((current + 0.15).toFixed(2))))}><Plus size={15} /></button><button aria-label="По размеру" onClick={() => setZoom(1)}><Maximize2 size={14} /></button>
-                </div>
-              </div>
-              <div className="employee-map-scroll" ref={mapScrollRef}>
-                <div className="employee-map-surface" style={{ width: `${zoom * 100}%`, minWidth: `${900 * zoom}px`, height: `${620 * zoom}px` }}>
-                  <svg className="employee-map-edges" viewBox="0 0 1000 620" preserveAspectRatio="none" aria-hidden="true">{map.edges.map((edge) => { const from = map.nodes.find((node) => node.id === edge.from); const to = map.nodes.find((node) => node.id === edge.to); if (!from || !to) return null; return <g key={`${edge.from}-${edge.to}-${edge.label ?? "edge"}`} className={`employee-map-edge employee-map-edge--${edge.tone} ${edge.dashed ? "is-dashed" : ""}`}><line x1={from.x} y1={from.y} x2={to.x} y2={to.y} /><circle cx={to.x} cy={to.y} r="4" />{edge.label && <text x={(from.x + to.x) / 2} y={(from.y + to.y) / 2 - 8} textAnchor="middle">{edge.label}</text>}</g>; })}</svg>
-                  {map.nodes.map((node) => <button key={node.id} className={`employee-map-node employee-map-node--${node.kind} status-${node.status} ${selectedNode.id === node.id ? "selected" : ""}`} style={{ left: `${node.x / 10}%`, top: `${node.y / 6.2}%` }} onClick={() => setSelectedNodeId(node.id)} aria-label={`${employeeMapKindLabels[node.kind]}: ${node.label}`}><span>{employeeMapKindLabels[node.kind]}</span><strong>{node.label}</strong><small>{node.metric}</small>{node.status === "risk" && <i><CircleAlert size={12} /></i>}</button>)}
-                </div>
-              </div>
-              <EmployeeNodeInspector node={selectedNode} task={selectedTask} profile={profile} alarms={alarms} taskCount={tasks.length} />
-            </div>
-          )}
-
-          {viewMode === "tasks" && <div className="employee-work-lower employee-work-lower--simple">
-            <section className="work-alarm-panel">
-              <header><div><span>Что требует внимания</span><h3>Сигналы руководителю</h3></div><em className={alarms.length ? "has-alarm" : "is-clear"}>{alarms.length || "OK"}</em></header>
-              {alarms.length === 0 ? (
-                <div className="work-alarm-clear"><Check size={18} /><div><strong>Критичных отклонений нет</strong><p>Есть задачи, постановщик и дедлайны определены.</p></div></div>
-              ) : (
-                <div className="work-alarm-list">
-                  {alarms.map((alarm) => (
-                    <button key={alarm.id} className={`work-alarm-row severity-${alarm.severity}`} onClick={() => setSelectedNodeId(alarm.taskId ? `task-${alarm.taskId}` : "alarm")}>
-                      <CircleAlert size={17} /><span><strong>{alarm.title}</strong><small>{alarm.description}</small></span><em>{alarmSeverityLabel(alarm.severity)}</em>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <section className="employee-task-register">
-              <header><div><span>Полный рабочий план</span><h3>Все задачи</h3></div><strong>{tasks.length}</strong></header>
-              {tasks.length === 0 ? (
-                <div className="employee-task-empty"><CircleAlert size={18} /><p>Задач нет. Руководителю нужно сформировать рабочий план.</p><button onClick={openTaskModal}><Plus size={14} />Поставить первую задачу</button></div>
-              ) : (
-                <div className="employee-task-list">
-                  {tasks.map((task) => (
-                    <button key={task.id} className={`employee-task-row status-${task.status}`} onClick={() => setSelectedNodeId(`task-${task.id}`)}>
-                      <span className="employee-task-status"><i />{taskStatusLabel(task.status)}</span>
-                      <strong>{task.title}</strong>
-                      <small>Поставил: {task.assignedBy}{task.assignedByIsManager ? " · руководитель" : " · не подтверждено руководителем"}</small>
-                      <div><em>{task.deadline ? `до ${formatTaskDate(task.deadline)}` : "Нет дедлайна"}</em><span>{task.progress}%</span></div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </section>
-          </div>}
-        </main>
-
-      {taskModalOpen && (
-        <div className="task-assignment-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setTaskModalOpen(false)}>
-          <form className="task-assignment-modal" onSubmit={(event) => { event.preventDefault(); assignTask(); }} aria-modal="true" role="dialog" aria-labelledby="task-modal-title">
-            <header><div><span>Новая задача</span><h2 id="task-modal-title">Поставить задачу сотруднику</h2></div><button type="button" aria-label="Закрыть" onClick={() => setTaskModalOpen(false)}><X size={18} /></button></header>
-            <div className="task-assignment-person"><span>{profile.employee.initials}</span><div><strong>{profile.employee.name}</strong><small>{profile.employee.role}</small></div></div>
-            <div className="task-assignment-manager"><Check size={16} /><p><span>Постановщик</span><strong>{profile.managerName} · {profile.managerRole}</strong></p></div>
-            <label><span>Что нужно сделать</span><input autoFocus value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} placeholder="Например, подготовить отчет кампании" /></label>
-            <div className="task-assignment-fields">
-              <label><span>Дедлайн</span><input type="date" min="2026-08-12" value={taskDeadline} onChange={(event) => setTaskDeadline(event.target.value)} /></label>
-              <label><span>Взаимодействие</span><select value={collaborationTeamId} onChange={(event) => setCollaborationTeamId(event.target.value)}>{teams.map((team) => <option key={team.id} value={team.id}>{team.shortTitle}</option>)}</select></label>
-            </div>
-            <p className="task-assignment-rule"><CircleAlert size={15} />MOLECULE требует постановщика-руководителя и дедлайн. Иначе задача попадет в управленческие алармы.</p>
-            <footer><button type="button" onClick={() => setTaskModalOpen(false)}>Отмена</button><button type="submit" disabled={!taskTitle.trim() || !taskDeadline}><Plus size={15} />Поставить задачу</button></footer>
-          </form>
+    <div className="molecule-app">
+      <header className="workspace-topbar">
+        <div className="workspace-brand"><strong>ЦУМ</strong><i /><span>MOLECULE</span></div>
+        <button className="employee-switch-button" onClick={() => setActiveWindow("employees")} aria-label="Выбрать сотрудника">
+          <span className="employee-switch-avatar">{profile.employee.initials}</span>
+          <span><small>Рабочая карта сотрудника</small><strong>{profile.employee.name}</strong><em>{profile.team.shortTitle} · {profile.employee.role}</em></span>
+          <ChevronRight size={18} />
+        </button>
+        <div className="workspace-top-actions">
+          <span className={`workspace-health ${alarms.length ? "has-alarm" : "is-clear"}`}><i />{alarms.length ? countLabel(alarms.length, "сигнал", "сигнала", "сигналов") : "Отклонений нет"}</span>
+          <button onClick={openCreateTask}><Plus size={17} /><span>Задача</span></button>
+          <span className="workspace-user">ВС</span>
         </div>
+      </header>
+
+      <nav className="workspace-dock" aria-label="Инструменты MOLECULE">
+        <button className={!activeWindow || activeWindow === "node" || activeWindow === "process" || activeWindow === "employees" ? "active" : ""} onClick={() => setActiveWindow(null)}><Atom size={20} /><span>Карта</span></button>
+        <button className={activeWindow === "tasks" || activeWindow === "create-task" ? "active" : ""} onClick={() => setActiveWindow("tasks")}><ListTodo size={20} /><span>Задачи</span><em>{tasks.length}</em></button>
+        <button className={activeWindow === "analytics" ? "active" : ""} onClick={() => setActiveWindow("analytics")}><BarChart3 size={20} /><span>Аналитика</span></button>
+        <button className={activeWindow === "optimization" ? "active" : ""} onClick={() => setActiveWindow("optimization")}><Sparkles size={20} /><span>Оптимизация</span><em className="orange">{opportunities.length}</em></button>
+        <button className={activeWindow === "cost" ? "active" : ""} onClick={() => setActiveWindow("cost")}><WalletCards size={20} /><span>Расходы</span></button>
+      </nav>
+
+      <main className="visual-workspace">
+        <div className="workspace-context">
+          <span>Marketing / {profile.team.shortTitle}</span>
+          <strong>{countLabel(tasks.length, "бизнес-процесс", "бизнес-процесса", "бизнес-процессов")}</strong>
+          <em>Нажмите на объект, чтобы открыть детали</em>
+        </div>
+
+        <div className="visual-canvas" ref={canvasRef}>
+          <div className="visual-surface" style={{ width: `${surfaceWidth * zoom}px`, height: `${surfaceHeight * zoom}px` }}>
+            <div className="visual-aura visual-aura--one" /><div className="visual-aura visual-aura--two" />
+            <svg className="visual-edges" viewBox="0 0 1000 620" preserveAspectRatio="none" aria-hidden="true">
+              <defs>
+                <filter id="edgeGlow"><feGaussianBlur stdDeviation="2.2" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+              </defs>
+              {map.edges.map((edge) => {
+                const from = map.nodes.find((node) => node.id === edge.from);
+                const to = map.nodes.find((node) => node.id === edge.to);
+                if (!from || !to) return null;
+                const middle = (from.x + to.x) / 2;
+                return (
+                  <g key={`${edge.from}-${edge.to}-${edge.label ?? "edge"}`} className={`visual-edge visual-edge--${edge.tone} ${edge.dashed ? "is-dashed" : ""}`}>
+                    <path d={`M ${from.x} ${from.y} C ${middle} ${from.y}, ${middle} ${to.y}, ${to.x} ${to.y}`} />
+                    <circle cx={to.x} cy={to.y} r="4" />
+                    {edge.label && <text x={middle} y={(from.y + to.y) / 2 - 8} textAnchor="middle">{edge.label}</text>}
+                  </g>
+                );
+              })}
+            </svg>
+
+            {map.nodes.map((node) => (
+              <WorkspaceNode key={node.id} node={node} profile={profile} onClick={() => openNode(node)} />
+            ))}
+          </div>
+        </div>
+
+        <div className="workspace-controls">
+          <button aria-label="Уменьшить" onClick={() => setZoom((current) => Math.max(0.78, Number((current - 0.1).toFixed(2))))} disabled={zoom <= 0.78}><Minus size={18} /></button>
+          <span>{Math.round(zoom * 100)}%</span>
+          <button aria-label="Увеличить" onClick={() => setZoom((current) => Math.min(1.32, Number((current + 0.1).toFixed(2))))} disabled={zoom >= 1.32}><Plus size={18} /></button>
+          <button aria-label="Центрировать карту" onClick={focusCanvas}><Focus size={18} /></button>
+          <button aria-label="Сбросить масштаб" onClick={() => { setZoom(1); window.setTimeout(focusCanvas, 20); }}><Maximize2 size={17} /></button>
+        </div>
+      </main>
+
+      {activeWindow === "employees" && <EmployeePicker profile={profile} taskOverrides={taskOverrides} onSelect={selectEmployee} onClose={() => setActiveWindow(null)} />}
+      {activeWindow === "analytics" && <AnalyticsWindow profile={profile} tasks={tasks} alarms={alarms} onOpenProcess={openProcess} onClose={() => setActiveWindow(null)} />}
+      {activeWindow === "optimization" && <OptimizationWindow profile={profile} opportunities={opportunities} onClose={() => setActiveWindow(null)} />}
+      {activeWindow === "tasks" && <TasksWindow profile={profile} tasks={tasks} alarms={alarms} onCreate={openCreateTask} onOpenProcess={openProcess} onClose={() => setActiveWindow(null)} />}
+      {activeWindow === "cost" && <CostWindow profile={profile} tasks={tasks} onClose={() => setActiveWindow(null)} />}
+      {activeWindow === "process" && activeTask && <ProcessWindow profile={profile} task={activeTask} alarms={alarms.filter((alarm) => alarm.taskId === activeTask.id)} onClose={() => setActiveWindow(null)} />}
+      {activeWindow === "node" && activeNode && <NodeWindow profile={profile} node={activeNode} tasks={tasks} onClose={() => setActiveWindow(null)} />}
+      {activeWindow === "create-task" && (
+        <WorkspaceModal eyebrow="Постановка руководителя" title="Новая задача" icon={<Plus size={20} />} onClose={() => setActiveWindow(null)} size="compact">
+          <form className="create-task-form" onSubmit={(event) => { event.preventDefault(); assignTask(); }}>
+            <div className="create-task-person"><span>{profile.employee.initials}</span><div><strong>{profile.employee.name}</strong><small>{profile.employee.role}</small></div></div>
+            <div className="manager-confirm"><Check size={17} /><p><span>Постановщик</span><strong>{profile.managerName} · {profile.managerRole}</strong></p></div>
+            <label><span>Что нужно сделать</span><input autoFocus value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} placeholder="Например, подготовить отчет кампании" /></label>
+            <div className="form-columns"><label><span>Дедлайн</span><input type="date" min="2026-08-12" value={taskDeadline} onChange={(event) => setTaskDeadline(event.target.value)} /></label><label><span>Смежная команда</span><select value={collaborationTeamId} onChange={(event) => setCollaborationTeamId(event.target.value)}>{teams.map((team) => <option key={team.id} value={team.id}>{team.shortTitle}</option>)}</select></label></div>
+            <div className="modal-form-actions"><button type="button" onClick={() => setActiveWindow(null)}>Отмена</button><button type="submit" disabled={!taskTitle.trim() || !taskDeadline}><Plus size={16} />Поставить задачу</button></div>
+          </form>
+        </WorkspaceModal>
       )}
     </div>
   );
 }
 
-function EmployeeNodeInspector({ node, task, profile, alarms, taskCount }: { node: EmployeeMapNode; task?: EmployeeWorkTask; profile: (typeof employeeWorkProfiles)[number]; alarms: EmployeeWorkAlarm[]; taskCount: number }) {
+function WorkspaceNode({ node, profile, onClick }: { node: EmployeeMapNode; profile: EmployeeWorkProfile; onClick: () => void }) {
+  const isProcess = node.kind === "task";
+  const icon = nodeIcon(node, profile);
   return (
-    <aside className={`employee-node-inspector status-${node.status}`}>
-      <div><span>{employeeMapKindLabels[node.kind]}</span><em>{employeeNodeStatusLabel(node.status)}</em></div>
-      <h3>{node.label}</h3>
-      <p>{node.description}</p>
-      {task ? (
-        <dl>
-          <div><dt>Поставил</dt><dd>{task.assignedBy}<small>{task.assignedByIsManager ? "Руководитель подтвердил приоритет" : "Нет подтверждения руководителя"}</small></dd></div>
-          <div><dt>Дедлайн</dt><dd>{formatTaskDate(task.deadline)}<small>{task.status === "looped" ? task.loopPath : `${task.progress}% выполнено`}</small></dd></div>
-          <div><dt>Взаимодействует</dt><dd>{task.teamIds.map((id) => teamById(id)?.shortTitle).filter(Boolean).join(" · ")}</dd></div>
-          <div><dt>Результат / KPI</dt><dd>{task.result}<small>{task.kpi}</small></dd></div>
-        </dl>
+    <button
+      className={`workspace-node workspace-node--${node.kind} status-${node.status} ${isProcess ? "is-process" : "is-orb"}`}
+      style={{ left: `${node.x / 10}%`, top: `${node.y / 6.2}%` }}
+      onClick={onClick}
+      aria-label={`${node.kind === "task" ? "Бизнес-процесс" : employeeMapKindLabels[node.kind]}: ${node.label}`}
+    >
+      {isProcess ? (
+        <><span className="process-node-status"><i />{node.status === "risk" ? "Требует внимания" : node.status === "done" ? "Завершен" : "В работе"}</span><strong>{node.label}</strong><small>{node.metric}</small><ChevronRight size={15} /></>
       ) : (
-        <dl>
-          <div><dt>Руководитель</dt><dd>{profile.managerName}<small>{profile.managerRole}</small></dd></div>
-          <div><dt>Рабочий срез</dt><dd>{taskCount} задач в плане<small>{alarms.length ? `${alarms.length} отклонения требуют внимания` : "Отклонений не найдено"}</small></dd></div>
-        </dl>
+        <><span className="workspace-orb">{icon}</span><span className="workspace-node-copy"><em>{employeeMapKindLabels[node.kind]}</em><strong>{node.label}</strong><small>{node.metric}</small></span>{node.status === "risk" && <i className="node-alert"><CircleAlert size={12} /></i>}</>
       )}
-    </aside>
+    </button>
   );
 }
 
-function employeeNodeStatusLabel(status: EmployeeMapNode["status"]) {
-  return { normal: "Связь", active: "В работе", done: "Завершено", queued: "Ожидается", risk: "Аларм" }[status];
+function nodeIcon(node: EmployeeMapNode, profile: EmployeeWorkProfile) {
+  if (node.kind === "employee") return <b>{profile.employee.initials}</b>;
+  if (node.kind === "manager") return <UserRound size={23} />;
+  if (node.kind === "function") return <BriefcaseBusiness size={21} />;
+  if (node.kind === "team") return <UsersRound size={22} />;
+  if (node.kind === "result") return <Target size={22} />;
+  if (node.kind === "kpi") return <Activity size={22} />;
+  return <CircleAlert size={22} />;
+}
+
+function WorkspaceModal({ eyebrow, title, icon, onClose, size = "wide", children }: { eyebrow: string; title: string; icon: ReactNode; onClose: () => void; size?: "wide" | "compact"; children: ReactNode }) {
+  return (
+    <div className="workspace-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className={`workspace-modal workspace-modal--${size}`} role="dialog" aria-modal="true" aria-labelledby="workspace-modal-title">
+        <header><div className="modal-title-icon">{icon}</div><div><span>{eyebrow}</span><h2 id="workspace-modal-title">{title}</h2></div><button aria-label="Закрыть" onClick={onClose}><X size={20} /></button></header>
+        <div className="workspace-modal-content">{children}</div>
+      </section>
+    </div>
+  );
+}
+
+function EmployeePicker({ profile, taskOverrides, onSelect, onClose }: { profile: EmployeeWorkProfile; taskOverrides: Record<string, EmployeeWorkTask[]>; onSelect: (id: string) => void; onClose: () => void }) {
+  const [query, setQuery] = useState("");
+  const [teamFilter, setTeamFilter] = useState("all");
+  const normalized = query.trim().toLocaleLowerCase("ru-RU");
+  const visible = employeeWorkProfiles.filter((item) => (teamFilter === "all" || item.team.id === teamFilter) && (!normalized || `${item.employee.name} ${item.employee.role} ${item.team.shortTitle}`.toLocaleLowerCase("ru-RU").includes(normalized)));
+  return (
+    <WorkspaceModal eyebrow="88 сотрудников" title="Выберите рабочую карту" icon={<Search size={20} />} onClose={onClose}>
+      <div className="employee-picker-toolbar"><label><Search size={17} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Имя или должность" /></label><select value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)}><option value="all">Все отделы</option>{teams.map((team) => <option key={team.id} value={team.id}>{team.shortTitle}</option>)}</select></div>
+      <div className="workspace-employee-list">
+        {visible.map((item) => {
+          const itemTasks = taskOverrides[item.employee.id] ?? item.tasks;
+          const itemAlarms = diagnoseEmployeeTasks(item.employee, item.managerName, itemTasks);
+          return <button key={item.employee.id} data-employee-id={item.employee.id} className={item.employee.id === profile.employee.id ? "selected" : ""} onClick={() => onSelect(item.employee.id)}><span>{item.employee.initials}</span><div><strong>{item.employee.name}</strong><small>{item.employee.role}</small><em>{item.team.shortTitle} · загрузка {item.employee.utilization}%</em></div><i className={itemAlarms.length ? "has-alarm" : "is-clear"}>{itemAlarms.length || <Check size={13} />}</i></button>;
+        })}
+      </div>
+    </WorkspaceModal>
+  );
+}
+
+function AnalyticsWindow({ profile, tasks, alarms, onOpenProcess, onClose }: { profile: EmployeeWorkProfile; tasks: EmployeeWorkTask[]; alarms: EmployeeWorkAlarm[]; onOpenProcess: (id: string) => void; onClose: () => void }) {
+  const completed = tasks.filter((task) => task.status === "done").length;
+  const teamsCount = new Set(tasks.flatMap((task) => task.teamIds)).size;
+  const averageProgress = tasks.length ? Math.round(tasks.reduce((sum, task) => sum + task.progress, 0) / tasks.length) : 0;
+  return (
+    <WorkspaceModal eyebrow="Запрос MOLECULE" title={`Аналитика · ${profile.employee.name}`} icon={<BarChart3 size={20} />} onClose={onClose}>
+      <div className="analysis-summary"><div className={alarms.length ? "has-alarm" : "is-clear"}><span>{alarms.length ? "Нужна проверка руководителя" : "Работа организована устойчиво"}</span><strong>{alarms.length ? countLabel(alarms.length, "отклонение", "отклонения", "отклонений") : "Отклонений нет"}</strong><p>Анализ построен по задачам, срокам, постановщикам и межкомандным связям сотрудника.</p></div><button><Sparkles size={17} />Пересчитать анализ</button></div>
+      <div className="analysis-metrics"><MetricCard label="Загрузка" value={`${profile.employee.utilization}%`} note={profile.employee.status === "overloaded" ? "Выше устойчивого уровня" : "Текущий рабочий срез"} /><MetricCard label="Средний прогресс" value={`${averageProgress}%`} note={`${completed} завершено`} /><MetricCard label="Процессы" value={String(tasks.length)} note={`${teamsCount} команд вовлечено`} /><MetricCard label="В срок" value={`${profile.employee.onTime}%`} note="По истории выполнения" /></div>
+      <div className="analysis-columns"><section><header><span>Диагностика</span><h3>Что требует внимания</h3></header>{alarms.length ? <div className="analysis-alarm-list">{alarms.map((alarm) => <button key={alarm.id} onClick={() => alarm.taskId && onOpenProcess(alarm.taskId)}><CircleAlert size={17} /><span><strong>{alarm.title}</strong><small>{alarm.description}</small></span><ChevronRight size={16} /></button>)}</div> : <div className="analysis-clear"><Check size={20} /><span><strong>Критичных сигналов нет</strong><small>Все процессы имеют владельца и срок.</small></span></div>}</section><section><header><span>Бизнес-процессы</span><h3>Текущая работа</h3></header><div className="analysis-process-list">{tasks.map((task) => <button key={task.id} onClick={() => onOpenProcess(task.id)}><span className={`task-dot status-${task.status}`} /><div><strong>{task.title}</strong><small>{task.deadline ? `до ${formatTaskDate(task.deadline)}` : "без дедлайна"}</small></div><em>{task.progress}%</em></button>)}</div></section></div>
+    </WorkspaceModal>
+  );
+}
+
+function OptimizationWindow({ profile, opportunities, onClose }: { profile: EmployeeWorkProfile; opportunities: OpportunityCard[]; onClose: () => void }) {
+  return (
+    <WorkspaceModal eyebrow="Optimization opportunities" title={`Потенциал · ${profile.employee.name}`} icon={<Sparkles size={20} />} onClose={onClose}>
+      <div className="optimization-intro"><div><span>Найдено</span><strong>{countLabel(opportunities.length, "возможность", "возможности", "возможностей")}</strong><p>Это гипотезы для проверки с руководителем, а не готовое кадровое решение.</p></div><button><Sparkles size={17} />Обновить рекомендации</button></div>
+      <div className="opportunity-window-list">{opportunities.map((item, index) => <article key={item.id} className={`tone-${item.tone}`}><header><span>{String(index + 1).padStart(2, "0")}</span><em>{item.tone === "critical" ? "Высокий приоритет" : item.tone === "warning" ? "Проверить" : "Возможность"}</em></header><h3>{item.title}</h3><dl><div><dt>Наблюдение</dt><dd>{item.evidence}</dd></div><div><dt>Ожидаемый эффект</dt><dd>{item.effect}</dd></div><div><dt>Следующий шаг</dt><dd>{item.action}</dd></div></dl><button>Добавить в план <ChevronRight size={15} /></button></article>)}</div>
+    </WorkspaceModal>
+  );
+}
+
+function TasksWindow({ profile, tasks, alarms, onCreate, onOpenProcess, onClose }: { profile: EmployeeWorkProfile; tasks: EmployeeWorkTask[]; alarms: EmployeeWorkAlarm[]; onCreate: () => void; onOpenProcess: (id: string) => void; onClose: () => void }) {
+  return (
+    <WorkspaceModal eyebrow="Рабочий контур" title={`Задачи · ${profile.employee.name}`} icon={<ListTodo size={20} />} onClose={onClose}>
+      <div className="tasks-window-header"><div><strong>{countLabel(tasks.length, "процесс", "процесса", "процессов")}</strong><span>{alarms.length ? `${countLabel(alarms.length, "сигнал", "сигнала", "сигналов")} требуют внимания` : "отклонений не найдено"}</span></div><button onClick={onCreate}><Plus size={17} />Поставить задачу</button></div>
+      {tasks.length ? <div className="tasks-window-list">{tasks.map((task) => { const taskAlarms = alarms.filter((alarm) => alarm.taskId === task.id); return <button key={task.id} onClick={() => onOpenProcess(task.id)}><span className={`task-window-state status-${task.status}`}><i />{taskStatusLabel(task.status)}</span><div><strong>{task.title}</strong><small>Поставил: {task.assignedBy}{task.assignedByIsManager ? " · руководитель" : " · не подтверждено"}</small><em>{task.teamIds.map((id) => teamById(id)?.shortTitle).filter(Boolean).join(" → ")}</em></div><span className="task-window-progress"><b>{task.progress}%</b><i><em style={{ width: `${task.progress}%` }} /></i></span><span className={task.deadline ? "task-window-deadline" : "task-window-deadline missing"}><Clock3 size={14} />{formatTaskDate(task.deadline)}</span>{taskAlarms.length > 0 && <span className="task-window-alarm"><CircleAlert size={13} />{taskAlarms.length}</span>}<ChevronRight size={18} /></button>; })}</div> : <div className="empty-work-plan"><CircleAlert size={23} /><h3>У сотрудника нет задач</h3><p>Руководителю необходимо сформировать рабочий план.</p><button onClick={onCreate}><Plus size={16} />Поставить первую задачу</button></div>}
+    </WorkspaceModal>
+  );
+}
+
+function CostWindow({ profile, tasks, onClose }: { profile: EmployeeWorkProfile; tasks: EmployeeWorkTask[]; onClose: () => void }) {
+  const monthly = profile.employee.cost;
+  const annual = monthly * 12;
+  const perProcess = tasks.length ? Math.round(monthly / tasks.length) : monthly;
+  return (
+    <WorkspaceModal eyebrow="Ресурсная модель" title={`Расходы · ${profile.employee.name}`} icon={<WalletCards size={20} />} onClose={onClose}>
+      <div className="cost-hero"><div><span>Стоимость позиции / месяц</span><strong>₽{monthly} тыс.</strong><small>Демонстрационная оценка полной стоимости позиции</small></div><div><span>Годовая стоимость</span><strong>₽{(annual / 1000).toFixed(2)} млн</strong><small>Без учета агентств и production-бюджетов</small></div></div>
+      <div className="cost-grid"><MetricCard label="На один процесс" value={`₽${perProcess} тыс.`} note="Условное распределение" /><MetricCard label="Бюджет команды" value={`₽${profile.team.budget} млн`} note="В месяц" /><MetricCard label="Загрузка" value={`${profile.employee.utilization}%`} note="Фактический срез" /></div>
+      <section className="resource-allocation"><header><span>Распределение ресурса</span><h3>На что уходит рабочее время</h3></header>{tasks.length ? tasks.map((task) => <div key={task.id}><span><strong>{task.title}</strong><small>{task.workFunction}</small></span><i><b style={{ width: `${Math.max(12, Math.round(100 / tasks.length))}%` }} /></i><em>≈ ₽{perProcess} тыс.</em></div>) : <p>Невозможно распределить стоимость: рабочий план не сформирован.</p>}</section>
+    </WorkspaceModal>
+  );
+}
+
+function ProcessWindow({ profile, task, alarms, onClose }: { profile: EmployeeWorkProfile; task: EmployeeWorkTask; alarms: EmployeeWorkAlarm[]; onClose: () => void }) {
+  return (
+    <WorkspaceModal eyebrow="Бизнес-процесс" title={task.title} icon={<GitBranch size={20} />} onClose={onClose}>
+      <div className={`process-window-hero status-${task.status}`}><div><span>{taskStatusLabel(task.status)}</span><strong>{task.progress}%</strong><small>готовность процесса</small></div><i><b style={{ width: `${task.progress}%` }} /></i><dl><div><dt>Постановщик</dt><dd>{task.assignedBy}<small>{task.assignedByIsManager ? "Приоритет подтвержден руководителем" : "Нет подтверждения руководителя"}</small></dd></div><div><dt>Дедлайн</dt><dd>{formatTaskDate(task.deadline)}</dd></div></dl></div>
+      <section className="process-chain-section"><header><span>Маршрут процесса</span><h3>От задачи до бизнес-результата</h3></header><div className="process-chain"><span><i><UserRound size={18} /></i><em>Сотрудник</em><strong>{profile.employee.name}</strong></span><ChevronRight size={18} /><span><i><BriefcaseBusiness size={18} /></i><em>Функция</em><strong>{task.workFunction}</strong></span><ChevronRight size={18} /><span><i><Network size={18} /></i><em>Команды</em><strong>{task.teamIds.map((id) => teamById(id)?.shortTitle).filter(Boolean).join(" · ")}</strong></span><ChevronRight size={18} /><span><i><Target size={18} /></i><em>Результат</em><strong>{task.result}</strong></span><ChevronRight size={18} /><span><i><Activity size={18} /></i><em>KPI</em><strong>{task.kpi}</strong></span></div></section>
+      {task.loopPath && <div className="process-loop"><CircleAlert size={19} /><div><span>Обнаружен повторяющийся маршрут</span><strong>{task.loopPath}</strong><p>Процесс возвращается на предыдущий уровень без зафиксированного решения.</p></div></div>}
+      {alarms.length > 0 && <section className="process-alarm-section"><header><span>Диагностика MOLECULE</span><h3>Отклонения процесса</h3></header>{alarms.map((alarm) => <article key={alarm.id}><CircleAlert size={17} /><div><strong>{alarm.title}</strong><p>{alarm.description}</p></div><em>{alarmSeverityLabel(alarm.severity)}</em></article>)}</section>}
+    </WorkspaceModal>
+  );
+}
+
+function NodeWindow({ profile, node, tasks, onClose }: { profile: EmployeeWorkProfile; node: EmployeeMapNode; tasks: EmployeeWorkTask[]; onClose: () => void }) {
+  const relatedTasks = node.kind === "team" ? tasks.filter((task) => task.teamIds.includes(node.id.replace("team-", ""))) : tasks;
+  return (
+    <WorkspaceModal eyebrow={employeeMapKindLabels[node.kind]} title={node.label} icon={nodeIcon(node, profile)} onClose={onClose} size="compact">
+      <div className={`node-window-summary status-${node.status}`}><span>{node.metric}</span><p>{node.description}</p></div>
+      <dl className="node-window-facts"><div><dt>Сотрудник</dt><dd>{profile.employee.name}</dd></div><div><dt>Команда</dt><dd>{profile.team.shortTitle}</dd></div><div><dt>Руководитель</dt><dd>{profile.managerName}</dd></div><div><dt>Связанные процессы</dt><dd>{relatedTasks.length}</dd></div></dl>
+    </WorkspaceModal>
+  );
+}
+
+function MetricCard({ label, value, note }: { label: string; value: string; note: string }) {
+  return <div><span>{label}</span><strong>{value}</strong><small>{note}</small></div>;
+}
+
+function buildOpportunities(profile: EmployeeWorkProfile, tasks: EmployeeWorkTask[], alarms: EmployeeWorkAlarm[]): OpportunityCard[] {
+  const items: OpportunityCard[] = alarms.map((alarm) => {
+    const task = tasks.find((item) => item.id === alarm.taskId);
+    if (alarm.type === "no_tasks") return { id: alarm.id, title: "Сформировать измеримый рабочий план", evidence: "У сотрудника нет активных задач и подтвержденного вклада в текущий план.", effect: "Появится понятная загрузка и ответственность за результат.", action: `Руководитель ${profile.managerName} ставит первую задачу с дедлайном.`, tone: "critical" };
+    if (alarm.type === "loop_no_deadline") return { id: alarm.id, title: "Разорвать цикл согласований", evidence: task?.loopPath ?? alarm.description, effect: "Сократить ожидание и убрать повторные возвраты.", action: "Назначить уровень финального решения и зафиксировать дедлайн.", tone: "critical" };
+    if (alarm.type === "wrong_assigner") return { id: alarm.id, title: "Вернуть приоритизацию руководителю", evidence: alarm.description, effect: "Убрать конфликт приоритетов между смежными командами.", action: "Подтвердить или снять задачу на уровне непосредственного руководителя.", tone: "warning" };
+    if (alarm.type === "overdue") return { id: alarm.id, title: "Пересобрать просроченный процесс", evidence: alarm.description, effect: "Вернуть управляемый срок и прогноз результата.", action: "Проверить блокер, владельца решения и новый срок.", tone: "critical" };
+    if (alarm.type === "blocked") return { id: alarm.id, title: "Снять межкомандную блокировку", evidence: alarm.description, effect: "Возобновить движение процесса без эскалации наверх.", action: "Назначить владельца блокера из смежной команды.", tone: "warning" };
+    if (alarm.type === "overload") return { id: alarm.id, title: "Перераспределить параллельную работу", evidence: alarm.description, effect: "Снизить риск задержек и выгорания.", action: "Снять низкоприоритетный процесс или передать часть работы.", tone: "warning" };
+    return { id: alarm.id, title: "Зафиксировать срок процесса", evidence: alarm.description, effect: "Сделать загрузку и своевременность измеримыми.", action: "Назначить дедлайн и контрольную точку.", tone: "warning" };
+  });
+  if (items.length === 0) items.push({ id: "healthy-capacity", title: "Масштабировать устойчивую практику", evidence: "Все процессы имеют постановщика, срок и измеримый результат.", effect: "Использовать рабочую схему как эталон для команды.", action: "Сравнить маршрут с похожими ролями и зафиксировать шаблон.", tone: "positive" });
+  return items.slice(0, 5);
 }
 
 function taskStatusLabel(status: EmployeeWorkTask["status"]) {
-  return { active: "В работе", blocked: "Блок", done: "Готово", looped: "Цикл", overdue: "Просрочено" }[status];
+  return { active: "В работе", blocked: "Заблокирован", done: "Завершен", looped: "Зациклен", overdue: "Просрочен" }[status];
 }
 
 function alarmSeverityLabel(severity: EmployeeWorkAlarm["severity"]) {
-  return { critical: "Критично", warning: "Внимание", info: "Инфо" }[severity];
+  return { critical: "Критично", warning: "Внимание", info: "Информация" }[severity];
 }
 
 function countLabel(value: number, one: string, few: string, many: string) {
@@ -879,165 +389,6 @@ function countLabel(value: number, one: string, few: string, many: string) {
   const last = value % 10;
   const word = lastTwo >= 11 && lastTwo <= 19 ? many : last === 1 ? one : last >= 2 && last <= 4 ? few : many;
   return `${value} ${word}`;
-}
-
-function stepStatusLabel(status: Process["steps"][number]["status"]) {
-  return { done: "Завершен", active: "В работе", waiting: "Ожидает", queued: "В очереди" }[status];
-}
-
-function FinanceScreen({ onOpenTeam, onOpenOpportunity }: { onOpenTeam: (id: string) => void; onOpenOpportunity: (id: string) => void }) {
-  return (
-    <div className="screen-stack">
-      <section className="finance-hero">
-        <div><span>Годовой маркетинговый бюджет</span><strong>₽312,4 млн</strong><small>утвержденный план 2026</small></div>
-        <div className="finance-plan">
-          <div><span>Факт YTD</span><strong>₽204,6 млн</strong><small>65% плана</small></div>
-          <div><span>Прогноз</span><strong>₽326,8 млн</strong><small className="metric-alert">+4,6% к плану</small></div>
-          <div><span>Потенциал</span><strong>₽26,8 млн</strong><small>без прямых сокращений</small></div>
-        </div>
-      </section>
-
-      <section className="finance-columns">
-        <div className="section-card spend-card">
-          <SectionHeading eyebrow="Структура бюджета" title="На что тратит маркетинг" />
-          <div className="spend-list">
-            {financeCategories.map((category) => (
-              <div key={category.label} className="spend-row">
-                <div><strong>{category.label}</strong><small>{category.share}% бюджета · ROI {category.roi}</small></div>
-                <div className="spend-bar"><i style={{ width: `${category.share * 2.75}%` }} /></div>
-                <strong>₽{formatMoney(category.value)} млн</strong>
-                <span className={category.delta > 7 ? "over" : category.delta < 0 ? "under" : ""}>{category.delta > 0 ? "+" : ""}{category.delta}%</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="section-card finance-signals">
-          <SectionHeading eyebrow="Расходы под наблюдением" title="Что проверить первым" />
-          <button onClick={() => onOpenOpportunity("agencies")}><CircleAlert size={19} /><div><strong>Агентства и сервисы</strong><span>7 контрактов пересекаются со штатными функциями</span><small>Потенциал ₽11,4 млн / год</small></div><ChevronRight size={18} /></button>
-          <button onClick={() => onOpenOpportunity("events-flow")}><TrendingUp size={19} /><div><strong>Мероприятия</strong><span>Прогноз превышения плана на 14%</span><small>4 версии брифа увеличивают цикл</small></div><ChevronRight size={18} /></button>
-          <button onClick={() => onOpenOpportunity("reuse")}><Zap size={19} /><div><strong>Fashion production</strong><span>Только 24% материалов используются повторно</span><small>Потенциал ₽6,2 млн / год</small></div><ChevronRight size={18} /></button>
-        </div>
-      </section>
-
-      <section className="section-card team-budget-table">
-        <SectionHeading eyebrow="Владельцы расходов" title="Бюджет по командам · в месяц" />
-        <div className="budget-table-head"><span>Команда</span><span>Бюджет</span><span>Задачи в срок</span><span>Вклад</span><span>Сигнал</span></div>
-        {[...teams].sort((a, b) => b.budget - a.budget).map((team) => (
-          <button key={team.id} onClick={() => onOpenTeam(team.id)}>
-            <span><strong>{team.shortTitle}</strong><small>{team.count} сотрудников</small></span>
-            <strong>₽{formatMoney(team.budget)} млн</strong>
-            <span>{team.onTime}%</span>
-            <span>{team.impact}%</span>
-            <span className={team.issues > 2 ? "signal-risk" : "signal-ok"}>{team.issues > 2 ? `${team.issues} проблемы` : "В норме"}</span>
-          </button>
-        ))}
-      </section>
-    </div>
-  );
-}
-
-function OpportunitiesScreen({ onOpenOpportunity }: { onOpenOpportunity: (id: string) => void }) {
-  return (
-    <div className="screen-stack">
-      <section className="opportunities-intro">
-        <div><Sparkles size={20} /><span>Optimization map</span><strong>₽26,8 млн</strong><small>оценочный годовой потенциал уже измеримых инициатив</small></div>
-        <p>MOLECULE не предлагает «кого уволить». Она показывает, где работа дублируется, зависает, стоит дороже результата или может быть перераспределена — с доказательствами для управленческого решения.</p>
-      </section>
-      <section className="opportunity-grid">
-        {opportunities.map((opportunity) => (
-          <button key={opportunity.id} className="opportunity-card" onClick={() => onOpenOpportunity(opportunity.id)}>
-            <header><span>{opportunity.number}</span><em>{opportunity.area}</em></header>
-            <h3>{opportunity.title}</h3><p>{opportunity.summary}</p>
-            <dl>
-              <div><dt>Эффект</dt><dd>{opportunity.impact}</dd></div>
-              <div><dt>Уверенность</dt><dd>{opportunity.confidence}%</dd></div>
-              <div><dt>Сложность</dt><dd>{opportunity.effort}</dd></div>
-            </dl>
-            <footer><span>Открыть доказательства</span><ArrowUpRight size={17} /></footer>
-          </button>
-        ))}
-      </section>
-    </div>
-  );
-}
-
-function TeamDetail({ team, onOpenEmployee }: { team: Team; onOpenEmployee: (id: string) => void }) {
-  const teamEmployees = employees.filter((employee) => employee.teamId === team.id);
-  return (
-    <div className="drawer-content">
-      <span className="drawer-eyebrow">Команда · {team.direction === "online" ? "Online" : "Offline"}</span>
-      <h2>{team.title}</h2><p className="drawer-lead">Руководитель: {team.lead}</p>
-      <div className="drawer-hero-metric"><div><strong>{team.utilization}%</strong><span>загрузка команды</span></div><i><b style={{ width: `${Math.min(team.utilization, 100)}%` }} /></i></div>
-      <div className="drawer-metrics">
-        <div><strong>{team.count}</strong><span>сотрудников</span></div><div><strong>{team.processes}</strong><span>процессов</span></div><div><strong>{team.tasks}</strong><span>задач</span></div><div><strong>{team.onTime}%</strong><span>в срок</span></div>
-      </div>
-      <DrawerSection title="Основные функции"><div className="tag-list">{team.functions.map((item) => <span key={item}>{item}</span>)}</div></DrawerSection>
-      <DrawerSection title="Экономика и результат">
-        <div className="drawer-result-grid"><div><span>Бюджет / месяц</span><strong>₽{formatMoney(team.budget)} млн</strong></div><div><span>Вклад в маркетинг</span><strong>{team.impact}%</strong></div><div><span>Проблемные процессы</span><strong>{team.issues}</strong></div></div>
-      </DrawerSection>
-      <DrawerSection title={`Сотрудники · ${teamEmployees.length}`}>
-        <div className="drawer-people-list">{teamEmployees.slice(0, 6).map((employee) => <button key={employee.id} onClick={() => onOpenEmployee(employee.id)}><i>{employee.initials}</i><span><strong>{employee.name}</strong><small>{employee.role}</small></span><em className={`status-${employee.status}`}>{employee.utilization}%</em><ChevronRight size={16} /></button>)}</div>
-      </DrawerSection>
-    </div>
-  );
-}
-
-function EmployeeDetail({ employee, onOpenTeam }: { employee: Employee; onOpenTeam: (id: string) => void }) {
-  const team = teamById(employee.teamId)!;
-  return (
-    <div className="drawer-content">
-      <div className="drawer-person-head"><i>{employee.initials}</i><div><span className="drawer-eyebrow">Сотрудник</span><h2>{employee.name}</h2><p>{employee.role}</p></div></div>
-      <button className="drawer-team-link" onClick={() => onOpenTeam(team.id)}><span>{team.title}</span><ChevronRight size={17} /></button>
-      <div className={`employee-load-card status-${employee.status}`}><div><span>Фактическая загрузка</span><strong>{employee.utilization}%</strong><small>{statusLabel(employee.status)}</small></div><i><b style={{ width: `${Math.min(employee.utilization, 100)}%` }} /></i></div>
-      <div className="drawer-metrics">
-        <div><strong>₽{employee.cost} тыс.</strong><span>стоимость / мес.</span></div><div><strong>{employee.processes}</strong><span>процессов</span></div><div><strong>{employee.tasks}</strong><span>задач / мес.</span></div><div><strong>{employee.onTime}%</strong><span>в срок</span></div>
-      </div>
-      <DrawerSection title="Функциональный профиль">
-        <div className="function-profile"><div><span>Уникальные функции</span><strong>{employee.uniqueFunctions}</strong></div><div><span>Дублируются другими</span><strong className={employee.duplicateFunctions > 0 ? "metric-alert" : ""}>{employee.duplicateFunctions}</strong></div><div><span>Зависимых процессов</span><strong>{employee.dependencies}</strong></div></div>
-      </DrawerSection>
-      <DrawerSection title="Связь с бизнес-результатом">
-        <div className="impact-chain"><span>{employee.name.split(" ")[0]}</span><ArrowRight size={15} /><span>{employee.role}</span><ArrowRight size={15} /><span>{team.shortTitle}</span><ArrowRight size={15} /><strong>{employee.businessImpact}</strong></div>
-      </DrawerSection>
-      <div className="drawer-note"><CircleAlert size={17} /><p>Показатели описывают работу позиции, а не оценивают личность сотрудника. Для решения нужна проверка с руководителем команды.</p></div>
-    </div>
-  );
-}
-
-function statusLabel(status: EmployeeStatus) {
-  if (status === "underloaded") return "Есть свободная емкость";
-  if (status === "overloaded") return "Выше устойчивого уровня";
-  return "В устойчивом диапазоне";
-}
-
-function OpportunityDetail({ opportunity }: { opportunity: Opportunity }) {
-  return (
-    <div className="drawer-content opportunity-detail">
-      <span className="drawer-eyebrow">Optimization opportunity · {opportunity.number}</span>
-      <h2>{opportunity.title}</h2><p className="drawer-lead">{opportunity.area}</p>
-      <div className="opportunity-impact"><span>Ожидаемый эффект</span><strong>{opportunity.impact}</strong><small>{opportunity.confidence}% уверенность · сложность: {opportunity.effort.toLowerCase()}</small></div>
-      <p className="opportunity-summary">{opportunity.summary}</p>
-      <DrawerSection title="На чем основан сигнал"><div className="evidence-list">{opportunity.evidence.map((evidence, index) => <div key={evidence}><span>{String(index + 1).padStart(2, "0")}</span><strong>{evidence}</strong></div>)}</div></DrawerSection>
-      <DrawerSection title="Следующий управленческий шаг"><div className="action-callout"><Target size={18} /><p>{opportunity.action}</p></div></DrawerSection>
-      <div className="drawer-note drawer-note--positive"><Check size={17} /><p>Гипотеза готова к валидации. После подтверждения эффект можно закрепить как инициативу и отслеживать в MOLECULE.</p></div>
-    </div>
-  );
-}
-
-function DrawerSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section className="drawer-section"><h3>{title}</h3>{children}</section>;
-}
-
-function MobileNavigation({ view, onNavigate }: { view: ViewId; onNavigate: (view: ViewId) => void }) {
-  const visible = navItems.filter((item) => item.id !== "teams");
-  return (
-    <nav className="mobile-navigation">
-      {visible.map((item) => {
-        const Icon = item.icon;
-        return <button key={item.id} className={view === item.id ? "active" : ""} onClick={() => onNavigate(item.id)}><Icon size={19} /><span>{item.mobileLabel}</span></button>;
-      })}
-    </nav>
-  );
 }
 
 export default App;

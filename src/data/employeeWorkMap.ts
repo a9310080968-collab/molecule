@@ -150,7 +150,7 @@ export function diagnoseEmployeeTasks(employee: Employee, managerName: string, t
   if (tasks.length === 0) {
     alarms.push({
       id: `${employee.id}-no-tasks`, type: "no_tasks", severity: "critical", title: "У сотрудника нет активных задач",
-      description: `${managerName} не поставил ни одной задачи. Загрузка и вклад сотрудника не подтверждены рабочим планом.`,
+      description: `Рабочий план не сформирован. Ответственный руководитель — ${managerName}; загрузка и вклад сотрудника пока не подтверждены задачами.`,
     });
   }
 
