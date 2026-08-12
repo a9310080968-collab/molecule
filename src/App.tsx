@@ -84,9 +84,9 @@ const pageMeta: Record<ViewId, { eyebrow: string; title: string; description: st
     description: "Маршруты, владельцы, ожидание и последствия для других каналов.",
   },
   molecule: {
-    eyebrow: "Employee work map",
-    title: "Карта работы конкретного сотрудника",
-    description: "Выберите человека, чтобы увидеть его задачи, постановщика, функции, взаимодействия и управленческие алармы.",
+    eyebrow: "Контроль работы",
+    title: "Работа сотрудника",
+    description: "Выберите человека. Система сразу покажет главное отклонение и подскажет следующее действие.",
   },
   finance: {
     eyebrow: "Маркетинговые расходы",
@@ -609,9 +609,8 @@ function ProcessesScreen() {
 
 function MoleculeScreen() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("employee-27");
-  const [query, setQuery] = useState("");
   const [teamFilter, setTeamFilter] = useState("all");
-  const [listFilter, setListFilter] = useState<"all" | "alarms" | "no_tasks" | "loop">("all");
+  const [viewMode, setViewMode] = useState<"summary" | "map" | "tasks">("summary");
   const [taskOverrides, setTaskOverrides] = useState<Record<string, EmployeeWorkTask[]>>({});
   const [selectedNodeId, setSelectedNodeId] = useState("employee");
   const [zoom, setZoom] = useState(1);
@@ -627,37 +626,12 @@ function MoleculeScreen() {
   const map = useMemo(() => buildEmployeeWorkMap(profile, tasks, alarms), [profile, tasks, alarms]);
   const selectedNode = map.nodes.find((node) => node.id === selectedNodeId) ?? map.nodes.find((node) => node.id === "employee") ?? map.nodes[0];
   const selectedTask = selectedNode.kind === "task" ? tasks.find((task) => `task-${task.id}` === selectedNode.id) : undefined;
-
-  function tasksForProfile(item: (typeof employeeWorkProfiles)[number]) {
-    return taskOverrides[item.employee.id] ?? item.tasks;
-  }
-
-  function alarmsForProfile(item: (typeof employeeWorkProfiles)[number]) {
-    return diagnoseEmployeeTasks(item.employee, item.managerName, tasksForProfile(item));
-  }
-
-  const profileStats = useMemo(() => employeeWorkProfiles.map((item) => ({
-    profile: item,
-    tasks: taskOverrides[item.employee.id] ?? item.tasks,
-    alarms: diagnoseEmployeeTasks(item.employee, item.managerName, taskOverrides[item.employee.id] ?? item.tasks),
-  })), [taskOverrides]);
-
-  const visibleProfiles = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase("ru-RU");
-    return profileStats.filter(({ profile: item, alarms: itemAlarms }) => {
-      const matchesSearch = !normalizedQuery || `${item.employee.name} ${item.employee.role} ${item.team.shortTitle}`.toLocaleLowerCase("ru-RU").includes(normalizedQuery);
-      const matchesTeam = teamFilter === "all" || item.team.id === teamFilter;
-      const matchesList = listFilter === "all"
-        || (listFilter === "alarms" && itemAlarms.length > 0)
-        || (listFilter === "no_tasks" && itemAlarms.some((alarm) => alarm.type === "no_tasks"))
-        || (listFilter === "loop" && itemAlarms.some((alarm) => alarm.type === "loop_no_deadline"));
-      return matchesSearch && matchesTeam && matchesList;
-    });
-  }, [listFilter, profileStats, query, teamFilter]);
-
-  const noTaskCount = profileStats.filter(({ alarms: itemAlarms }) => itemAlarms.some((alarm) => alarm.type === "no_tasks")).length;
-  const loopCount = profileStats.filter(({ alarms: itemAlarms }) => itemAlarms.some((alarm) => alarm.type === "loop_no_deadline")).length;
-  const alarmCount = profileStats.filter(({ alarms: itemAlarms }) => itemAlarms.length > 0).length;
+  const employeeOptions = teamFilter === "all" ? employeeWorkProfiles : employeeWorkProfiles.filter((item) => item.team.id === teamFilter);
+  const activeTaskCount = tasks.filter((task) => task.status !== "done").length;
+  const primaryAlarm = alarms.find((alarm) => alarm.severity === "critical") ?? alarms[0];
+  const interactionTeams = Array.from(new Set(tasks.flatMap((task) => task.teamIds)))
+    .map((teamId) => teamById(teamId))
+    .filter((team): team is Team => Boolean(team));
 
   useEffect(() => {
     const element = mapScrollRef.current;
@@ -676,6 +650,14 @@ function MoleculeScreen() {
     setSelectedNodeId("employee");
     setCollaborationTeamId(nextProfile.team.id);
     setZoom(1);
+    setViewMode("summary");
+  }
+
+  function selectTeam(teamId: string) {
+    setTeamFilter(teamId);
+    if (teamId === "all" || profile.team.id === teamId) return;
+    const firstInTeam = employeeWorkProfiles.find((item) => item.team.id === teamId);
+    if (firstInTeam) selectEmployee(firstInTeam.employee.id);
   }
 
   function openTaskModal() {
@@ -704,126 +686,106 @@ function MoleculeScreen() {
     setTaskOverrides((current) => ({ ...current, [profile.employee.id]: [task, ...tasks] }));
     setSelectedNodeId(`task-${task.id}`);
     setTaskModalOpen(false);
+    setViewMode("summary");
+  }
+
+  function showPrimaryIssue() {
+    if (primaryAlarm?.type === "no_tasks") {
+      openTaskModal();
+      return;
+    }
+    if (primaryAlarm?.taskId) setSelectedNodeId(`task-${primaryAlarm.taskId}`);
+    setViewMode("tasks");
   }
 
   return (
     <div className="screen-stack employee-molecule-screen">
-      <section className="employee-map-principle">
-        <div className="employee-map-principle-copy">
-          <span><Atom size={20} />Персональная молекула работы</span>
-          <h2>Сначала человек — затем его реальная работа</h2>
-          <p>Карта не показывает абстрактный процесс. Она собирается вокруг выбранного сотрудника: кто поставил задачи, что он делает, с кем взаимодействует и где руководителю нужно вмешаться.</p>
-        </div>
-        <div className="employee-map-health">
-          <div><strong>{noTaskCount}</strong><span>без задач</span></div>
-          <div><strong>{loopCount}</strong><span>зациклено без срока</span></div>
-          <div><strong>{alarmCount}</strong><span>сотрудников с алармами</span></div>
-        </div>
+      <section className="employee-simple-selector" aria-label="Выбор сотрудника">
+        <div><span>Кого проверяем?</span><p>Можно начать с отдела, затем выбрать конкретного человека.</p></div>
+        <label><span>Отдел</span><select value={teamFilter} onChange={(event) => selectTeam(event.target.value)}><option value="all">Все отделы</option>{teams.map((team) => <option key={team.id} value={team.id}>{team.shortTitle}</option>)}</select></label>
+        <label><span>Сотрудник</span><select data-testid="employee-select" value={selectedEmployeeId} onChange={(event) => selectEmployee(event.target.value)}>{employeeOptions.map((item) => <option key={item.employee.id} value={item.employee.id}>{item.employee.name} — {item.employee.role}</option>)}</select></label>
       </section>
 
-      <div className="employee-map-layout">
-        <aside className="employee-picker" aria-label="Выбор сотрудника">
-          <header><span>Сотрудники</span><strong>{visibleProfiles.length} из {employeeWorkProfiles.length}</strong></header>
-          <label className="employee-picker-search">
-            <Search size={15} />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Имя или должность" />
-          </label>
-          <select className="employee-picker-team" value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)} aria-label="Фильтр по отделу">
-            <option value="all">Все отделы</option>
-            {teams.map((team) => <option key={team.id} value={team.id}>{team.shortTitle}</option>)}
-          </select>
-          <div className="employee-picker-filters" aria-label="Фильтр по сигналам">
-            <button className={listFilter === "all" ? "active" : ""} onClick={() => setListFilter("all")}>Все</button>
-            <button className={listFilter === "alarms" ? "active" : ""} onClick={() => setListFilter("alarms")}>Алармы</button>
-            <button className={listFilter === "no_tasks" ? "active" : ""} onClick={() => setListFilter("no_tasks")}>Без задач</button>
-            <button className={listFilter === "loop" ? "active" : ""} onClick={() => setListFilter("loop")}>Цикл</button>
-          </div>
-          <div className="employee-picker-list">
-            {visibleProfiles.map(({ profile: item, tasks: itemTasks, alarms: itemAlarms }) => {
-              const firstAlarm = itemAlarms[0];
-              return (
-                <button
-                  key={item.employee.id}
-                  data-employee-id={item.employee.id}
-                  className={`employee-picker-row ${item.employee.id === selectedEmployeeId ? "selected" : ""}`}
-                  onClick={() => selectEmployee(item.employee.id)}
-                >
-                  <span className="employee-picker-avatar">{item.employee.initials}</span>
-                  <span className="employee-picker-copy">
-                    <strong>{item.employee.name}</strong>
-                    <small>{item.employee.role}</small>
-                    <em>{item.team.shortTitle} · {item.employee.utilization}%</em>
-                  </span>
-                  <span className={`employee-picker-signal ${firstAlarm ? `severity-${firstAlarm.severity}` : "is-clear"}`}>
-                    {firstAlarm?.type === "no_tasks" ? "Нет задач" : firstAlarm?.type === "loop_no_deadline" ? "Цикл" : itemAlarms.length ? `${itemAlarms.length}` : `${itemTasks.length}`}
-                  </span>
-                </button>
-              );
-            })}
-            {visibleProfiles.length === 0 && <div className="employee-picker-empty">Сотрудники по фильтру не найдены.</div>}
-          </div>
-        </aside>
-
-        <main className="employee-workspace">
+      <main className="employee-workspace employee-workspace--simple">
           <header className="employee-workspace-header">
             <div className="employee-workspace-person">
               <span className="employee-workspace-avatar">{profile.employee.initials}</span>
               <div><span>{profile.team.shortTitle}</span><h2>{profile.employee.name}</h2><p>{profile.employee.role} · руководитель: {profile.managerName}</p></div>
             </div>
             <div className="employee-workspace-actions">
-              <div className={`employee-workspace-alarm ${alarms.length ? "has-alarm" : "is-clear"}`}><CircleAlert size={16} /><span>{alarms.length ? `${alarms.length} аларма` : "Нет алармов"}</span></div>
               <button className="assign-task-button" onClick={openTaskModal}><Plus size={16} />Поставить задачу</button>
             </div>
           </header>
 
-          <div className="employee-map-toolbar">
-            <div><span><i className="legend-manager" />Постановка</span><span><i className="legend-work" />Работа</span><span><i className="legend-interaction" />Взаимодействие</span><span><i className="legend-risk" />Аларм</span></div>
-            <div className="employee-map-zoom" aria-label="Масштаб карты">
-              <button aria-label="Уменьшить" disabled={zoom <= 0.85} onClick={() => setZoom((current) => Math.max(0.85, Number((current - 0.15).toFixed(2))))}><Minus size={15} /></button>
-              <span>{Math.round(zoom * 100)}%</span>
-              <button aria-label="Увеличить" disabled={zoom >= 1.3} onClick={() => setZoom((current) => Math.min(1.3, Number((current + 0.15).toFixed(2))))}><Plus size={15} /></button>
-              <button aria-label="По размеру" onClick={() => setZoom(1)}><Maximize2 size={14} /></button>
+          <section className={`executive-glance ${primaryAlarm ? "has-alarm" : "is-clear"}`}>
+            <div className="executive-glance-focus">
+              <span>{primaryAlarm ? "Требует вашего решения" : "Ситуация в норме"}</span>
+              <div className="executive-glance-title">{primaryAlarm ? <CircleAlert size={25} /> : <Check size={25} />}<h3>{primaryAlarm?.title ?? "Критичных отклонений нет"}</h3></div>
+              <p>{primaryAlarm?.description ?? "У сотрудника есть задачи, сроки и подтвержденный руководителем приоритет."}</p>
+              {primaryAlarm && <button onClick={showPrimaryIssue}>{primaryAlarm.type === "no_tasks" ? "Поставить первую задачу" : "Посмотреть все сигналы"}<ArrowRight size={16} /></button>}
             </div>
-          </div>
-
-          <div className="employee-map-scroll" ref={mapScrollRef}>
-            <div className="employee-map-surface" style={{ width: `${zoom * 100}%`, minWidth: `${900 * zoom}px`, height: `${620 * zoom}px` }}>
-              <svg className="employee-map-edges" viewBox="0 0 1000 620" preserveAspectRatio="none" aria-hidden="true">
-                {map.edges.map((edge) => {
-                  const from = map.nodes.find((node) => node.id === edge.from);
-                  const to = map.nodes.find((node) => node.id === edge.to);
-                  if (!from || !to) return null;
-                  return (
-                    <g key={`${edge.from}-${edge.to}-${edge.label ?? "edge"}`} className={`employee-map-edge employee-map-edge--${edge.tone} ${edge.dashed ? "is-dashed" : ""}`}>
-                      <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} />
-                      <circle cx={to.x} cy={to.y} r="4" />
-                      {edge.label && <text x={(from.x + to.x) / 2} y={(from.y + to.y) / 2 - 8} textAnchor="middle">{edge.label}</text>}
-                    </g>
-                  );
-                })}
-              </svg>
-              {map.nodes.map((node) => (
-                <button
-                  key={node.id}
-                  className={`employee-map-node employee-map-node--${node.kind} status-${node.status} ${selectedNode.id === node.id ? "selected" : ""}`}
-                  style={{ left: `${node.x / 10}%`, top: `${node.y / 6.2}%` }}
-                  onClick={() => setSelectedNodeId(node.id)}
-                  aria-label={`${employeeMapKindLabels[node.kind]}: ${node.label}`}
-                >
-                  <span>{employeeMapKindLabels[node.kind]}</span>
-                  <strong>{node.label}</strong>
-                  <small>{node.metric}</small>
-                  {node.status === "risk" && <i><CircleAlert size={12} /></i>}
-                </button>
-              ))}
+            <div className="executive-glance-metrics">
+              <div><span>Задачи в работе</span><strong>{activeTaskCount}</strong><small>всего {tasks.length}</small></div>
+              <div><span>Загрузка</span><strong>{profile.employee.utilization}%</strong><small>{statusLabel(profile.employee.status)}</small></div>
+              <div><span>Взаимодействия</span><strong>{interactionTeams.length}</strong><small>команд</small></div>
             </div>
-          </div>
+          </section>
 
-          <EmployeeNodeInspector node={selectedNode} task={selectedTask} profile={profile} alarms={alarms} taskCount={tasks.length} />
+          <nav className="employee-view-tabs" aria-label="Разделы карты сотрудника">
+            <button className={viewMode === "summary" ? "active" : ""} onClick={() => setViewMode("summary")}><span>Главное</span><small>Короткий обзор</small></button>
+            <button className={viewMode === "map" ? "active" : ""} onClick={() => setViewMode("map")}><span>Карта связей</span><small>Кто с кем работает</small></button>
+            <button className={viewMode === "tasks" ? "active" : ""} onClick={() => setViewMode("tasks")}><span>Задачи и сигналы</span><small>{countLabel(tasks.length, "задача", "задачи", "задач")} · {countLabel(alarms.length, "сигнал", "сигнала", "сигналов")}</small></button>
+          </nav>
 
-          <div className="employee-work-lower">
+          {viewMode === "summary" && (
+            <div className="employee-simple-summary">
+              <section className="employee-current-work">
+                <header><div><span>Сейчас в работе</span><h3>Ближайшие задачи</h3></div><button onClick={() => setViewMode("tasks")}>Показать все <ArrowRight size={15} /></button></header>
+                {tasks.length === 0 ? (
+                  <div className="employee-simple-empty"><CircleAlert size={22} /><div><strong>Рабочий план не сформирован</strong><p>Назначьте сотруднику первую задачу с понятным сроком.</p></div><button onClick={openTaskModal}>Поставить задачу</button></div>
+                ) : (
+                  <div className="employee-simple-task-list">
+                    {tasks.filter((task) => task.status !== "done").slice(0, 3).map((task) => (
+                      <button key={task.id} onClick={() => { setSelectedNodeId(`task-${task.id}`); setViewMode("tasks"); }}>
+                        <span className={`simple-task-state status-${task.status}`}>{taskStatusLabel(task.status)}</span>
+                        <strong>{task.title}</strong>
+                        <small>{task.deadline ? `Срок: ${formatTaskDate(task.deadline)}` : "Срок не указан"}</small>
+                        <div><i><b style={{ width: `${task.progress}%` }} /></i><em>{task.progress}%</em></div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <aside className="employee-simple-context">
+                <section><span>Что делает сотрудник</span><div className="simple-function-list">{profile.functions.map((item, index) => <p key={item}><em>{index + 1}</em><strong>{item}</strong></p>)}</div></section>
+                <section><span>С кем взаимодействует</span><div className="simple-team-list">{interactionTeams.length ? interactionTeams.map((team) => <strong key={team.id}>{team.shortTitle}</strong>) : <p>Только внутри своей команды</p>}</div></section>
+                <section className="simple-manager-row"><span>Ответственный руководитель</span><div><i>{profile.managerName.split(" ").map((item) => item[0]).join("")}</i><p><strong>{profile.managerName}</strong><small>{profile.managerRole}</small></p></div></section>
+              </aside>
+            </div>
+          )}
+
+          {viewMode === "map" && (
+            <div className="employee-map-view">
+              <div className="employee-map-toolbar">
+                <div><span><i className="legend-manager" />Постановка</span><span><i className="legend-work" />Работа</span><span><i className="legend-interaction" />Взаимодействие</span><span><i className="legend-risk" />Проблема</span></div>
+                <div className="employee-map-zoom" aria-label="Масштаб карты">
+                  <button aria-label="Уменьшить" disabled={zoom <= 0.85} onClick={() => setZoom((current) => Math.max(0.85, Number((current - 0.15).toFixed(2))))}><Minus size={15} /></button><span>{Math.round(zoom * 100)}%</span><button aria-label="Увеличить" disabled={zoom >= 1.3} onClick={() => setZoom((current) => Math.min(1.3, Number((current + 0.15).toFixed(2))))}><Plus size={15} /></button><button aria-label="По размеру" onClick={() => setZoom(1)}><Maximize2 size={14} /></button>
+                </div>
+              </div>
+              <div className="employee-map-scroll" ref={mapScrollRef}>
+                <div className="employee-map-surface" style={{ width: `${zoom * 100}%`, minWidth: `${900 * zoom}px`, height: `${620 * zoom}px` }}>
+                  <svg className="employee-map-edges" viewBox="0 0 1000 620" preserveAspectRatio="none" aria-hidden="true">{map.edges.map((edge) => { const from = map.nodes.find((node) => node.id === edge.from); const to = map.nodes.find((node) => node.id === edge.to); if (!from || !to) return null; return <g key={`${edge.from}-${edge.to}-${edge.label ?? "edge"}`} className={`employee-map-edge employee-map-edge--${edge.tone} ${edge.dashed ? "is-dashed" : ""}`}><line x1={from.x} y1={from.y} x2={to.x} y2={to.y} /><circle cx={to.x} cy={to.y} r="4" />{edge.label && <text x={(from.x + to.x) / 2} y={(from.y + to.y) / 2 - 8} textAnchor="middle">{edge.label}</text>}</g>; })}</svg>
+                  {map.nodes.map((node) => <button key={node.id} className={`employee-map-node employee-map-node--${node.kind} status-${node.status} ${selectedNode.id === node.id ? "selected" : ""}`} style={{ left: `${node.x / 10}%`, top: `${node.y / 6.2}%` }} onClick={() => setSelectedNodeId(node.id)} aria-label={`${employeeMapKindLabels[node.kind]}: ${node.label}`}><span>{employeeMapKindLabels[node.kind]}</span><strong>{node.label}</strong><small>{node.metric}</small>{node.status === "risk" && <i><CircleAlert size={12} /></i>}</button>)}
+                </div>
+              </div>
+              <EmployeeNodeInspector node={selectedNode} task={selectedTask} profile={profile} alarms={alarms} taskCount={tasks.length} />
+            </div>
+          )}
+
+          {viewMode === "tasks" && <div className="employee-work-lower employee-work-lower--simple">
             <section className="work-alarm-panel">
-              <header><div><span>Автодиагностика</span><h3>Алармы руководителю</h3></div><em className={alarms.length ? "has-alarm" : "is-clear"}>{alarms.length || "OK"}</em></header>
+              <header><div><span>Что требует внимания</span><h3>Сигналы руководителю</h3></div><em className={alarms.length ? "has-alarm" : "is-clear"}>{alarms.length || "OK"}</em></header>
               {alarms.length === 0 ? (
                 <div className="work-alarm-clear"><Check size={18} /><div><strong>Критичных отклонений нет</strong><p>Есть задачи, постановщик и дедлайны определены.</p></div></div>
               ) : (
@@ -838,7 +800,7 @@ function MoleculeScreen() {
             </section>
 
             <section className="employee-task-register">
-              <header><div><span>Рабочий план</span><h3>Задачи сотрудника</h3></div><strong>{tasks.length}</strong></header>
+              <header><div><span>Полный рабочий план</span><h3>Все задачи</h3></div><strong>{tasks.length}</strong></header>
               {tasks.length === 0 ? (
                 <div className="employee-task-empty"><CircleAlert size={18} /><p>Задач нет. Руководителю нужно сформировать рабочий план.</p><button onClick={openTaskModal}><Plus size={14} />Поставить первую задачу</button></div>
               ) : (
@@ -854,9 +816,8 @@ function MoleculeScreen() {
                 </div>
               )}
             </section>
-          </div>
+          </div>}
         </main>
-      </div>
 
       {taskModalOpen && (
         <div className="task-assignment-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setTaskModalOpen(false)}>
@@ -911,6 +872,13 @@ function taskStatusLabel(status: EmployeeWorkTask["status"]) {
 
 function alarmSeverityLabel(severity: EmployeeWorkAlarm["severity"]) {
   return { critical: "Критично", warning: "Внимание", info: "Инфо" }[severity];
+}
+
+function countLabel(value: number, one: string, few: string, many: string) {
+  const lastTwo = value % 100;
+  const last = value % 10;
+  const word = lastTwo >= 11 && lastTwo <= 19 ? many : last === 1 ? one : last >= 2 && last <= 4 ? few : many;
+  return `${value} ${word}`;
 }
 
 function stepStatusLabel(status: Process["steps"][number]["status"]) {
