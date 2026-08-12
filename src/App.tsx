@@ -1,2729 +1,751 @@
-import { type CSSProperties, type DragEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Sidebar, type SidebarMenuId } from "./components/Sidebar";
-import { TopSearch } from "./components/TopSearch";
-import { ProjectScene, type SceneHandle } from "./components/ProjectScene";
-import { BottomControls } from "./components/BottomControls";
-import { RightPanel } from "./components/RightPanel";
-import { WorkspacePanel, type WorkspaceTaskDraft } from "./components/WorkspacePanel";
-import { DocumentModal } from "./components/DocumentModal";
-import { OrphanFilesPanel } from "./components/OrphanFilesPanel";
-import { ProjectChatPanel } from "./components/ProjectChatPanel";
-import { ProjectManagerModal } from "./components/ProjectManagerModal";
-import { ProcessBuilderModal } from "./components/ProcessBuilderModal";
-import { ProcessDetailModal } from "./components/ProcessDetailModal";
-import { PersonalIntegrationsModal } from "./components/PersonalIntegrationsModal";
-import { DemoLogin } from "./components/DemoLogin";
-import { ConfirmDialog } from "./components/ConfirmDialog";
-import { MvpGuide } from "./components/MvpGuide";
-import { demoProjects, initialNotifications } from "./data/mockProject";
+import { useMemo, useState } from "react";
 import {
-  createDocumentNode,
-  createDocumentFromName,
-  createProcessId,
-  formatBytes,
-  getDefaultLevel,
-  getDocumentFromNode,
-  getLevelById,
-  getLevelNodes,
-  getLevelProcesses,
-  getNodeById,
-  getProcessDeadlineEntries,
-  getProcessById,
-  formatDeadlineDistance,
-  getSearchMatches,
-  parseDeadline,
-} from "./lib/graph";
+  ArrowDownRight,
+  ArrowRight,
+  ArrowUpRight,
+  BarChart3,
+  BriefcaseBusiness,
+  Check,
+  ChevronRight,
+  CircleAlert,
+  Clock3,
+  GitBranch,
+  LayoutDashboard,
+  Menu,
+  Network,
+  Search,
+  Sparkles,
+  Target,
+  TrendingUp,
+  Users,
+  WalletCards,
+  X,
+  Zap,
+} from "lucide-react";
 import {
-  addDocumentNodeToProject,
-  appendUnique,
-  canOpenNodeLevel,
-  ensureNodeLevel,
-  putDocumentIntoNode,
-  removeDocumentFromNode,
-} from "./lib/projectMutations";
-import { createBlankProjectTemplate, createDefaultProjectTemplate, createProjectFromTemplate, createTemplateFromProject } from "./lib/projectTemplates";
-import { buildRoleProject, canEditNode, canEditProcess, demoAccessByRole, resolveDemoUser } from "./lib/demoAccess";
-import { normalizeProjectPeople, normalizeTemplatePeople, toEnglishData } from "./lib/englishContent";
-import { useI18n } from "./lib/i18n";
-import type {
-  BusinessProcess,
-  ChatMessage,
-  DemoNotification,
-  DemoProject,
-  DemoUserRole,
-  IntegrationProvider,
-  NodeChecklistItem,
-  NodeEdit,
-  NodeStatus,
-  ParticipantEdit,
-  ProcessDocument,
-  ProcessEdit,
-  ProjectParticipantSeed,
-  ProjectNode,
-  ProjectTemplate,
-  UserIntegration,
-  Vec2,
-} from "./types";
+  employees,
+  financeCategories,
+  formatMoney,
+  opportunities,
+  processes,
+  teamById,
+  teams,
+  type Direction,
+  type Employee,
+  type EmployeeStatus,
+  type Opportunity,
+  type Process,
+  type Team,
+} from "./data/tsumPrototype";
 
-type HistorySnapshot = {
-  projects: DemoProject[];
-  activeProjectId: string;
-  activeLevelId: string;
-  selectedNodeId: string;
-  selectedProcessId: string | null;
-  notifications: DemoNotification[];
+type ViewId = "overview" | "teams" | "people" | "processes" | "finance" | "opportunities";
+type PeopleFilter = "all" | EmployeeStatus | "critical";
+
+const navItems: Array<{ id: ViewId; label: string; mobileLabel: string; icon: typeof LayoutDashboard }> = [
+  { id: "overview", label: "Обзор", mobileLabel: "Обзор", icon: LayoutDashboard },
+  { id: "teams", label: "Команды", mobileLabel: "Команды", icon: Network },
+  { id: "people", label: "88 сотрудников", mobileLabel: "Люди", icon: Users },
+  { id: "processes", label: "Процессы", mobileLabel: "Процессы", icon: GitBranch },
+  { id: "finance", label: "Расходы", mobileLabel: "Расходы", icon: WalletCards },
+  { id: "opportunities", label: "Оптимизация", mobileLabel: "Шансы", icon: Sparkles },
+];
+
+const pageMeta: Record<ViewId, { eyebrow: string; title: string; description: string }> = {
+  overview: {
+    eyebrow: "Marketing department",
+    title: "Что сейчас происходит внутри маркетинга?",
+    description: "Живая управленческая карта людей, функций, процессов, расходов и результата.",
+  },
+  teams: {
+    eyebrow: "12 команд",
+    title: "Структура и эффективность отделов",
+    description: "Сравните загрузку, скорость, бюджет и вклад каждой команды.",
+  },
+  people: {
+    eyebrow: "88 сотрудников",
+    title: "Кто чем занят и где теряется емкость",
+    description: "Фактическая загрузка, функции, зависимости и связь с бизнес-результатом.",
+  },
+  processes: {
+    eyebrow: "Сквозные процессы",
+    title: "Как работа движется между командами",
+    description: "Маршруты, владельцы, ожидание и последствия для других каналов.",
+  },
+  finance: {
+    eyebrow: "Маркетинговые расходы",
+    title: "Сколько, на что и с каким результатом",
+    description: "Бюджет, прогноз, отдача и затраты, которые требуют управленческого внимания.",
+  },
+  opportunities: {
+    eyebrow: "8 возможностей",
+    title: "Где система видит потенциал оптимизации",
+    description: "Не готовое кадровое решение, а проверяемые гипотезы с фактами и ожидаемым эффектом.",
+  },
 };
 
-const HISTORY_LIMIT = 60;
-const STORAGE_KEY = "molecule-mvp-state-v2";
-type LevelTransition = "down" | "up";
+const kpis = [
+  { value: "88", label: "сотрудников", note: "в 12 командах", tone: "ink", action: "people" as const },
+  { value: "68%", label: "средняя загрузка", note: "−4 п.п. к плану", tone: "neutral", action: "people" as const },
+  { value: "17", label: "загружены < 50%", note: "3,6 FTE емкости", tone: "warning", action: "underloaded" as const },
+  { value: "11", label: "перегружены", note: "риск выгорания", tone: "danger", action: "overloaded" as const },
+  { value: "14", label: "дублей функций", note: "между 7 командами", tone: "warning", action: "duplicates" as const },
+  { value: "9", label: "узких мест", note: "в активных процессах", tone: "danger", action: "processes" as const },
+  { value: "23", label: "ждут согласования", note: "в среднем 19 часов", tone: "neutral", action: "processes" as const },
+  { value: "6", label: "задач у топ-менеджмента", note: "операционный уровень", tone: "danger", action: "sms" as const },
+  { value: "8", label: "зон оптимизации", note: "₽26,8 млн потенциала", tone: "accent", action: "opportunities" as const },
+];
 
-type DeletionRequest = {
-  kind: "project" | "node" | "document" | "process";
-  id: string;
-  title: string;
-  description: string;
-  confirmLabel: string;
-};
-
-type PersistedAppState = {
-  projects: DemoProject[];
-  projectTemplates: ProjectTemplate[];
-  activeProjectId: string;
-  activeLevelId: string;
-  selectedNodeId: string;
-  notifications: DemoNotification[];
-  fontScale: number;
-  interfaceScale?: number;
-  guideDismissed?: boolean;
-  demoRole?: DemoUserRole;
-  demoAuthenticated?: boolean;
-};
-
-let cachedPersistedState: PersistedAppState | null | undefined;
-
-function getPersistedState() {
-  if (cachedPersistedState !== undefined) {
-    return cachedPersistedState;
-  }
-
-  if (typeof window === "undefined") {
-    cachedPersistedState = null;
-    return cachedPersistedState;
-  }
-
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      cachedPersistedState = null;
-    } else {
-      const state = toEnglishData(JSON.parse(raw) as PersistedAppState);
-      cachedPersistedState = {
-        ...state,
-        projects: state.projects.map(normalizeProjectPeople),
-        projectTemplates: state.projectTemplates?.map(normalizeTemplatePeople) ?? [],
-      };
-    }
-  } catch {
-    cachedPersistedState = null;
-  }
-
-  return cachedPersistedState;
-}
-
-function mergeProjectTemplates(savedTemplates: ProjectTemplate[] | undefined, defaultTemplates: ProjectTemplate[]) {
-  if (!savedTemplates?.length) {
-    return defaultTemplates;
-  }
-
-  const defaultIds = new Set(defaultTemplates.map((template) => template.id));
-  const defaultSignatures = new Set(defaultTemplates.map((template) => `${template.title}\u0000${template.sourceProjectTitle}`));
-  return [
-    ...defaultTemplates,
-    ...savedTemplates.filter((template) =>
-      !defaultIds.has(template.id)
-      && !defaultSignatures.has(`${template.title}\u0000${template.sourceProjectTitle}`),
-    ),
-  ];
-}
-
-function mergeDemoProjects(savedProjects: DemoProject[] | undefined, defaults: DemoProject[]) {
-  if (!savedProjects?.length) {
-    return defaults;
-  }
-
-  const savedIds = new Set(savedProjects.map((project) => project.id));
-  return [
-    ...defaults.filter((project) => !savedIds.has(project.id)),
-    ...savedProjects,
-  ];
-}
-
-function mergeDemoNotifications(savedNotifications: DemoNotification[] | undefined, defaults: DemoNotification[]) {
-  if (!savedNotifications?.length) {
-    return defaults;
-  }
-
-  const savedIds = new Set(savedNotifications.map((notification) => notification.id));
-  return [
-    ...defaults.filter((notification) => !savedIds.has(notification.id)),
-    ...savedNotifications,
-  ];
-}
-
-export default function App() {
-  const { t } = useI18n();
-  const persistedState = getPersistedState();
-  const defaultTemplates = useMemo(() => toEnglishData([
-    createBlankProjectTemplate(),
-    createDefaultProjectTemplate(),
-    { ...createTemplateFromProject(demoProjects[0], "ЖК Рога и копыта / ТЗ с готовыми БП", "Структура по приложенному ТЗ: ИРД, РД, разделы, подразделы, участники и готовые бизнес-процессы."), id: "template-demo-roga-kopyta" },
-    { ...createTemplateFromProject(demoProjects[1], "Жилой комплекс / полный комплект", "Структура разделов, внутренних уровней и контейнеров связи без рабочих документов."), id: "template-demo-sirius" },
-    { ...createTemplateFromProject(demoProjects[2], "Компактный офисный проект", "Легкая структура для небольшого объекта с ИРД, АР, КР, ЭОМ и сметой."), id: "template-demo-vega" },
-  ]).map(normalizeTemplatePeople), []);
-  const initialProjects = mergeDemoProjects(persistedState?.projects, demoProjects);
-  const savedHasPrimaryDemo = Boolean(persistedState?.projects?.some((project) => project.id === demoProjects[0]?.id));
-  const preferredActiveProjectId = savedHasPrimaryDemo ? persistedState?.activeProjectId : demoProjects[0]?.id;
-  const initialActiveProject = initialProjects.find((project) => project.id === preferredActiveProjectId) ?? initialProjects[0] ?? demoProjects[0];
-  const initialActiveLevel = initialActiveProject.levels.find((level) => level.id === persistedState?.activeLevelId) ?? getDefaultLevel(initialActiveProject);
-  const initialSelectedNode = getNodeById(initialActiveProject, persistedState?.selectedNodeId) ?? getNodeById(initialActiveProject, initialActiveLevel.centralNodeId);
-  const [projects, setProjects] = useState<DemoProject[]>(initialProjects);
-  const [projectTemplates, setProjectTemplates] = useState<ProjectTemplate[]>(() => mergeProjectTemplates(persistedState?.projectTemplates, defaultTemplates));
-  const [activeProjectId, setActiveProjectId] = useState(initialActiveProject.id);
-  const [activeLevelId, setActiveLevelId] = useState(initialActiveLevel.id);
-  const [selectedNodeId, setSelectedNodeId] = useState(initialSelectedNode?.id ?? initialActiveLevel.centralNodeId);
-  const [selectedProcessId, setSelectedProcessId] = useState<string | null>(null);
-  const [linkingFromId, setLinkingFromId] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [activeMenu, setActiveMenu] = useState<SidebarMenuId>("map");
+function App() {
+  const [view, setView] = useState<ViewId>("overview");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [notifications, setNotifications] = useState<DemoNotification[]>(() => mergeDemoNotifications(persistedState?.notifications, initialNotifications));
-  const [modalDocument, setModalDocument] = useState<ProcessDocument | null>(null);
-  const [projectManagerOpen, setProjectManagerOpen] = useState(false);
-  const [personalSettingsOpen, setPersonalSettingsOpen] = useState(false);
-  const [processBuilderId, setProcessBuilderId] = useState<string | null>(null);
-  const [processDetailId, setProcessDetailId] = useState<string | null>(null);
-  const [deletionRequest, setDeletionRequest] = useState<DeletionRequest | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
-  const [fontScale, setFontScale] = useState(persistedState?.fontScale ?? 0.94);
-  const [interfaceScale, setInterfaceScale] = useState(persistedState?.interfaceScale ?? 1);
-  const [guideDismissed, setGuideDismissed] = useState(Boolean(persistedState?.guideDismissed));
-  const [demoRole, setDemoRole] = useState<DemoUserRole>(persistedState?.demoRole ?? "gip");
-  const [demoAuthenticated, setDemoAuthenticated] = useState(Boolean(persistedState?.demoAuthenticated));
-  const [constructorHintDismissed, setConstructorHintDismissed] = useState(false);
-  const [chatPanelOpen, setChatPanelOpen] = useState(false);
-  const [seenChatMessageIds, setSeenChatMessageIds] = useState<Set<string>>(() => new Set());
-  const [isDropActive, setIsDropActive] = useState(false);
-  const [levelTransition, setLevelTransition] = useState<LevelTransition | null>(null);
-  const [undoStack, setUndoStack] = useState<HistorySnapshot[]>([]);
-  const [redoStack, setRedoStack] = useState<HistorySnapshot[]>([]);
-  const sceneRef = useRef<SceneHandle | null>(null);
+  const [peopleFilter, setPeopleFilter] = useState<PeopleFilter>("all");
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
+  const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>(null);
 
-  const hasProjects = projects.length > 0;
-  const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0] ?? demoProjects[0];
-  const access = demoAccessByRole[demoRole];
-  const currentUser = resolveDemoUser(activeProject, demoRole);
-  const visibleProject = useMemo(() => buildRoleProject(activeProject, currentUser, access), [access, activeProject, currentUser]);
-  const activeLevel = getLevelById(visibleProject, activeLevelId);
-  const levelNodes = useMemo(() => getLevelNodes(visibleProject, activeLevel), [activeLevel, visibleProject]);
-  const levelProcesses = useMemo(() => getLevelProcesses(visibleProject, activeLevel), [activeLevel, visibleProject]);
-  const selectedNode = getNodeById(visibleProject, selectedNodeId) ?? getNodeById(visibleProject, activeLevel.centralNodeId) ?? levelNodes[0];
-  const selectedProcess = getProcessById(visibleProject, selectedProcessId) ?? null;
-  const builderProcess = getProcessById(visibleProject, processBuilderId) ?? null;
-  const detailProcess = getProcessById(visibleProject, processDetailId) ?? null;
-  const demoAccounts = useMemo(() => ({
-    employee: resolveDemoUser(activeProject, "employee"),
-    gip: resolveDemoUser(activeProject, "gip"),
-    director: resolveDemoUser(activeProject, "director"),
-  }), [activeProject]);
-  const chatUnreadCount = visibleProject.chatMessages.filter(
-    (message) => message.author !== currentUser?.name && !seenChatMessageIds.has(message.id),
-  ).length;
-  const matches = useMemo(() => getSearchMatches(query, visibleProject, activeLevel), [activeLevel, query, visibleProject]);
-  const isSearching = query.trim().length > 0;
-  const hasNoResults = isSearching && matches.nodeIds.size + matches.processIds.size === 0;
-  const appVars = useMemo(() => buildAppVars(fontScale, interfaceScale), [fontScale, interfaceScale]);
-  const showConstructorHint =
-    hasProjects &&
-    activeMenu === "map" &&
-    guideDismissed &&
-    access.canEditStructure &&
-    !constructorHintDismissed &&
-    visibleProject.processes.length === 0 &&
-    levelNodes.filter((node) => node.type !== "central" && node.type !== "document").length <= 4;
+  const selectedTeam = selectedTeamId ? teamById(selectedTeamId) ?? null : null;
+  const selectedEmployee = selectedEmployeeId ? employees.find((employee) => employee.id === selectedEmployeeId) ?? null : null;
+  const selectedOpportunity = selectedOpportunityId ? opportunities.find((item) => item.id === selectedOpportunityId) ?? null : null;
 
-  useEffect(() => {
-    const state: PersistedAppState = {
-      projects,
-      projectTemplates,
-      activeProjectId,
-      activeLevelId,
-      selectedNodeId,
-      notifications,
-      fontScale,
-      interfaceScale,
-      guideDismissed,
-      demoRole,
-      demoAuthenticated,
-    };
-
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {
-      // Local storage can be unavailable in private browser modes. The demo still works in memory.
-    }
-  }, [activeLevelId, activeProjectId, demoAuthenticated, demoRole, fontScale, guideDismissed, interfaceScale, notifications, projectTemplates, projects, selectedNodeId]);
-
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      const target = event.target as HTMLElement | null;
-      const isTextField = target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.isContentEditable;
-
-      if ((event.ctrlKey || event.metaKey) && !isTextField && event.key.toLocaleLowerCase() === "z") {
-        event.preventDefault();
-        if (event.shiftKey) {
-          redo();
-        } else {
-          undo();
-        }
-      }
-
-      if ((event.ctrlKey || event.metaKey) && !isTextField && event.key.toLocaleLowerCase() === "y") {
-        event.preventDefault();
-        redo();
-      }
-
-      if (event.key === "Delete" && selectedProcessId && !isTextField) {
-        event.preventDefault();
-        deleteProcess(selectedProcessId);
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [projects, activeProjectId, activeLevelId, selectedNodeId, selectedProcessId, notifications, undoStack, redoStack]);
-
-  useEffect(() => {
-    setNotifications((current) => {
-      const additions = buildDeadlineNotifications(projects, current);
-      return additions.length ? [...additions, ...current].slice(0, 30) : current;
-    });
-  }, [projects]);
-
-  function getSnapshot(): HistorySnapshot {
-    return {
-      projects,
-      activeProjectId,
-      activeLevelId,
-      selectedNodeId,
-      selectedProcessId,
-      notifications,
-    };
-  }
-
-  function restoreSnapshot(snapshot: HistorySnapshot) {
-    setProjects(snapshot.projects);
-    setActiveProjectId(snapshot.activeProjectId);
-    setActiveLevelId(snapshot.activeLevelId);
-    setSelectedNodeId(snapshot.selectedNodeId);
-    setSelectedProcessId(snapshot.selectedProcessId);
-    setNotifications(snapshot.notifications);
-    setLinkingFromId(null);
-    setProcessBuilderId(null);
-    setProcessDetailId(null);
-    setLevelTransition(null);
-  }
-
-  function recordHistory() {
-    const snapshot = getSnapshot();
-    setUndoStack((current) => [...current, snapshot].slice(-HISTORY_LIMIT));
-    setRedoStack([]);
-  }
-
-  function undo() {
-    setUndoStack((current) => {
-      const snapshot = current[current.length - 1];
-      if (!snapshot) {
-        return current;
-      }
-      setRedoStack((redoCurrent) => [...redoCurrent, getSnapshot()].slice(-HISTORY_LIMIT));
-      restoreSnapshot(snapshot);
-      return current.slice(0, -1);
-    });
-  }
-
-  function redo() {
-    setRedoStack((current) => {
-      const snapshot = current[current.length - 1];
-      if (!snapshot) {
-        return current;
-      }
-      setUndoStack((undoCurrent) => [...undoCurrent, getSnapshot()].slice(-HISTORY_LIMIT));
-      restoreSnapshot(snapshot);
-      return current.slice(0, -1);
-    });
-  }
-
-  function updateActiveProject(updater: (project: DemoProject) => DemoProject, record = true) {
-    if (record) {
-      recordHistory();
-    }
-    setProjects((current) => current.map((project) =>
-      project.id === activeProjectId
-        ? normalizeProjectPeople(toEnglishData(updater(project)))
-        : project,
-    ));
-  }
-
-  function saveLevelPositions(levelId: string, positions: Record<string, Vec2>, record = true) {
-    if (!access.canEditStructure) {
-      return;
-    }
-    updateActiveProject((project) => ({
-      ...project,
-      nodePositions: {
-        ...(project.nodePositions ?? {}),
-        [levelId]: positions,
-      },
-    }), record);
-  }
-
-  function selectProject(projectId: string) {
-    const project = projects.find((item) => item.id === projectId);
-    if (!project) {
-      return;
-    }
-    setActiveProjectId(project.id);
-    setActiveLevelId(getDefaultLevel(project).id);
-    setSelectedNodeId(getDefaultLevel(project).centralNodeId);
-    setSelectedProcessId(null);
-    setNotifications((current) => current.filter((notification) => notification.projectId !== projectId));
-    setLinkingFromId(null);
-    setProcessBuilderId(null);
-    setProcessDetailId(null);
-    setPersonalSettingsOpen(false);
-    setChatPanelOpen(false);
-    setSeenChatMessageIds(new Set());
-    setQuery("");
-    setLevelTransition(null);
-    setActiveMenu("map");
-  }
-
-  function createProject(title: string, address: string, templateId: string, teamMembers: ProjectParticipantSeed[] = []) {
-    if (!requireAccess(access.canManageProjects)) {
-      return;
-    }
-    const template = projectTemplates.find((item) => item.id === templateId) ?? projectTemplates[0];
-    if (!template) {
-      return;
-    }
-
-    recordHistory();
-    const project = normalizeProjectPeople(toEnglishData(applyProjectTeam(
-      createProjectFromTemplate(template, title || t("Проект {count}", { count: projects.length + 1 }), address || t("Адрес не указан")),
-      teamMembers,
-    )));
-    const defaultLevel = getDefaultLevel(project);
-    setProjects((current) => [...current, project]);
-    setActiveProjectId(project.id);
-    setActiveLevelId(defaultLevel.id);
-    setSelectedNodeId(defaultLevel.centralNodeId);
-    setSelectedProcessId(null);
-    setLinkingFromId(null);
-    setProcessBuilderId(null);
-    setProcessDetailId(null);
-    setQuery("");
-    setActiveMenu("map");
-    setConstructorHintDismissed(false);
-    setProjectManagerOpen(false);
-    showToast(t("Проект «{project}» создан из шаблона «{template}».", { project: project.title, template: template.title }));
-  }
-
-  function deleteProject(projectId: string) {
-    if (!requireAccess(access.canManageProjects)) {
-      return;
-    }
-    const project = projects.find((item) => item.id === projectId);
-    if (!project) {
-      return;
-    }
-    setDeletionRequest({
-      kind: "project",
-      id: project.id,
-      title: t("Удалить проект «{title}»?", { title: project.title }),
-      description: t("Будут удалены все уровни, ноды, процессы, документы и история проекта. После подтверждения восстановить проект через интерфейс нельзя."),
-      confirmLabel: t("Удалить проект"),
-    });
-  }
-
-  function performDeleteProject(projectId: string) {
-    if (!requireAccess(access.canManageProjects)) {
-      return;
-    }
-    if (projects.length <= 1) {
-      const project = projects.find((item) => item.id === projectId);
-      if (!project) {
-        return;
-      }
-      recordHistory();
-      setProjects([]);
-      setActiveProjectId("");
-      setActiveLevelId("");
-      setSelectedNodeId("");
-      setSelectedProcessId(null);
-      setLinkingFromId(null);
-      setProcessBuilderId(null);
-      setProcessDetailId(null);
-      setProjectManagerOpen(false);
-      setPersonalSettingsOpen(false);
-      setActiveMenu("map");
-      showToast(t("Проект «{title}» удален.", { title: project.title }));
-      return;
-    }
-
-    const project = projects.find((item) => item.id === projectId);
-    if (!project) {
-      return;
-    }
-
-    recordHistory();
-    const remaining = projects.filter((item) => item.id !== projectId);
-    const nextProject = remaining.find((item) => item.id !== projectId) ?? remaining[0];
-    const nextLevel = getDefaultLevel(nextProject);
-
-    setProjects(remaining);
-    setActiveProjectId(nextProject.id);
-    setActiveLevelId(nextLevel.id);
-    setSelectedNodeId(nextLevel.centralNodeId);
-    setSelectedProcessId(null);
-    setLinkingFromId(null);
-    setProcessBuilderId(null);
-    setProcessDetailId(null);
-    setProjectManagerOpen(false);
-    setPersonalSettingsOpen(false);
-    setActiveMenu("map");
-    showToast(t("Проект «{title}» удален.", { title: project.title }));
-  }
-
-  function addSectionNode(position?: Vec2) {
-    if (!requireAccess(access.canEditStructure)) {
-      return;
-    }
-    const sectionCount = levelNodes.filter((node) => node.type !== "central" && node.type !== "document").length + 1;
-    const shortCode = `${t("Б")}${sectionCount}`;
-    const node: ProjectNode = {
-      id: `node-section-${Date.now()}-${Math.round(Math.random() * 10000)}`,
-      projectId: activeProject.id,
-      levelId: activeLevel.id,
-      type: "section",
-      title: t("Новый блок {count}", { count: sectionCount }),
-      shortCode,
-      description: t("Новый средний блок проекта. Переименуйте его и задайте теги автопривязки в правой панели."),
-      status: "unchecked",
-      responsible: currentUser?.name,
-      updatedAt: "только что",
-      tags: [shortCode],
-    };
-
-    updateActiveProject((project) => withNodePosition({
-      ...project,
-      nodes: [node, ...project.nodes],
-      levels: project.levels.map((level) =>
-        level.id === activeLevel.id
-          ? {
-              ...level,
-              nodeIds: appendUnique(level.nodeIds, node.id),
-            }
-          : level,
-      ),
-      updatedAt: "только что",
-    }, activeLevel.id, node.id, position));
-    setSelectedNodeId(node.id);
-    setSelectedProcessId(null);
-    setActiveMenu("map");
-    if (!position) {
-      window.setTimeout(() => sceneRef.current?.focusNode(node.id), 80);
-    }
-    showToast(t("Добавлен средний блок «{title}».", { title: node.title }));
-  }
-
-  function createTemplate(title: string, description: string) {
-    if (!requireAccess(access.canManageProjects)) {
-      return;
-    }
-    const template = normalizeTemplatePeople(toEnglishData(createTemplateFromProject(
-      activeProject,
-      title || t("{project}: шаблон", { project: activeProject.title }),
-      description || t("Структура проекта без рабочих документов."),
-    )));
-    setProjectTemplates((current) => [template, ...current]);
-    showToast(t("Шаблон «{title}» сохранен.", { title: template.title }));
-    return template;
-  }
-
-  function selectNode(nodeId: string) {
-    setSelectedNodeId(nodeId);
-    setSelectedProcessId(null);
-    setProcessBuilderId(null);
-  }
-
-  function selectProcess(processId: string) {
-    const process = getProcessById(activeProject, processId);
-    if (!process) {
-      return;
-    }
-    if (process.projectId !== activeProjectId) {
-      selectProject(process.projectId);
-    }
-    setLevelTransition(null);
-    setActiveLevelId(process.levelId);
-    setSelectedProcessId(processId);
-    setSelectedNodeId(process.from);
-    setActiveMenu("map");
-    setProcessBuilderId(null);
-    sceneRef.current?.focusNode(process.from);
-  }
-
-  function selectProcessOnMap(processId: string) {
-    const process = getProcessById(activeProject, processId);
-    if (!process) {
-      return;
-    }
-    setLevelTransition(null);
-    setSelectedProcessId(processId);
-    setSelectedNodeId("");
-    setActiveMenu("map");
-    setProcessBuilderId(null);
-  }
-
-  function openProcessDetails(processId: string) {
-    selectProcessOnMap(processId);
-    setProcessDetailId(processId);
-  }
-
-  function openNodeLevel(node: ProjectNode) {
-    if (!canOpenNodeLevel(node, activeLevel.id)) {
-      return;
-    }
-
-    const prepared = ensureNodeLevel(activeProject, node.id);
-    updateActiveProject(() => prepared.project);
-    setLevelTransition("down");
-    setActiveLevelId(prepared.levelId);
-    setSelectedNodeId(node.id);
-    setSelectedProcessId(null);
-    setLinkingFromId(null);
-    setProcessBuilderId(null);
-    setActiveMenu("map");
-  }
-
-  function backLevel() {
-    if (!activeLevel.parentLevelId) {
-      return;
-    }
-    const parent = getLevelById(activeProject, activeLevel.parentLevelId);
-    setLevelTransition("up");
-    setActiveLevelId(parent.id);
-    setSelectedNodeId(activeLevel.parentNodeId ?? parent.centralNodeId);
-    setSelectedProcessId(null);
-    setLinkingFromId(null);
-    setProcessBuilderId(null);
-  }
-
-  function updateNode(nodeId: string, edit: NodeEdit) {
-    const node = getNodeById(activeProject, nodeId);
-    if (!node || !requireAccess(canEditNode(access, currentUser, node))) {
-      return;
-    }
-    updateActiveProject((project) => {
-      const nodes = project.nodes.map((node) => {
-        if (node.id !== nodeId) {
-          return node;
-        }
-
-        const checklistStatus = edit.checklist ? getChecklistStatus(edit.checklist, node.status) : undefined;
-        return {
-          ...node,
-          ...edit,
-          status: checklistStatus ?? edit.status ?? node.status,
-          updatedAt: "только что",
-          updatedBy: currentUser?.name ?? "Система",
-        };
-      });
-      const renamedNode = nodes.find((node) => node.id === nodeId);
-      const levelTitle = renamedNode ? formatNodeLevelTitle(renamedNode) : undefined;
-
-      return {
-        ...project,
-        nodes,
-        levels: project.levels.map((level) =>
-          level.centralNodeId === nodeId || level.parentNodeId === nodeId
-            ? {
-                ...level,
-                title: levelTitle ?? level.title,
-              }
-            : level,
-        ),
-        updatedAt: "только что",
-      };
-    });
-  }
-
-  function navigateToNode(nodeId: string) {
-    const node = getNodeById(activeProject, nodeId);
-    if (!node) {
-      return;
-    }
-
-    setLevelTransition(null);
-    setActiveLevelId(node.levelId);
-    setSelectedNodeId(node.id);
-    setSelectedProcessId(null);
-    setProcessBuilderId(null);
-    setActiveMenu("map");
-    window.setTimeout(() => sceneRef.current?.focusNode(node.id), 80);
-  }
-
-  function toggleNodePositionLock(nodeId: string) {
-    if (!requireAccess(access.canEditStructure)) {
-      return;
-    }
-    const node = getNodeById(activeProject, nodeId);
-    if (!node || node.type === "central") {
-      return;
-    }
-
-    updateNode(nodeId, { positionLocked: !node.positionLocked });
-    showToast(t(node.positionLocked ? "Положение ноды разблокировано." : "Положение ноды закреплено."));
-  }
-
-  function deleteNode(nodeId: string) {
-    if (!requireAccess(access.canEditStructure)) {
-      return;
-    }
-    const node = getNodeById(activeProject, nodeId);
-    if (!node || node.type === "central") {
-      return;
-    }
-
-    if (node.type === "document") {
-      deleteDocument(getDocumentFromNode(node).id, node.title);
-      return;
-    }
-
-    const title = node.shortCode ?? node.title;
-    setDeletionRequest({
-      kind: "node",
-      id: node.id,
-      title: t("Удалить ноду «{title}»?", { title }),
-      description: t("Связанные процессы и вложенные уровни будут удалены. Документы из ноды и процессов сохранятся в бесхозных файлах."),
-      confirmLabel: t("Удалить ноду"),
-    });
-  }
-
-  function performDeleteNode(nodeId: string) {
-    if (!requireAccess(access.canEditStructure)) {
-      return;
-    }
-    const node = getNodeById(activeProject, nodeId);
-    if (!node || node.type === "central" || node.type === "document") {
-      return;
-    }
-    updateActiveProject((project) => removeProjectNodeTree(project, node.id));
-    setSelectedNodeId(activeLevel.centralNodeId);
-    setSelectedProcessId(null);
-    setLinkingFromId(null);
-    setProcessBuilderId(null);
-    setProcessDetailId(null);
-    showToast(t("Нода «{title}» удалена. Файлы перенесены во входящие.", { title: node.shortCode ?? node.title }));
-  }
-
-  function deleteDocument(documentId: string, title: string) {
-    if (!requireAccess(access.canEditStructure)) {
-      return;
-    }
-    setDeletionRequest({
-      kind: "document",
-      id: documentId,
-      title: t("Удалить файл «{title}»?", { title }),
-      description: t("Файл будет безвозвратно удалён с карты, из бизнес-процессов, нод и бесхозных файлов."),
-      confirmLabel: t("Удалить файл"),
-    });
-  }
-
-  function performDeleteDocument(documentId: string) {
-    if (!requireAccess(access.canEditStructure)) {
-      return;
-    }
-    const document = activeProject.inboxDocuments.find((item) => item.id === documentId)
-      ?? activeProject.nodes.find((node) => node.document?.id === documentId)?.document
-      ?? activeProject.processes.flatMap((process) => process.documents).find((item) => item.id === documentId);
-    updateActiveProject((project) => removeDocumentEverywhere(project, documentId));
-    setSelectedNodeId(activeLevel.centralNodeId);
-    setSelectedProcessId(null);
-    setProcessBuilderId(null);
-    setProcessDetailId(null);
-    showToast(t("Файл «{title}» удален.", { title: document?.title ?? t("Документ") }));
-  }
-
-  function deleteInboxDocument(documentId: string) {
-    const document = activeProject.inboxDocuments.find((item) => item.id === documentId);
-    if (document) {
-      deleteDocument(document.id, document.title);
-    }
-  }
-
-  function markProjectChatRead() {
-    setSeenChatMessageIds((current) => {
-      const next = new Set(current);
-      activeProject.chatMessages.forEach((message) => next.add(message.id));
-      return next;
-    });
-  }
-
-  function toggleChatPanel() {
-    if (!chatPanelOpen) {
-      markProjectChatRead();
-    }
-    setChatPanelOpen(!chatPanelOpen);
-  }
-
-  function selectSidebarMenu(menu: SidebarMenuId) {
-    setActiveMenu(menu);
-    if (menu === "chat") {
-      markProjectChatRead();
-      setChatPanelOpen(false);
-    }
-  }
-
-  function updateProcess(processId: string, edit: ProcessEdit) {
-    const process = getProcessById(activeProject, processId);
-    const approvalChange = edit.status === "accepted" || edit.status === "rejected";
-    if (!process || !requireAccess(canEditProcess(access, currentUser, process)) || (approvalChange && !requireAccess(access.canApprove))) {
-      return;
-    }
-    updateActiveProject((project) => ({
-      ...project,
-      processes: project.processes.map((process) =>
-        process.id === processId
-          ? {
-              ...process,
-              ...edit,
-              validationAt: edit.status === "accepted" || edit.status === "in_work" ? edit.validationAt ?? process.validationAt ?? "только что" : edit.validationAt ?? process.validationAt,
-            }
-          : process,
-      ),
-      updatedAt: "только что",
-    }));
-  }
-
-  function updateProcessDelegation(processId: string, delegatedTo: string[]) {
-    const process = getProcessById(activeProject, processId);
-    if (!process) {
-      return;
-    }
-    const participantNames = Array.from(new Set([
-      process.sender,
-      process.receiver,
-      process.approver ?? process.receiver,
-      ...delegatedTo,
-    ]));
-    updateProcess(processId, { delegatedTo, participantNames });
-    showToast(delegatedTo.length
-      ? t("Исполнители назначены: {names}.", { names: delegatedTo.join(", ") })
-      : t("Внутреннее делегирование очищено."));
-  }
-
-  function submitProcessClarification(processId: string, text: string, kind: "question" | "unclear") {
-    const process = getProcessById(activeProject, processId);
-    if (!process || !requireAccess(canEditProcess(access, currentUser, process))) {
-      return;
-    }
-
-    const normalizedText = text.trim() || "Задание непонятно. Нужны дополнительные пояснения.";
-    const author = currentUser?.name ?? process.receiver;
-    const entry = {
-      id: `process-message-${Date.now()}-${Math.round(Math.random() * 10000)}`,
-      author,
-      text: normalizedText,
-      createdAt: "только что",
-      kind,
-    } as const;
-    const chatMessage: ChatMessage = {
-      id: `chat-process-${Date.now()}-${Math.round(Math.random() * 10000)}`,
-      projectId: activeProject.id,
-      author,
-      role: currentUser?.position ?? "Исполнитель",
-      text: `${kind === "unclear" ? "Задание непонятно" : "Вопрос по заданию"} «${process.title}»: ${normalizedText}`,
-      time: "только что",
-      processId,
-    };
-
-    updateActiveProject((project) => ({
-      ...project,
-      processes: project.processes.map((current) =>
-        current.id === processId
-          ? { ...current, discussion: [...(current.discussion ?? []), entry] }
-          : current,
-      ),
-      chatMessages: [chatMessage, ...project.chatMessages],
-      updatedAt: "только что",
-    }));
-    pushNotification({
-      title: kind === "unclear" ? "Исполнителю непонятно задание" : "Вопрос по заданию",
-      description: `${process.sender}: ${author} просит уточнить «${process.title}». ${normalizedText}`,
-      targetProcessId: processId,
-    });
-    showToast(t("Уведомление отправлено постановщику: {sender}.", { sender: process.sender }));
-  }
-
-  function updateDocumentStatus(documentId: string, status: NodeStatus) {
-    if (!requireAccess(access.canApprove)) {
-      return;
-    }
-    updateActiveProject((project) => ({
-      ...project,
-      nodes: project.nodes.map((node) =>
-        node.type === "document" && node.document?.id === documentId
-          ? {
-              ...node,
-              status,
-              updatedAt: "только что",
-              document: {
-                ...node.document,
-                status,
-                updatedAt: "только что",
-              },
-            }
-          : node,
-      ),
-      processes: project.processes.map((process) => ({
-        ...process,
-        documents: process.documents.map((document) =>
-          document.id === documentId ? { ...document, status, updatedAt: "только что" } : document,
-        ),
-      })),
-      inboxDocuments: project.inboxDocuments.map((document) =>
-        document.id === documentId ? { ...document, status, updatedAt: "только что" } : document,
-      ),
-      updatedAt: "только что",
-    }));
-    showToast(t(status === "approved" ? "Документ согласован." : status === "comments" ? "Документ отмечен как не принятый." : "Документ принят в работу."));
-  }
-
-  function createTaggedDocument(title: string, tag: string) {
-    if (!requireAccess(access.canUploadFiles)) {
-      return;
-    }
-    const normalizedTitle = title.trim() || t("Новый_документ.pdf");
-    const normalizedTag = normalizeFileTag(tag);
-    const taggedTitle = appendTagToFileName(normalizedTitle, normalizedTag);
-    const document: ProcessDocument = {
-      ...createDocumentFromName(taggedTitle, "manual"),
-      from: t("Тестовый импорт"),
-      detectedTag: normalizedTag || undefined,
-      isNew: true,
-      updatedAt: "только что",
-    };
-    const result = routeDocumentToNodeOrInbox(activeProject, activeLevel.id, document);
-
-    updateActiveProject(() => result.project);
-    setSelectedProcessId(null);
-    setActiveMenu("map");
-    if (result.documentNode) {
-      setActiveLevelId(result.levelId);
-      setSelectedNodeId(result.documentNode.id);
-      window.setTimeout(() => sceneRef.current?.focusNode(result.documentNode!.id), 80);
-    }
-
-    pushNotification({
-      title: result.targetNode ? "Документ распределен по тегу" : "Документ создан без совпадения тега",
-      description: result.targetNode
-        ? `Тег «${normalizedTag}» совпал с нодой «${result.targetNode.shortCode ?? result.targetNode.title}».`
-        : "Совпадающая нода не найдена, документ остался в бесхозных.",
-      targetNodeId: result.documentNode?.id,
-    });
-    showToast(result.targetNode
-      ? t("Документ попал в ноду «{title}».", { title: result.targetNode.shortCode ?? result.targetNode.title })
-      : t("Документ добавлен в бесхозные."));
-  }
-
-  function createTaskDraft(edit: WorkspaceTaskDraft) {
-    if (!requireAccess(access.canCreateTasks)) {
-      return;
-    }
-    const from = getNodeById(activeProject, edit.fromNodeId);
-    const to = getNodeById(activeProject, edit.toNodeId);
-    if (!from || !to || from.id === to.id) {
-      showToast(t("Для задания нужны две разные ноды."));
-      return;
-    }
-
-    const level = activeProject.levels.find((item) => item.nodeIds.includes(from.id) && item.nodeIds.includes(to.id)) ?? getDefaultLevel(activeProject);
-    const pairCount = activeProject.processes.filter(
-      (process) =>
-        process.levelId === level.id &&
-        ((process.from === from.id && process.to === to.id) || (process.from === to.id && process.to === from.id)),
-    ).length;
-    const process: BusinessProcess = {
-      id: createProcessId(from.id, to.id),
-      projectId: activeProject.id,
-      levelId: level.id,
-      from: from.id,
-      to: to.id,
-      title: edit.title.trim() || t("Новое задание"),
-      description: edit.description.trim() || t("Черновик задания, созданный из вкладки «Задания»."),
-      status: "draft",
-      direction: "forward",
-      sender: from.responsible ?? from.title,
-      receiver: to.responsible ?? to.title,
-      participantNames: [from.responsible ?? from.title, to.responsible ?? to.title],
-      createdAt: "только что",
-      dueAt: edit.dueAt || getDefaultProcessDueAt(24),
-      parallelIndex: pairCount ? pairCount - 0.5 : 0,
-      source: "manual",
-      documents: [],
-    };
-
-    updateActiveProject((project) => ({
-      ...project,
-      processes: [process, ...project.processes],
-      updatedAt: "только что",
-    }));
-    setActiveLevelId(level.id);
-    setSelectedNodeId(from.id);
-    setSelectedProcessId(process.id);
-    setActiveMenu("map");
-    showToast(t("Черновик задания создан."));
-  }
-
-  function addParticipant(edit: ParticipantEdit) {
-    if (!requireAccess(access.canManageUsers)) {
-      return;
-    }
-    const participant = {
-      ...edit,
-      id: `participant-${Date.now()}`,
-      projectId: activeProject.id,
-    };
-
-    updateActiveProject((project) => ({
-      ...project,
-      participants: [participant, ...project.participants],
-      updatedAt: "только что",
-    }));
-    showToast(t("Пользователь «{name}» добавлен в проект.", { name: participant.name }));
-  }
-
-  function addParticipantFromDirectory(seed: ProjectParticipantSeed) {
-    if (!requireAccess(access.canManageUsers)) {
-      return;
-    }
-    if (activeProject.participants.some((participant) => participant.email === seed.email)) {
-      showToast(t("Участник «{name}» уже есть в команде проекта.", { name: seed.name }));
-      return;
-    }
-
-    const participant = {
-      ...seed,
-      id: `participant-${Date.now()}-${Math.round(Math.random() * 10000)}`,
-      projectId: activeProject.id,
-      status: "active" as const,
-    };
-
-    updateActiveProject((project) => ({
-      ...project,
-      participants: [participant, ...project.participants],
-      updatedAt: "только что",
-    }));
-    showToast(t("Участник «{name}» добавлен в проект и доступен в процессе.", { name: participant.name }));
-  }
-
-  function updateParticipant(participantId: string, edit: ParticipantEdit) {
-    if (!requireAccess(access.canManageUsers)) {
-      return;
-    }
-    updateActiveProject((project) => ({
-      ...project,
-      participants: project.participants.map((participant) =>
-        participant.id === participantId
-          ? {
-              ...participant,
-              ...edit,
-            }
-          : participant,
-      ),
-      updatedAt: "только что",
-    }));
-    showToast(t("Карточка пользователя «{name}» обновлена.", { name: edit.name }));
-  }
-
-  function deleteParticipant(participantId: string) {
-    if (!requireAccess(access.canManageUsers)) {
-      return;
-    }
-    const participant = activeProject.participants.find((item) => item.id === participantId);
-    if (!participant) {
-      return;
-    }
-
-    const adminCount = activeProject.participants.filter((item) => item.role === "admin").length;
-    if (participant.role === "admin" && adminCount <= 1) {
-      showToast(t("В проекте должен остаться хотя бы один администратор."));
-      return;
-    }
-
-    updateActiveProject((project) => ({
-      ...project,
-      participants: project.participants.filter((item) => item.id !== participantId),
-      updatedAt: "только что",
-    }));
-    showToast(t("Пользователь «{name}» удален из проекта.", { name: participant.name }));
-  }
-
-  function saveParticipantIntegrations(participantId: string, integrations: UserIntegration[]) {
-    if (!requireAccess(access.canManageUsers || participantId === currentUser?.id)) {
-      return;
-    }
-    updateActiveProject(
-      (project) => ({
-        ...project,
-        participants: project.participants.map((participant) =>
-          participant.id === participantId
-            ? {
-                ...participant,
-                integrations,
-              }
-            : participant,
-        ),
-        updatedAt: "только что",
-      }),
-      false,
-    );
-  }
-
-  function markIntegrationSynced(participantId: string, provider: IntegrationProvider) {
-    updateActiveProject(
-      (project) => ({
-        ...project,
-        participants: project.participants.map((participant) =>
-          participant.id === participantId
-            ? {
-                ...participant,
-                integrations: upsertIntegration(participant.integrations ?? [], provider, {
-                  status: "connected",
-                  lastSyncAt: "только что",
-                }),
-              }
-            : participant,
-        ),
-        updatedAt: "только что",
-      }),
-      false,
-    );
-  }
-
-  function importDemoIntegration(provider: IntegrationProvider, participantId: string) {
-    if (!requireAccess(access.canUploadFiles && participantId === currentUser?.id)) {
-      return;
-    }
-    const documents = getDemoIntegrationFiles(provider).map((name) => createDocumentFromName(name, provider));
-    markIntegrationSynced(participantId, provider);
-    ingestIncomingDocuments(documents, provider, participantId);
-  }
-
-  function importIntegrationTestFile(provider: IntegrationProvider, participantId: string, mode: "tagged" | "untagged", customTag?: string) {
-    if (!requireAccess(access.canUploadFiles && participantId === currentUser?.id)) {
-      return;
-    }
-    const tag = mode === "tagged" ? normalizeFileTag(customTag) || getRandomProjectTag(activeProject) : undefined;
-    const fileName = tag ? appendTagToFileName(t("Входящий файл.pdf"), tag) : t("Входящий файл без тега.pdf");
-    const document = {
-      ...createDocumentFromName(fileName, provider, undefined, undefined, "application/pdf", getRandomFileSize()),
-      previewText: tag
-        ? t("Демо-файл из {provider}. Тег {tag} найден, документ должен попасть в соответствующую ноду.", { provider: getIntegrationProviderLabel(provider), tag })
-        : t("Демо-файл из {provider} без тега. Документ должен попасть во входящие бесхозные файлы.", { provider: getIntegrationProviderLabel(provider) }),
-    };
-
-    markIntegrationSynced(participantId, provider);
-    ingestIncomingDocuments([document], provider, participantId);
-  }
-
-  async function importIntegrationFiles(provider: IntegrationProvider, participantId: string, files: File[]) {
-    if (!requireAccess(access.canUploadFiles && participantId === currentUser?.id)) {
-      return;
-    }
-    const documents = await Promise.all(
-      files.map(async (file) => ({
-        ...createDocumentFromName(
-          file.name,
-          provider,
-          URL.createObjectURL(file),
-          file.name.toLowerCase().endsWith(".txt") ? await file.text() : undefined,
-          file.type,
-          formatBytes(file.size),
-        ),
-        updatedAt: formatFileModifiedAt(file.lastModified),
-        originPath: (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name,
-      })),
-    );
-
-    markIntegrationSynced(participantId, provider);
-    ingestIncomingDocuments(documents, provider, participantId);
-  }
-
-  function routeDocumentToNodeOrInbox(project: DemoProject, levelId: string, document: ProcessDocument) {
-    const detectedTag = detectDocumentTag(project, document.title);
-    const targetNode = detectedTag ? findNodeByTag(project, detectedTag) : undefined;
-    const incomingDocument: ProcessDocument = {
-      ...document,
-      status: targetNode ? "review" : "draft",
-      detectedTag,
-      autoRouted: Boolean(targetNode),
-      isNew: true,
-      updatedAt: "только что",
-    };
-
-    if (targetNode) {
-      return {
-        ...addDocumentNodeToProject(project, levelId, incomingDocument, targetNode.id),
-        routed: true,
-      };
-    }
-
-    return {
-      project: addDocumentToInbox(project, incomingDocument),
-      documentNode: undefined,
-      levelId,
-      targetNode: undefined,
-      routed: false,
-    };
-  }
-
-  function ingestIncomingDocuments(documents: ProcessDocument[], provider: IntegrationProvider, participantId: string) {
-    const recipient = activeProject.participants.find((participant) => participant.id === participantId);
-    let nextProject = activeProject;
-    const importedNodes: ProjectNode[] = [];
-    let routedCount = 0;
-    let unassignedCount = 0;
-
-    documents.forEach((document) => {
-      const detectedTag = detectDocumentTag(nextProject, document.title);
-      const targetNode = detectedTag ? findNodeByTag(nextProject, detectedTag) : undefined;
-      const incomingDocument: ProcessDocument = {
-        ...document,
-        status: targetNode ? "review" : "draft",
-        from: getIntegrationProviderLabel(provider),
-        updatedAt: "только что",
-        detectedTag,
-        receivedByParticipantId: recipient?.id,
-        receivedByEmail: recipient?.email,
-        integrationProvider: provider,
-        autoRouted: Boolean(targetNode),
-        isNew: true,
-      };
-      const result = routeDocumentToNodeOrInbox(nextProject, activeLevel.id, incomingDocument);
-      nextProject = result.project;
-      if (result.documentNode) {
-        importedNodes.push(result.documentNode);
-      }
-      if (result.routed) {
-        routedCount += 1;
-      } else {
-        unassignedCount += 1;
-      }
-    });
-
-    updateActiveProject(() => nextProject);
-
-    const firstNode = importedNodes[0];
-    if (firstNode) {
-      setActiveLevelId(firstNode.levelId);
-      setSelectedNodeId(firstNode.id);
-      setSelectedProcessId(null);
-      window.setTimeout(() => sceneRef.current?.focusNode(firstNode.id), 80);
-    }
-
-    pushNotification({
-      title: `Новые файлы из ${getIntegrationProviderLabel(provider)}`,
-      description: `${recipient?.name ?? "Пользователь"} получил(а) ${documents.length} файл(а): ${routedCount} распределено по тегам, ${unassignedCount} во входящих.`,
-      targetNodeId: firstNode?.id,
-    });
-    showToast(t("{count} файл(а) импортировано: {routed} распределено, {unassigned} во входящих.", {
-      count: documents.length,
-      routed: routedCount,
-      unassigned: unassignedCount,
-    }));
-  }
-
-  function startLink(nodeId: string) {
-    if (!requireAccess(access.canEditStructure)) {
-      return;
-    }
-    setLinkingFromId(nodeId);
-    setSelectedNodeId(nodeId);
-    setSelectedProcessId(null);
-    setProcessBuilderId(null);
-    showToast(t("Выберите вторую ноду для бизнес-процесса."));
-  }
-
-  function completeLink(targetNodeId: string) {
-    if (!requireAccess(access.canEditStructure)) {
-      setLinkingFromId(null);
-      return;
-    }
-    if (!linkingFromId || linkingFromId === targetNodeId) {
-      setLinkingFromId(null);
-      return;
-    }
-
-    const from = getNodeById(activeProject, linkingFromId);
-    const to = getNodeById(activeProject, targetNodeId);
-    if (!from || !to) {
-      setLinkingFromId(null);
-      return;
-    }
-
-    const pairCount = activeProject.processes.filter(
-      (process) =>
-        process.levelId === activeLevel.id &&
-        ((process.from === from.id && process.to === to.id) || (process.from === to.id && process.to === from.id)),
-    ).length;
-    const offset = pairCount ? pairCount - 0.5 : 0;
-    const process: BusinessProcess = {
-      id: createProcessId(from.id, to.id),
-      projectId: activeProject.id,
-      levelId: activeLevel.id,
-      from: from.id,
-      to: to.id,
-      title: t("Передача задания: {from} → {to}", { from: from.shortCode ?? from.title, to: to.shortCode ?? to.title }),
-      description: t("Ручной контейнер связи. Здесь можно описать, какие файлы передаются и как валидируется задание."),
-      status: "draft",
-      direction: "forward",
-      sender: from.responsible ?? from.title,
-      receiver: to.responsible ?? to.title,
-      participantNames: [from.responsible ?? from.title, to.responsible ?? to.title],
-      createdAt: "только что",
-      dueAt: getDefaultProcessDueAt(24),
-      parallelIndex: offset,
-      source: "manual",
-      documents: [],
-    };
-
-    updateActiveProject((project) => ({
-      ...project,
-      processes: [...project.processes, process],
-      updatedAt: "только что",
-    }));
-    setLinkingFromId(null);
-    setSelectedProcessId(process.id);
-    setProcessBuilderId(process.id);
-    showToast(t("Создан черновик процесса. Открыл конструктор маршрута."));
-  }
-
-  function deleteProcess(processId: string) {
-    if (!requireAccess(access.canEditStructure)) {
-      return;
-    }
-    const process = getProcessById(activeProject, processId);
-    if (!process) {
-      return;
-    }
-    setDeletionRequest({
-      kind: "process",
-      id: process.id,
-      title: t("Удалить процесс «{title}»?", { title: process.title }),
-      description: t("Маршрут и история задания будут удалены. Прикреплённые документы останутся в проекте."),
-      confirmLabel: t("Удалить процесс"),
-    });
-  }
-
-  function performDeleteProcess(processId: string) {
-    if (!requireAccess(access.canEditStructure)) {
-      return;
-    }
-    updateActiveProject((project) => {
-      const process = project.processes.find((item) => item.id === processId);
-      const inboxById = new Map(project.inboxDocuments.map((document) => [document.id, document]));
-      const nodeDocumentIds = new Set(project.nodes.flatMap((node) => node.document ? [node.document.id] : []));
-      process?.documents.forEach((document) => {
-        if (!nodeDocumentIds.has(document.id)) {
-          inboxById.set(document.id, { ...document, isNew: true, updatedAt: "только что" });
-        }
-      });
-      return {
-        ...project,
-        processes: project.processes.filter((item) => item.id !== processId),
-        inboxDocuments: Array.from(inboxById.values()),
-        updatedAt: "только что",
-      };
-    });
-    setSelectedProcessId(null);
-    setProcessBuilderId((current) => (current === processId ? null : current));
-    setProcessDetailId((current) => (current === processId ? null : current));
-    showToast(t("Контейнер связи удален. Его документы сохранены в проекте."));
-  }
-
-  function confirmDeletion() {
-    const request = deletionRequest;
-    if (!request) {
-      return;
-    }
-    setDeletionRequest(null);
-    if (request.kind === "project") {
-      performDeleteProject(request.id);
-    } else if (request.kind === "node") {
-      performDeleteNode(request.id);
-    } else if (request.kind === "document") {
-      performDeleteDocument(request.id);
-    } else {
-      performDeleteProcess(request.id);
-    }
-  }
-
-  function saveProcessBuilder(processId: string, edit: ProcessEdit, mode: "draft" | "launch") {
-    if (!requireAccess(access.canEditStructure)) {
-      return;
-    }
-    const currentProcess = getProcessById(activeProject, processId);
-    updateProcess(processId, edit);
-
-    if (mode === "launch") {
-      setProcessBuilderId(null);
-      pushNotification({
-        title: "Процесс отправлен на согласование",
-        description: `Маршрут «${edit.title ?? currentProcess?.title ?? "бизнес-процесс"}» собран в конструкторе и отправлен на проверку.`,
-        targetProcessId: processId,
-      });
-      showToast(t("Процесс собран и отправлен на согласование."));
-      return;
-    }
-
-    showToast(t("Черновик процесса сохранен."));
-  }
-
-  function attachInboxDocument(processId: string, documentId: string) {
-    const process = getProcessById(activeProject, processId);
-    if (!process || !requireAccess(access.canUploadFiles && canEditProcess(access, currentUser, process))) {
-      return;
-    }
-    updateActiveProject((project) => {
-      const document = project.inboxDocuments.find((item) => item.id === documentId);
-      if (!document) {
-        return project;
-      }
-      return {
-        ...project,
-        inboxDocuments: project.inboxDocuments.filter((item) => item.id !== documentId),
-        processes: project.processes.map((process) =>
-          process.id === processId
-            ? {
-                ...process,
-                documents: [{ ...document, status: "review", updatedAt: "только что", source: document.source ?? "manual" }, ...process.documents],
-                status: process.status === "draft" ? "sent" : process.status,
-              }
-            : process,
-        ),
-        updatedAt: "только что",
-      };
-    });
-    showToast(t("Задание вручную прикручено к выбранной связи."));
-  }
-
-  function rejectProcessDocument(processId: string, documentId: string) {
-    if (!requireAccess(access.canApprove)) {
-      return;
-    }
-    const process = getProcessById(activeProject, processId);
-    const document = process?.documents.find((item) => item.id === documentId);
-    if (!process || !document) {
-      return;
-    }
-
-    const rejectedDocument: ProcessDocument = {
-      ...document,
-      status: "comments",
-      updatedAt: "только что",
-    };
-    const documentNodeId = `node-${rejectedDocument.id}`;
-    const existingNode = getNodeById(activeProject, documentNodeId);
-    const rejectedNode: ProjectNode = existingNode
-      ? {
-          ...existingNode,
-          levelId: process.levelId,
-          documentOwnerNodeId: undefined,
-          description: t("Не принято. Документ выброшен наружу для доработки."),
-          status: "comments",
-          updatedAt: "только что",
-          document: rejectedDocument,
-        }
-      : {
-          ...createDocumentNode(activeProject.id, process.levelId, rejectedDocument),
-          description: t("Не принято. Документ выброшен наружу для доработки."),
-          status: "comments",
-        };
-
-    updateActiveProject((project) => ({
-      ...project,
-      processes: project.processes.map((item) =>
-        item.id === processId
-          ? {
-              ...item,
-              status: "rejected",
-              documents: item.documents.map((itemDocument) => (itemDocument.id === documentId ? rejectedDocument : itemDocument)),
-            }
-          : item,
-      ),
-      nodes: project.nodes.some((node) => node.id === rejectedNode.id)
-        ? project.nodes.map((node) => (node.id === rejectedNode.id ? rejectedNode : node))
-        : [rejectedNode, ...project.nodes],
-      levels: project.levels.map((level) => ({
-        ...level,
-        nodeIds:
-          level.id === process.levelId
-            ? appendUnique(level.nodeIds.filter((id) => id !== rejectedNode.id), rejectedNode.id)
-            : level.nodeIds.filter((id) => id !== rejectedNode.id),
-      })),
-      inboxDocuments: project.inboxDocuments.filter((item) => item.id !== rejectedDocument.id),
-      updatedAt: "только что",
-    }));
-
-    setActiveLevelId(process.levelId);
-    setSelectedNodeId(rejectedNode.id);
-    setSelectedProcessId(null);
-    pushNotification({
-      title: "Документ не принят",
-      description: `Файл «${rejectedDocument.title}» выброшен наружу для доработки.`,
-      targetNodeId: rejectedNode.id,
-      targetProcessId: process.id,
-    });
-    showToast(t("Документ не принят и выброшен наружу как малая нода."));
-  }
-
-  function receiveMail(processId?: string) {
-    const targetProcess = processId ? getProcessById(activeProject, processId) : findBestProcessForIncoming(activeProject, activeLevel.id, "АР");
-    const document = {
-      ...createDocumentFromName(targetProcess ? "АР_пакет_из_почты_новое.pdf" : "Письмо без тега.pdf", "mail"),
-      status: targetProcess ? ("review" as const) : ("draft" as const),
-      isNew: true,
-    };
-    const targetNodeId = targetProcess?.to ?? targetProcess?.from;
-    const projectWithProcess = targetProcess
-      ? {
-          ...activeProject,
-          processes: activeProject.processes.map((process) =>
-            process.id === targetProcess.id
-              ? {
-                  ...process,
-                  status: "sent" as const,
-                  documents: [document, ...process.documents],
-                  source: "mail" as const,
-                }
-              : process,
-          ),
-          updatedAt: "только что",
-        }
-      : activeProject;
-    const result = addDocumentNodeToProject(projectWithProcess, activeLevel.id, document, targetNodeId);
-    updateActiveProject(() => result.project);
-    setActiveLevelId(result.levelId);
-    setSelectedNodeId(result.documentNode.id);
-    setSelectedProcessId(null);
-
-    pushNotification({
-      title: targetProcess ? "Письмо привязано к связи" : "Письмо попало во входящие",
-      description: targetProcess ? `Вложение добавлено в контейнер «${targetProcess.title}».` : "Тег не распознан, задание можно прикрутить вручную.",
-      targetProcessId: targetProcess?.id,
-    });
-    showToast(t(targetProcess ? "Почтовое вложение добавлено в контейнер связи." : "Письмо без тега добавлено во входящие."));
-  }
-
-  function receiveChat(processId?: string) {
-    const targetProcess = processId ? getProcessById(activeProject, processId) : levelProcesses.find((process) => process.status === "sent" || process.status === "draft");
-    const message: ChatMessage = {
-      id: `chat-${Date.now()}`,
-      projectId: activeProject.id,
-      author: "Павел Андреев",
-      role: "ГИП",
-      text: targetProcess
-        ? `Принял контейнер «${targetProcess.title}» в работу, жду финальный комплект.`
-        : "Поступило новое задание без тега. Нужна ручная привязка к процессу.",
-      time: "только что",
-      processId: targetProcess?.id,
-    };
-    const document = {
-      ...createDocumentFromName("сообщение_из_мессенджера.txt", "chat", undefined, message.text),
-      status: targetProcess ? ("review" as const) : ("draft" as const),
-      isNew: true,
-    };
-    const targetNodeId = targetProcess?.to ?? targetProcess?.from;
-    const projectWithMessage: DemoProject = {
-      ...activeProject,
-      chatMessages: [message, ...activeProject.chatMessages],
-      processes: targetProcess
-        ? activeProject.processes.map((process) =>
-            process.id === targetProcess.id
-              ? {
-                  ...process,
-                  status: "in_work",
-                  validationAt: "только что",
-                  documents: [document, ...process.documents],
-                  source: "chat",
-                }
-              : process,
-          )
-        : activeProject.processes,
-      updatedAt: "только что",
-    };
-    const result = addDocumentNodeToProject(projectWithMessage, activeLevel.id, document, targetNodeId);
-    updateActiveProject(() => result.project);
-    setActiveLevelId(result.levelId);
-    setSelectedNodeId(result.documentNode.id);
-    setSelectedProcessId(null);
-
-    pushNotification({
-      title: targetProcess ? "Мессенджер изменил статус связи" : "Сообщение без тега",
-      description: targetProcess ? "Контейнер принят в работу через событие мессенджера." : "Сообщение добавлено во входящие для ручной привязки.",
-      targetProcessId: targetProcess?.id,
-    });
-    showToast(t(targetProcess ? "Статус связи изменен событием из мессенджера." : "Сообщение добавлено во входящие."));
-  }
-
-  function addRandomFile(targetNodeId?: string, customTag?: string) {
-    if (!requireAccess(access.canUploadFiles)) {
-      return;
-    }
-    const document = createDocumentFromName(appendTagToFileName(getRandomFileName(), customTag), "manual", undefined, undefined, undefined, getRandomFileSize());
-    if (!targetNodeId) {
-      const result = routeDocumentToNodeOrInbox(activeProject, activeLevel.id, document);
-      updateActiveProject(() => result.project);
-      setSelectedProcessId(null);
-      if (result.documentNode) {
-        setActiveLevelId(result.levelId);
-        setSelectedNodeId(result.documentNode.id);
-        window.setTimeout(() => sceneRef.current?.focusNode(result.documentNode!.id), 80);
-        showToast(t("Файл распределен по тегу и добавлен в нужную ноду."));
-      } else {
-        showToast(t("Файл добавлен в бесхозные. Перетащите его на рабочую область, когда будете готовы разобрать."));
-      }
-      return;
-    }
-
-    const result = addDocumentNodeToProject(activeProject, activeLevel.id, document, targetNodeId);
-    const targetLabel = result.targetNode?.shortCode ?? result.targetNode?.title ?? "";
-    updateActiveProject(() => result.project);
-
-    if (targetNodeId) {
-      setSelectedNodeId(targetNodeId);
-    } else {
-      setActiveLevelId(result.levelId);
-      setSelectedNodeId(result.documentNode.id);
-    }
-    setSelectedProcessId(null);
-    showToast(targetNodeId
-      ? t("Документ добавлен внутрь ноды «{title}».", { title: targetLabel })
-      : t("Бесхозный файл добавлен на карту как малая нода."));
-  }
-
-  function moveDocumentNode(documentNodeId: string, targetNodeId: string | null, position?: Vec2) {
-    if (!requireAccess(access.canUploadFiles)) {
-      return;
-    }
-    if (targetNodeId) {
-      const result = putDocumentIntoNode(activeProject, documentNodeId, targetNodeId);
-      const targetLabel = result.targetNode?.shortCode ?? result.targetNode?.title ?? "";
-      updateActiveProject(() => result.project);
-      setSelectedNodeId(targetNodeId);
-      setSelectedProcessId(null);
-      showToast(t("Файл вложен в ноду «{title}».", { title: targetLabel }));
-      return;
-    }
-
-    const result = removeDocumentFromNode(activeProject, documentNodeId);
-    updateActiveProject(() => withNodePosition(result.project, result.levelId, documentNodeId, position));
-    setActiveLevelId(result.levelId);
-    setSelectedNodeId(documentNodeId);
-    setSelectedProcessId(null);
-    showToast(t("Файл вынесен из ноды и снова стал бесхозным."));
-  }
-
-  function materializeInboxDocument(documentId: string, position?: Vec2) {
-    if (!requireAccess(access.canUploadFiles)) {
-      return;
-    }
-    const document = activeProject.inboxDocuments.find((item) => item.id === documentId);
-    if (!document) {
-      return;
-    }
-
-    const result = addDocumentNodeToProject(activeProject, activeLevel.id, { ...document, isNew: false, updatedAt: "только что" });
-    updateActiveProject(() => withNodePosition(result.project, result.levelId, result.documentNode.id, position));
-    setActiveLevelId(result.levelId);
-    setSelectedNodeId(result.documentNode.id);
-    setSelectedProcessId(null);
-    setActiveMenu("map");
-    if (!position) {
-      window.setTimeout(() => sceneRef.current?.focusNode(result.documentNode.id), 80);
-    }
-    showToast(t("Файл вынесен из бесхозных на рабочую область."));
-  }
-
-  function moveDocumentNodeToInbox(documentNodeId: string) {
-    if (!requireAccess(access.canUploadFiles)) {
-      return;
-    }
-    const node = getNodeById(activeProject, documentNodeId);
-    if (!node || node.type !== "document") {
-      return;
-    }
-
-    const document = {
-      ...getDocumentFromNode(node),
-      status: "draft" as const,
-      isNew: true,
-      updatedAt: "только что",
-    };
-    updateActiveProject((project) => addDocumentToInbox(project, document));
-    setSelectedNodeId(activeLevel.centralNodeId);
-    setSelectedProcessId(null);
-    showToast(t("Файл возвращен в бесхозные и убран с рабочей области."));
-  }
-
-  function sendProjectChatMessage(text: string) {
-    const message: ChatMessage = {
-      id: `chat-${Date.now()}`,
-      projectId: activeProject.id,
-      author: currentUser?.name ?? "Павел Андреев",
-      role: currentUser?.position ?? "Участник проекта",
-      text,
-      time: "только что",
-    };
-
-    updateActiveProject((project) => ({
-      ...project,
-      chatMessages: [message, ...project.chatMessages],
-      updatedAt: "только что",
-    }));
-    showToast(t("Сообщение отправлено в мессенджер проекта."));
+  function navigate(next: ViewId) {
+    setView(next);
+    setMobileMenuOpen(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  async function createDocumentsFromDroppedFiles(files: File[]) {
-    return Promise.all(
-      files.map(async (file) => ({
-        ...createDocumentFromName(
-          file.name,
-          "drop",
-          URL.createObjectURL(file),
-          file.name.toLowerCase().endsWith(".txt") ? await file.text() : undefined,
-          file.type,
-          formatBytes(file.size),
-        ),
-        updatedAt: formatFileModifiedAt(file.lastModified),
-      })),
-    );
+  function openTeam(id: string) {
+    setSelectedEmployeeId(null);
+    setSelectedOpportunityId(null);
+    setSelectedTeamId(id);
   }
-
-  function updateParticipantProfile(participantId: string, name: string, avatarUrl: string | undefined, email: string, phone: string) {
-    const participant = activeProject.participants.find((item) => item.id === participantId);
-    const normalizedName = name.trim();
-    const normalizedEmail = email.trim();
-    if (!participant || !requireAccess(access.canManageUsers || participantId === currentUser?.id)) {
-      return;
-    }
-    if (!normalizedName || !normalizedEmail) {
-      showToast(t("Укажите имя и рабочую почту пользователя."));
-      return;
-    }
 
-    const previousName = participant.name;
-    const replaceName = (value: string | undefined) => value === previousName ? normalizedName : value;
-    updateActiveProject((project) => ({
-      ...project,
-      participants: project.participants.map((item) =>
-        item.id === participantId
-          ? { ...item, name: normalizedName, avatarUrl, email: normalizedEmail, phone: phone.trim() }
-          : item,
-      ),
-      nodes: project.nodes.map((node) => ({
-        ...node,
-        responsible: replaceName(node.responsible),
-        updatedBy: replaceName(node.updatedBy),
-      })),
-      processes: project.processes.map((process) => ({
-        ...process,
-        sender: replaceName(process.sender) ?? process.sender,
-        receiver: replaceName(process.receiver) ?? process.receiver,
-        approver: replaceName(process.approver),
-        participantNames: process.participantNames?.map((item) => replaceName(item) ?? item),
-        delegatedTo: process.delegatedTo?.map((item) => replaceName(item) ?? item),
-        discussion: process.discussion?.map((entry) => ({ ...entry, author: replaceName(entry.author) ?? entry.author })),
-      })),
-      chatMessages: project.chatMessages.map((message) => ({ ...message, author: replaceName(message.author) ?? message.author })),
-      updatedAt: "только что",
-    }));
-    showToast(t("Профиль пользователя обновлен."));
+  function openEmployee(id: string) {
+    setSelectedTeamId(null);
+    setSelectedOpportunityId(null);
+    setSelectedEmployeeId(id);
   }
-
-  async function importFilesToProjectPool(files: File[]) {
-    if (!files.length || !requireAccess(access.canUploadFiles)) {
-      return;
-    }
-
-    const documents = await createDocumentsFromDroppedFiles(files);
 
-    let nextProject = activeProject;
-    const documentNodes: ProjectNode[] = [];
-    let routedCount = 0;
-    let inboxCount = 0;
-    documents.forEach((document) => {
-      const result = routeDocumentToNodeOrInbox(nextProject, activeLevel.id, document);
-      nextProject = result.project;
-      if (result.documentNode) {
-        documentNodes.push(result.documentNode);
-      }
-      if (result.routed) {
-        routedCount += 1;
-      } else {
-        inboxCount += 1;
-      }
-    });
-
-    updateActiveProject(() => nextProject);
-    if (documentNodes[0]) {
-      setSelectedNodeId(documentNodes[0].id);
-      setSelectedProcessId(null);
-    }
-    showToast(t("Файлы импортированы: {routed} распределено по тегам, {inbox} добавлено в бесхозные.", { routed: routedCount, inbox: inboxCount }));
+  function openOpportunity(id: string) {
+    setSelectedTeamId(null);
+    setSelectedEmployeeId(null);
+    setSelectedOpportunityId(id);
   }
-
-  async function importFilesToWorkspace(files: File[], position?: Vec2 | null) {
-    if (!files.length || !requireAccess(access.canUploadFiles)) {
-      return;
-    }
-
-    if (!position) {
-      await importFilesToProjectPool(files);
-      return;
-    }
-
-    const documents = await createDocumentsFromDroppedFiles(files);
-    let nextProject = activeProject;
-    const documentNodes: ProjectNode[] = [];
 
-    documents.forEach((document, index) => {
-      const result = addDocumentNodeToProject(nextProject, activeLevel.id, { ...document, isNew: true, updatedAt: "только что" });
-      nextProject = withNodePosition(result.project, result.levelId, result.documentNode.id, offsetDropPosition(position, index));
-      documentNodes.push(result.documentNode);
-    });
-
-    updateActiveProject(() => nextProject);
-    if (documentNodes[0]) {
-      setActiveLevelId(activeLevel.id);
-      setSelectedNodeId(documentNodes[0].id);
-      setSelectedProcessId(null);
-      setActiveMenu("map");
-    }
-    showToast(t("Файлы добавлены на карту в точку перетаскивания: {count}.", { count: documents.length }));
+  function closeDetail() {
+    setSelectedTeamId(null);
+    setSelectedEmployeeId(null);
+    setSelectedOpportunityId(null);
   }
-
-  async function handleDrop(event: DragEvent<HTMLDivElement>) {
-    event.preventDefault();
-    setIsDropActive(false);
-    if (!requireAccess(access.canUploadFiles)) {
-      return;
-    }
-    const dropPosition = sceneRef.current?.clientToWorld(event.clientX, event.clientY);
 
-    const documentNodeId = event.dataTransfer.getData("application/x-molecule-document-node");
-    if (documentNodeId) {
-      moveDocumentNode(documentNodeId, null, dropPosition ?? undefined);
+  function handleKpiAction(action: (typeof kpis)[number]["action"]) {
+    if (action === "underloaded" || action === "overloaded") {
+      setPeopleFilter(action);
+      navigate("people");
       return;
     }
-
-    const inboxDocumentId = event.dataTransfer.getData("application/x-molecule-inbox-document");
-    if (inboxDocumentId) {
-      materializeInboxDocument(inboxDocumentId, dropPosition ?? undefined);
+    if (action === "duplicates") {
+      navigate("opportunities");
+      openOpportunity("duplicates");
       return;
-    }
-
-    await importFilesToWorkspace(Array.from(event.dataTransfer.files), dropPosition);
-  }
-
-  function handleNotificationClick(notification: DemoNotification) {
-    setNotifications((current) =>
-      current.map((item) => (item.id === notification.id ? { ...item, unread: false } : item)),
-    );
-
-    if (notification.projectId !== activeProjectId) {
-      selectProject(notification.projectId);
-    }
-    if (notification.targetProcessId) {
-      selectProcess(notification.targetProcessId);
-    }
-    if (notification.targetNodeId) {
-      selectNode(notification.targetNodeId);
-      sceneRef.current?.focusNode(notification.targetNodeId);
-    }
-  }
-
-  function pushNotification(notification: Omit<DemoNotification, "id" | "projectId" | "time" | "unread">) {
-    setNotifications((current) => [
-      toEnglishData({
-        ...notification,
-        id: `notif-${Date.now()}`,
-        projectId: activeProject.id,
-        time: "только что",
-        unread: true,
-      }),
-      ...current,
-    ].slice(0, 10));
-  }
-
-  function showToast(text: string) {
-    setToast(text);
-    window.setTimeout(() => setToast(null), 2600);
-  }
-
-  function requireAccess(allowed: boolean) {
-    if (allowed) {
-      return true;
     }
-    showToast(t("Роль «{role}» не может выполнить это действие.", { role: t(access.label) }));
-    return false;
-  }
-
-  function changeDemoRole(role: DemoUserRole) {
-    setDemoRole(role);
-    setActiveMenu("map");
-    setSelectedProcessId(null);
-    setProcessBuilderId(null);
-    setProcessDetailId(null);
-    setLinkingFromId(null);
-  }
-
-  function loginDemo(role: DemoUserRole) {
-    changeDemoRole(role);
-    setDemoAuthenticated(true);
-  }
-
-  function logoutDemo() {
-    setPersonalSettingsOpen(false);
-    setDemoAuthenticated(false);
-  }
-
-  function toggleFullscreen() {
-    if (document.fullscreenElement) {
-      void document.exitFullscreen();
+    if (action === "sms") {
+      navigate("processes");
       return;
     }
-
-    void document.documentElement.requestFullscreen();
-  }
-
-  if (!demoAuthenticated) {
-    return <DemoLogin accounts={demoAccounts} initialRole={demoRole} onLogin={loginDemo} />;
-  }
-
-  if (!hasProjects) {
-    return (
-      <div className="app-shell empty-project-shell" style={appVars}>
-        <div className="cosmos-backdrop" />
-        <main className="empty-project-state glass-panel">
-          <span>{t("Проекты не созданы")}</span>
-          <h1>{t("Создайте первый проект")}</h1>
-          <p>{t(access.canManageProjects ? "После создания здесь появится рабочая карта проекта, ноды, документы, бизнес-процессы и мессенджер." : "Обратитесь к директору, чтобы получить доступ к проекту.")}</p>
-          {access.canManageProjects ? <button onClick={() => setProjectManagerOpen(true)}>{t("Создать новый проект")}</button> : null}
-        </main>
-        {projectManagerOpen ? (
-          <ProjectManagerModal
-            templates={projectTemplates}
-            onClose={() => setProjectManagerOpen(false)}
-            onCreateProject={createProject}
-          />
-        ) : null}
-        {toast ? <div className="toast glass-panel">{toast}</div> : null}
-      </div>
-    );
+    navigate(action);
   }
 
   return (
-    <div
-      className="app-shell"
-      style={appVars}
-      onDragOver={(event) => {
-        event.preventDefault();
-        if (!access.canUploadFiles) {
-          return;
-        }
-        const types = Array.from(event.dataTransfer.types);
-        setIsDropActive(types.includes("Files"));
-      }}
-      onDragLeave={() => setIsDropActive(false)}
-      onDrop={(event) => {
-        if (!access.canUploadFiles) {
-          event.preventDefault();
-          setIsDropActive(false);
-          return;
-        }
-        void handleDrop(event);
-      }}
-    >
-      <div className="cosmos-backdrop" />
-      {!guideDismissed && access.canManageProjects ? (
-        <MvpGuide
-          onCreateProject={() => setProjectManagerOpen(true)}
-          onClose={() => setGuideDismissed(true)}
-        />
-      ) : null}
-      {showConstructorHint ? <ConstructorHint onClose={() => setConstructorHintDismissed(true)} /> : null}
-      <Sidebar
-        isOpen={mobileMenuOpen}
-        activeMenu={activeMenu}
-        project={visibleProject}
-        chatUnreadCount={chatUnreadCount}
-        access={access}
-        onMenuSelect={selectSidebarMenu}
-        onSelectProcess={selectProcess}
-        onSelectNode={navigateToNode}
-        onOpenDocument={setModalDocument}
-        onClose={() => setMobileMenuOpen(false)}
-      />
-      <TopSearch
-        value={query}
-        onChange={setQuery}
-        hasNoResults={hasNoResults}
-        matchCount={matches.nodeIds.size + matches.processIds.size}
-        onMenuClick={() => setMobileMenuOpen(true)}
-        projects={projects}
-        activeProjectId={activeProjectId}
-        user={currentUser}
-        access={access}
-        onProjectChange={selectProject}
-        onProjectDelete={deleteProject}
-        notifications={notifications}
-        onNotificationClick={handleNotificationClick}
-        onOpenProjectManager={() => setProjectManagerOpen(true)}
-        onOpenPersonalSettings={() => setPersonalSettingsOpen(true)}
-      />
-      <ProjectScene
-        project={visibleProject}
-        level={activeLevel}
-        nodes={levelNodes}
-        processes={levelProcesses}
-        selectedNodeId={selectedProcessId ? "" : selectedNode?.id ?? activeLevel.centralNodeId}
-        selectedProcessId={selectedProcessId}
-        linkingFromId={linkingFromId}
-        matchedNodeIds={matches.nodeIds}
-        matchedProcessIds={matches.processIds}
-        isSearching={isSearching}
-        levelTransition={levelTransition}
-        interfaceScale={interfaceScale}
-        access={access}
-        onSelectNode={selectNode}
-        onOpenNodeLevel={openNodeLevel}
-        onBackLevel={backLevel}
-        onSelectProcess={selectProcessOnMap}
-        onOpenProcessDetails={openProcessDetails}
-        onStartLink={startLink}
-        onCompleteLink={completeLink}
-        onOpenDocument={setModalDocument}
-        onMoveDocumentNode={moveDocumentNode}
-        onMoveDocumentNodeToInbox={moveDocumentNodeToInbox}
-        onAddRandomFile={addRandomFile}
-        onAddSectionNode={addSectionNode}
-        onImportFilesAtPosition={(files, position) => {
-          void importFilesToWorkspace(files, position);
-        }}
-        onUpdateDocumentStatus={updateDocumentStatus}
-        onPositionsChange={saveLevelPositions}
-        onToggleNodePositionLock={toggleNodePositionLock}
-        onDeleteNode={deleteNode}
-        onDeleteProcess={deleteProcess}
-        onDeleteProject={() => deleteProject(activeProject.id)}
-        sceneRef={sceneRef}
-      />
-      <OrphanFilesPanel
-        project={visibleProject}
-        canUploadFiles={access.canUploadFiles}
-        canDeleteDocuments={access.canEditStructure}
-        onAddRandomFile={(tag) => addRandomFile(undefined, tag)}
-        onMaterializeInboxDocument={materializeInboxDocument}
-        onMoveDocumentNodeToInbox={moveDocumentNodeToInbox}
-        onDeleteDocument={deleteInboxDocument}
-        onImportFiles={(files) => {
-          void importFilesToProjectPool(files);
-        }}
-        onOpenDocument={(document) => setModalDocument(document)}
-      />
-      <ProjectChatPanel
-        messages={visibleProject.chatMessages}
-        isOpen={chatPanelOpen}
-        unreadCount={chatUnreadCount}
-        onSend={sendProjectChatMessage}
-        onToggle={toggleChatPanel}
-        onOpenChat={() => {
-          markProjectChatRead();
-          setChatPanelOpen(false);
-          setActiveMenu("chat");
-        }}
-      />
-      <WorkspacePanel
-        activeMenu={activeMenu}
-        project={visibleProject}
-        user={currentUser}
-        access={access}
-        onClose={() => setActiveMenu("map")}
-        onSelectProcess={selectProcess}
-        onOpenDocument={setModalDocument}
-        onReceiveMail={() => receiveMail()}
-        onReceiveChat={() => receiveChat()}
-        onSendMessage={sendProjectChatMessage}
-        projectTemplates={projectTemplates}
-        onCreateTemplate={createTemplate}
-        onCreateTaggedDocument={createTaggedDocument}
-        onCreateTaskDraft={createTaskDraft}
-        onUpdateDocumentStatus={updateDocumentStatus}
-        onAddParticipant={addParticipant}
-        onUpdateParticipant={updateParticipant}
-        onDeleteParticipant={deleteParticipant}
-        fontScale={fontScale}
-        interfaceScale={interfaceScale}
-        onFontScaleChange={setFontScale}
-        onInterfaceScaleChange={setInterfaceScale}
-      />
-      {selectedNode ? (
-        <RightPanel
-          project={visibleProject}
-          user={currentUser}
-          access={access}
-          level={activeLevel}
-          node={selectedNode}
-          process={selectedProcess}
-          onNodeUpdate={updateNode}
-          onProcessUpdate={updateProcess}
-          onDeleteProcess={deleteProcess}
-          onOpenDocument={setModalDocument}
-          onMoveDocumentNode={moveDocumentNode}
-          onUpdateDocumentStatus={updateDocumentStatus}
-          onRejectProcessDocument={rejectProcessDocument}
-          onAttachInboxDocument={attachInboxDocument}
-          onOpenProcessBuilder={(processId) => setProcessBuilderId(processId)}
-        />
-      ) : null}
-      <BottomControls
-        onUndo={undo}
-        onRedo={redo}
-        canUndo={access.canEditAssignedWork && undoStack.length > 0}
-        canRedo={access.canEditAssignedWork && redoStack.length > 0}
-        onNormalize={() => sceneRef.current?.normalize()}
-        onReset={() => sceneRef.current?.reset()}
-        onFocus={() => sceneRef.current?.focusSelected()}
-        onFullscreen={toggleFullscreen}
-      />
-      <DocumentModal
-        document={modalDocument}
-        onShowInFolder={(document) => showToast(t("Демо: файл «{title}» лежит в контейнере проекта.", { title: document.title }))}
-        onClose={() => setModalDocument(null)}
-      />
-      {projectManagerOpen ? (
-        <ProjectManagerModal
-          templates={projectTemplates}
-          onClose={() => setProjectManagerOpen(false)}
-          onCreateProject={createProject}
-        />
-      ) : null}
-      {personalSettingsOpen && currentUser ? (
-        <PersonalIntegrationsModal
-          project={visibleProject}
-          user={currentUser}
-          role={demoRole}
-          access={access}
-          onClose={() => setPersonalSettingsOpen(false)}
-          onRoleChange={changeDemoRole}
-          onLogout={logoutDemo}
-          onSaveIntegrations={saveParticipantIntegrations}
-          onSaveProfile={updateParticipantProfile}
-          onChangePassword={() => showToast(t("Демо-пароль обновлен для текущей сессии."))}
-          onImportDemo={importDemoIntegration}
-          onImportTestFile={importIntegrationTestFile}
-          onImportFiles={(provider, participantId, files) => {
-            void importIntegrationFiles(provider, participantId, files);
-          }}
-        />
-      ) : null}
-      {builderProcess ? (
-        <ProcessBuilderModal
-          project={visibleProject}
-          process={builderProcess}
-          onClose={() => setProcessBuilderId(null)}
-          onSave={saveProcessBuilder}
-          onOpenDocument={setModalDocument}
-          onAddParticipant={addParticipantFromDirectory}
-        />
-      ) : null}
-      {detailProcess ? (
-        <ProcessDetailModal
-          project={visibleProject}
-          process={detailProcess}
-          canEdit={canEditProcess(access, currentUser, detailProcess)}
-          canConfigure={access.canEditStructure}
-          onClose={() => setProcessDetailId(null)}
-          onOpenDocument={setModalDocument}
-          onDelegationChange={updateProcessDelegation}
-          onTaskCommentChange={(processId, taskComment) => updateProcess(processId, { taskComment })}
-          onClarification={submitProcessClarification}
-          onConfigure={(processId) => {
-            setProcessDetailId(null);
-            setProcessBuilderId(processId);
-          }}
-        />
-      ) : null}
-      {deletionRequest ? (
-        <ConfirmDialog
-          title={deletionRequest.title}
-          description={deletionRequest.description}
-          confirmLabel={deletionRequest.confirmLabel}
-          onConfirm={confirmDeletion}
-          onCancel={() => setDeletionRequest(null)}
-        />
-      ) : null}
-      {isDropActive ? (
-        <div className="drop-overlay">
-          <strong>{t("Отпустите файлы")}</strong>
-          <span>{t("Они попадут в выбранный контейнер связи или во входящие без тега.")}</span>
+    <div className="app-shell">
+      <DesktopSidebar view={view} onNavigate={navigate} />
+
+      {mobileMenuOpen && (
+        <button className="mobile-scrim" aria-label="Закрыть меню" onClick={() => setMobileMenuOpen(false)} />
+      )}
+
+      <main className="main-shell">
+        <Topbar onOpenMenu={() => setMobileMenuOpen(true)} />
+
+        <div className="page-wrap">
+          <PageHeader view={view} />
+
+          {view === "overview" && (
+            <OverviewScreen
+              onKpiAction={handleKpiAction}
+              onNavigate={navigate}
+              onOpenTeam={openTeam}
+              onOpenOpportunity={openOpportunity}
+            />
+          )}
+          {view === "teams" && <TeamsScreen onOpenTeam={openTeam} />}
+          {view === "people" && (
+            <PeopleScreen filter={peopleFilter} onFilter={setPeopleFilter} onOpenEmployee={openEmployee} />
+          )}
+          {view === "processes" && <ProcessesScreen />}
+          {view === "finance" && <FinanceScreen onOpenTeam={openTeam} onOpenOpportunity={openOpportunity} />}
+          {view === "opportunities" && <OpportunitiesScreen onOpenOpportunity={openOpportunity} />}
+
+          <footer className="prototype-footer">
+            <span>MOLECULE × TSUM MARKETING</span>
+            <p>Все данные и оргструктура демонстрационные. Система показывает факты и возможности, решение принимает руководитель.</p>
+          </footer>
         </div>
-      ) : null}
-      {toast ? <div className="toast glass-panel">{toast}</div> : null}
+      </main>
+
+      <MobileNavigation view={view} onNavigate={navigate} />
+
+      {mobileMenuOpen && (
+        <div className="mobile-menu-sheet">
+          <div className="brand-lockup brand-lockup--mobile">
+            <strong>ЦУМ</strong><i /> <span>MOLECULE</span>
+          </div>
+          <button className="icon-button" aria-label="Закрыть меню" onClick={() => setMobileMenuOpen(false)}><X size={20} /></button>
+          <nav>
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button key={item.id} className={view === item.id ? "active" : ""} onClick={() => navigate(item.id)}>
+                  <Icon size={19} /><span>{item.label}</span><ChevronRight size={17} />
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+      )}
+
+      {(selectedTeam || selectedEmployee || selectedOpportunity) && (
+        <>
+          <button className="detail-scrim" aria-label="Закрыть детали" onClick={closeDetail} />
+          <aside className="detail-drawer">
+            <button className="drawer-close" aria-label="Закрыть" onClick={closeDetail}><X size={20} /></button>
+            {selectedTeam && <TeamDetail team={selectedTeam} onOpenEmployee={openEmployee} />}
+            {selectedEmployee && <EmployeeDetail employee={selectedEmployee} onOpenTeam={openTeam} />}
+            {selectedOpportunity && <OpportunityDetail opportunity={selectedOpportunity} />}
+          </aside>
+        </>
+      )}
     </div>
   );
 }
 
-function applyProjectTeam(project: DemoProject, teamMembers: ProjectParticipantSeed[]) {
-  if (!teamMembers.length) {
-    return project;
-  }
-
-  const fallbackAdmin = project.participants.find((participant) => participant.role === "admin") ?? project.participants[0];
-  const seeds = teamMembers.some((participant) => participant.role === "admin")
-    ? teamMembers
-    : [
-        {
-          name: fallbackAdmin.name,
-          position: fallbackAdmin.position,
-          role: fallbackAdmin.role,
-          email: fallbackAdmin.email,
-          phone: fallbackAdmin.phone,
-          messenger: fallbackAdmin.messenger,
-          otherContacts: fallbackAdmin.otherContacts,
-          visibilityMode: fallbackAdmin.visibilityMode ?? "all",
-          visibleNodeIds: fallbackAdmin.visibleNodeIds ?? [],
-        },
-        ...teamMembers,
-      ];
-  const seen = new Set<string>();
-  const participants = seeds
-    .filter((participant) => {
-      const key = participant.email.toLocaleLowerCase();
-      if (seen.has(key)) {
-        return false;
-      }
-      seen.add(key);
-      return true;
-    })
-    .map((participant, index) => ({
-      ...participant,
-      id: `participant-${project.id}-${index}`,
-      projectId: project.id,
-      status: "active" as const,
-      integrations: [],
-      visibilityMode: participant.visibilityMode ?? "all",
-      visibleNodeIds: participant.visibleNodeIds ?? [],
-    }));
-
-  return {
-    ...project,
-    participants,
-  };
-}
-
-function addDocumentToInbox(project: DemoProject, document: ProcessDocument): DemoProject {
-  const nodeIdsToRemove = new Set(
-    project.nodes
-      .filter((node) => node.type === "document" && node.document?.id === document.id)
-      .map((node) => node.id),
-  );
-
-  const nodePositions = Object.fromEntries(
-    Object.entries(project.nodePositions ?? {}).map(([levelId, positions]) => [
-      levelId,
-      Object.fromEntries(Object.entries(positions).filter(([nodeId]) => !nodeIdsToRemove.has(nodeId))),
-    ]),
-  );
-
-  return {
-    ...project,
-    nodes: project.nodes.filter((node) => !nodeIdsToRemove.has(node.id)),
-    levels: project.levels.map((level) => ({
-      ...level,
-      nodeIds: level.nodeIds.filter((id) => !nodeIdsToRemove.has(id)),
-    })),
-    processes: project.processes.map((process) => ({
-      ...process,
-      documents: process.documents.filter((item) => item.id !== document.id),
-    })),
-    inboxDocuments: [
-      document,
-      ...project.inboxDocuments.filter((item) => item.id !== document.id),
-    ],
-    nodePositions,
-    updatedAt: "только что",
-  };
-}
-
-function removeDocumentEverywhere(project: DemoProject, documentId: string): DemoProject {
-  const nodeIdsToRemove = new Set(
-    project.nodes
-      .filter((node) => node.type === "document" && node.document?.id === documentId)
-      .map((node) => node.id),
-  );
-  const nodePositions = Object.fromEntries(
-    Object.entries(project.nodePositions ?? {}).map(([levelId, positions]) => [
-      levelId,
-      Object.fromEntries(Object.entries(positions).filter(([nodeId]) => !nodeIdsToRemove.has(nodeId))),
-    ]),
-  );
-
-  return {
-    ...project,
-    nodes: project.nodes.filter((node) => !nodeIdsToRemove.has(node.id)),
-    levels: project.levels.map((level) => ({
-      ...level,
-      nodeIds: level.nodeIds.filter((nodeId) => !nodeIdsToRemove.has(nodeId)),
-    })),
-    processes: project.processes.map((process) => ({
-      ...process,
-      documents: process.documents.filter((document) => document.id !== documentId),
-    })),
-    inboxDocuments: project.inboxDocuments.filter((document) => document.id !== documentId),
-    nodePositions,
-    updatedAt: "только что",
-  };
-}
-
-function removeProjectNodeTree(project: DemoProject, rootNodeId: string): DemoProject {
-  const removedNodeIds = new Set<string>([rootNodeId]);
-  const removedLevelIds = new Set<string>();
-  let changed = true;
-
-  while (changed) {
-    changed = false;
-    project.levels.forEach((level) => {
-      if (removedLevelIds.has(level.id) || !level.parentNodeId || !removedNodeIds.has(level.parentNodeId)) {
-        return;
-      }
-      removedLevelIds.add(level.id);
-      level.nodeIds.forEach((nodeId) => removedNodeIds.add(nodeId));
-      changed = true;
-    });
-  }
-
-  project.nodes.forEach((node) => {
-    if (node.documentOwnerNodeId && removedNodeIds.has(node.documentOwnerNodeId)) {
-      removedNodeIds.add(node.id);
-    }
-  });
-
-  const removedProcesses = project.processes.filter(
-    (process) => removedLevelIds.has(process.levelId) || removedNodeIds.has(process.from) || removedNodeIds.has(process.to),
-  );
-  const preservedDocuments = [
-    ...project.nodes
-      .filter((node) => removedNodeIds.has(node.id) && node.type === "document" && node.document)
-      .map((node) => getDocumentFromNode(node)),
-    ...removedProcesses.flatMap((process) => process.documents),
-  ];
-  const inboxById = new Map(project.inboxDocuments.map((document) => [document.id, document]));
-  preservedDocuments.forEach((document) => {
-    inboxById.set(document.id, {
-      ...document,
-      status: document.status === "approved" ? document.status : "draft",
-      isNew: true,
-      updatedAt: "только что",
-    });
-  });
-
-  const nodePositions = Object.fromEntries(
-    Object.entries(project.nodePositions ?? {})
-      .filter(([levelId]) => !removedLevelIds.has(levelId))
-      .map(([levelId, positions]) => [
-        levelId,
-        Object.fromEntries(Object.entries(positions).filter(([nodeId]) => !removedNodeIds.has(nodeId))),
-      ]),
-  );
-
-  return {
-    ...project,
-    levels: project.levels
-      .filter((level) => !removedLevelIds.has(level.id))
-      .map((level) => ({
-        ...level,
-        nodeIds: level.nodeIds.filter((nodeId) => !removedNodeIds.has(nodeId)),
-      })),
-    nodes: project.nodes.filter((node) => !removedNodeIds.has(node.id)),
-    processes: project.processes.filter((process) => !removedProcesses.some((removed) => removed.id === process.id)),
-    inboxDocuments: Array.from(inboxById.values()),
-    nodePositions,
-    updatedAt: "только что",
-  };
-}
-
-function withNodePosition(project: DemoProject, levelId: string, nodeId: string, position?: Vec2): DemoProject {
-  if (!position) {
-    return project;
-  }
-
-  return {
-    ...project,
-    nodePositions: {
-      ...(project.nodePositions ?? {}),
-      [levelId]: {
-        ...(project.nodePositions?.[levelId] ?? {}),
-        [nodeId]: position,
-      },
-    },
-  };
-}
-
-function offsetDropPosition(position: Vec2, index: number): Vec2 {
-  if (index === 0) {
-    return position;
-  }
-
-  const column = index % 3;
-  const row = Math.floor(index / 3);
-  return {
-    x: clampNumber(position.x + column * 1.35, -42, 42),
-    y: clampNumber(position.y + row * 1.05, -26, 26),
-  };
-}
-
-function clampNumber(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function findBestProcessForIncoming(project: DemoProject, levelId: string, marker: string) {
-  const normalized = marker.toLocaleLowerCase("ru-RU");
-  return project.processes.find((process) => {
-    if (process.levelId !== levelId) {
-      return false;
-    }
-    const from = getNodeById(project, process.from);
-    const to = getNodeById(project, process.to);
-    const text = [process.title, process.description, process.tag, from?.shortCode, from?.title, to?.shortCode, to?.title]
-      .filter(Boolean)
-      .join(" ")
-      .toLocaleLowerCase("ru-RU");
-    return normalized.includes("ар") ? text.includes("ар") : text.includes(normalized);
-  }) ?? project.processes.find((process) => process.levelId === levelId);
-}
-
-function upsertIntegration(integrations: UserIntegration[], provider: IntegrationProvider, patch: Partial<UserIntegration>): UserIntegration[] {
-  const existing = integrations.find((integration) => integration.provider === provider);
-  if (!existing) {
-    return [
-      ...integrations,
-      {
-        id: `integration-${provider}`,
-        provider,
-        label: getIntegrationProviderLabel(provider),
-        status: "connected",
-        ...patch,
-      },
-    ];
-  }
-
-  return integrations.map((integration) =>
-    integration.provider === provider
-      ? {
-          ...integration,
-          ...patch,
-        }
-      : integration,
-  );
-}
-
-function getDemoIntegrationFiles(provider: IntegrationProvider) {
-  const files: Record<IntegrationProvider, string[]> = {
-    outlook: ["Расчетная_схема_КР.pdf", "Письмо_АР.docx", "Уточнение_ХЗ.xlsx"],
-    yandex: ["Технические_условия_ВК.pdf", "Сметная_таблица_СМ.xlsx", "Вложение_БезТега.docx"],
-    gmail: ["Пояснения_ПЗ.docx", "Сводка_ЭОМ.xlsx", "Презентация_ABC.pptx"],
-    telegram: ["Скрин_ОВ.png", "Планировка_АР.pdf", "Комментарий_QA.txt"],
-    folder: ["Ведомость_ВК.xlsx", "Стройгенплан_ПОС.pdf", "Материалы_UnknownTag.docx"],
-  };
-  return files[provider];
-}
-
-function getIntegrationProviderLabel(provider: IntegrationProvider) {
-  const labels: Record<IntegrationProvider, string> = {
-    outlook: "Outlook",
-    yandex: "Яндекс Почта",
-    gmail: "Gmail",
-    telegram: "Telegram Desktop",
-    folder: "Рабочая папка",
-  };
-  return labels[provider];
-}
-
-function ConstructorHint({ onClose }: { onClose: () => void }) {
-  const { t } = useI18n();
+function DesktopSidebar({ view, onNavigate }: { view: ViewId; onNavigate: (view: ViewId) => void }) {
   return (
-    <aside className="constructor-hint glass-panel">
-      <header>
-        <div>
-          <span>{t("Пустой проект")}</span>
-          <strong>{t("Как начать сборку")}</strong>
-        </div>
-        <button onClick={onClose} aria-label={t("Скрыть подсказку")}>×</button>
-      </header>
-      <ol>
-        <li>{t("Выберите ноду и переименуйте ее в правой панели.")}</li>
-        <li>{t("Наведите на ноду и нажмите плюс, чтобы создать бизнес-процесс.")}</li>
-        <li>{t("Двойной клик по ноде открывает ее внутренний уровень.")}</li>
-      </ol>
+    <aside className="desktop-sidebar">
+      <div className="brand-lockup">
+        <strong>ЦУМ</strong><i /><span>MOLECULE</span>
+      </div>
+      <div className="sidebar-context">
+        <span>Рабочее пространство</span>
+        <strong>Marketing</strong>
+        <small>Демо-прототип · август 2026</small>
+      </div>
+      <nav>
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <button key={item.id} className={view === item.id ? "active" : ""} onClick={() => onNavigate(item.id)}>
+              <Icon size={18} /><span>{item.label}</span>
+              {item.id === "opportunities" && <em>8</em>}
+            </button>
+          );
+        })}
+      </nav>
+      <div className="sidebar-signal">
+        <span className="signal-dot" />
+        <div><strong>Данные обновлены</strong><small>сегодня в 09:42</small></div>
+      </div>
+      <div className="sidebar-profile">
+        <span>ВС</span>
+        <div><strong>Виктория Соколова</strong><small>Директор по маркетингу</small></div>
+      </div>
     </aside>
   );
 }
 
-function extractDocumentTag(title: string) {
-  const base = title.replace(/\.[^.]+$/, "");
-  const parts = extractTagTokens(base);
-  if (parts.length < 2) {
-    return undefined;
-  }
-  return parts[parts.length - 1].toLocaleUpperCase("ru-RU");
-}
-
-function findNodeByTag(project: DemoProject, tag: string) {
-  const normalizedTag = normalizeTag(tag);
-  return project.nodes.find((node) => {
-    if (node.type === "document" || node.type === "central") {
-      return false;
-    }
-
-    const tokens = [node.shortCode, node.title, ...(node.tags ?? [])].map((value) => normalizeTag(value ?? ""));
-    return tokens.some((token) => token === normalizedTag);
-  });
-}
-
-function detectDocumentTag(project: DemoProject, title: string) {
-  const tokens = extractTagTokens(title);
-  if (tokens.length < 2) {
-    return undefined;
-  }
-
-  const knownTags = new Set(
-    project.nodes
-      .filter((node) => node.type !== "document" && node.type !== "central")
-      .flatMap((node) => [node.shortCode, ...(node.tags ?? [])])
-      .map((tag) => normalizeTag(tag ?? ""))
-      .filter(Boolean),
-  );
-  const knownToken = tokens.find((token) => knownTags.has(normalizeTag(token)));
-  return (knownToken ?? tokens[tokens.length - 1]).toLocaleUpperCase("ru-RU");
-}
-
-function getRandomProjectTag(project: DemoProject) {
-  const tags = Array.from(
-    new Set(
-      project.nodes
-        .filter((node) => node.type !== "document" && node.type !== "central")
-        .flatMap((node) => [node.shortCode, ...(node.tags ?? [])])
-        .map((tag) => tag?.trim())
-        .filter(Boolean) as string[],
-    ),
-  );
-
-  return tags[Math.floor(Math.random() * tags.length)];
-}
-
-function getChecklistStatus(checklist: NodeChecklistItem[], fallback?: NodeStatus): NodeStatus {
-  if (!checklist.length) {
-    return fallback ?? "unchecked";
-  }
-
-  if (checklist.every((item) => item.done)) {
-    return "approved";
-  }
-
-  if (checklist.some((item) => item.done)) {
-    return "review";
-  }
-
-  return "unchecked";
-}
-
-function formatNodeLevelTitle(node: ProjectNode) {
-  const code = node.shortCode?.trim();
-  return code ? `${code} / ${node.title}` : node.title;
-}
-
-function normalizeTag(value: string) {
-  return value.toLocaleLowerCase("ru-RU").replace(/ё/g, "е").replace(/\s+/g, "");
-}
-
-function appendTagToFileName(fileName: string, tag?: string) {
-  const normalizedTag = normalizeFileTag(tag);
-  if (!normalizedTag) {
-    return fileName;
-  }
-
-  const tokens = extractTagTokens(fileName);
-  if (tokens.some((token) => normalizeTag(token) === normalizeTag(normalizedTag))) {
-    return fileName;
-  }
-
-  const dotIndex = fileName.lastIndexOf(".");
-  if (dotIndex <= 0) {
-    return `${fileName}_${normalizedTag}`;
-  }
-
-  return `${fileName.slice(0, dotIndex)}_${normalizedTag}${fileName.slice(dotIndex)}`;
-}
-
-function normalizeFileTag(tag?: string) {
-  const firstToken = tag?.trim().split(/[\s_]+/).find(Boolean) ?? "";
-  return firstToken.replace(/[^0-9A-Za-zА-Яа-яЁё]+/g, "").toLocaleUpperCase("ru-RU");
-}
-
-function extractTagTokens(value: string) {
-  return value
-    .replace(/\.[^.]+$/, "")
-    .split(/[\s_]+/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-}
-
-function getRandomFileName() {
-  const names = [
-    "замечания_экспертизы_новое.pdf",
-    "сводная_таблица_объемов.xlsx",
-    "письмо_заказчика_без_тега.docx",
-    "материалы_фасада_вариант.pptx",
-    "рабочие_пометки.txt",
-    "узел_крепления_черновик.dwg",
-  ];
-  return names[Math.floor(Math.random() * names.length)];
-}
-
-function getRandomFileSize() {
-  const sizes = ["420 КБ", "1.2 МБ", "2.8 МБ", "4.1 МБ", "740 КБ"];
-  return sizes[Math.floor(Math.random() * sizes.length)];
-}
-
-type DeadlineNotificationPhase = "due_soon" | "urgent" | "overdue";
-
-function buildDeadlineNotifications(projects: DemoProject[], current: DemoNotification[]) {
-  const existingIds = new Set(current.map((notification) => notification.id));
-  const notifications: DemoNotification[] = [];
-
-  projects.forEach((project) => {
-    project.processes.forEach((process) => {
-      if (process.status === "draft" || process.status === "accepted" || process.status === "rejected") {
-        return;
-      }
-
-      getProcessDeadlineEntries(process).forEach((entry) => {
-        const phase = getDeadlineNotificationPhase(entry.value);
-        if (!phase) {
-          return;
-        }
-
-        const id = `deadline-${project.id}-${process.id}-${entry.key}-${phase}`;
-        if (existingIds.has(id)) {
-          return;
-        }
-
-        notifications.push({
-          id,
-          projectId: project.id,
-          title: getDeadlineNotificationTitle(phase),
-          description: `${process.title}: ${entry.label} ${formatDeadlineDistance(entry.value)}. Передает: ${process.sender}; получает: ${process.receiver}; согласует: ${process.approver ?? process.receiver}.`,
-          time: "только что",
-          targetProcessId: process.id,
-          unread: true,
-        });
-      });
-    });
-  });
-
-  return notifications;
-}
-
-function getDeadlineNotificationPhase(value?: string): DeadlineNotificationPhase | null {
-  const deadline = parseDeadline(value);
-  if (!deadline) {
-    return null;
-  }
-
-  const hoursLeft = (deadline.getTime() - Date.now()) / 36e5;
-  if (hoursLeft < 0) {
-    return "overdue";
-  }
-  if (hoursLeft <= 24) {
-    return "urgent";
-  }
-  if (hoursLeft <= 72) {
-    return "due_soon";
-  }
-  return null;
-}
-
-function getDeadlineNotificationTitle(phase: DeadlineNotificationPhase) {
-  if (phase === "overdue") {
-    return "Срок бизнес-процесса просрочен";
-  }
-  if (phase === "urgent") {
-    return "До срока бизнес-процесса меньше суток";
-  }
-  return "Срок бизнес-процесса близко";
-}
-
-function getDefaultProcessDueAt(hoursFromNow: number) {
-  const date = new Date();
-  date.setHours(date.getHours() + hoursFromNow, 0, 0, 0);
-  return formatAppDateTimeLocal(date);
-}
-
-function formatAppDateTimeLocal(date: Date) {
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-function formatFileModifiedAt(timestamp: number) {
-  if (!timestamp || !Number.isFinite(timestamp)) {
-    return "только что";
-  }
-  const date = new Date(timestamp);
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-const fontSizes = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 26, 28, 30, 32, 34, 42, 54];
-
-function buildAppVars(fontScale: number, interfaceScale: number) {
-  return fontSizes.reduce(
-    (vars, size) => ({
-      ...vars,
-      [`--fs-${size}`]: `${size * fontScale}px`,
-    }),
-    {
-      "--font-scale": String(fontScale),
-      "--ui-scale": String(interfaceScale),
-      "--ui-left-adjustment": `${Math.round(316 * (interfaceScale - 1))}px`,
-      "--ui-right-adjustment": `${Math.round(330 * (interfaceScale - 1))}px`,
-      "--ui-control-size": `${Math.round(36 * interfaceScale)}px`,
-      "--ui-toolbar-height": `${Math.round(48 * interfaceScale)}px`,
-      "--ui-panel-padding": `${Math.round(14 * interfaceScale)}px`,
-    } as CSSProperties & Record<string, string>,
+function Topbar({ onOpenMenu }: { onOpenMenu: () => void }) {
+  return (
+    <header className="topbar">
+      <button className="mobile-menu-button" aria-label="Открыть меню" onClick={onOpenMenu}><Menu size={20} /></button>
+      <div className="topbar-search"><Search size={17} /><span>Найти сотрудника, функцию или процесс</span><kbd>⌘ K</kbd></div>
+      <div className="topbar-actions">
+        <span className="demo-badge">DEMO</span>
+        <button className="period-button">Август 2026 <ChevronRight size={15} /></button>
+      </div>
+    </header>
   );
 }
+
+function PageHeader({ view }: { view: ViewId }) {
+  const meta = pageMeta[view];
+  return (
+    <header className="page-header">
+      <span>{meta.eyebrow}</span>
+      <h1>{meta.title}</h1>
+      <p>{meta.description}</p>
+    </header>
+  );
+}
+
+type KpiAction = (typeof kpis)[number]["action"];
+
+function OverviewScreen({
+  onKpiAction,
+  onNavigate,
+  onOpenTeam,
+  onOpenOpportunity,
+}: {
+  onKpiAction: (action: KpiAction) => void;
+  onNavigate: (view: ViewId) => void;
+  onOpenTeam: (id: string) => void;
+  onOpenOpportunity: (id: string) => void;
+}) {
+  return (
+    <div className="screen-stack">
+      <section className="executive-hero">
+        <div className="executive-copy">
+          <span className="hero-kicker"><Sparkles size={14} /> Executive pulse</span>
+          <h2>Емкость есть, но она распределена не там, где возникает нагрузка.</h2>
+          <p>Редакция и in-store недозагружены, production и управление работают выше устойчивого уровня. Основной резерв — не сокращение, а перераспределение функций и более короткие маршруты решений.</p>
+          <button onClick={() => { onNavigate("opportunities"); onOpenOpportunity("capacity"); }}>
+            Посмотреть объяснение <ArrowRight size={17} />
+          </button>
+        </div>
+        <div className="hero-score">
+          <span>Индекс операционной эффективности</span>
+          <strong>72</strong>
+          <div><i style={{ width: "72%" }} /></div>
+          <small><ArrowUpRight size={14} /> +3 пункта к июлю</small>
+        </div>
+      </section>
+
+      <section className="kpi-grid" aria-label="Ключевые показатели">
+        {kpis.map((kpi) => (
+          <button key={kpi.label} className={`kpi-card kpi-card--${kpi.tone}`} onClick={() => onKpiAction(kpi.action)}>
+            <strong>{kpi.value}</strong>
+            <span>{kpi.label}</span>
+            <small>{kpi.note}</small>
+            <ArrowUpRight className="kpi-arrow" size={16} />
+          </button>
+        ))}
+      </section>
+
+      <section className="overview-columns">
+        <div className="section-card attention-card">
+          <SectionHeading eyebrow="Требует решения" title="Три сигнала с наибольшим влиянием" action="Все процессы" onAction={() => onNavigate("processes")} />
+          <div className="attention-list">
+            <button onClick={() => onNavigate("processes")}>
+              <span className="attention-index">01</span>
+              <div><strong>31 час задача ждет решения генерального директора</strong><small>SMS private sale · можно решить на уровне маркетинга</small></div>
+              <ChevronRight size={18} />
+            </button>
+            <button onClick={() => { onNavigate("opportunities"); onOpenOpportunity("capacity"); }}>
+              <span className="attention-index">02</span>
+              <div><strong>Перекос загрузки эквивалентен 3,6 полной позиции</strong><small>17 сотрудников &lt; 50% · 11 сотрудников &gt; 90%</small></div>
+              <ChevronRight size={18} />
+            </button>
+            <button onClick={() => { onNavigate("opportunities"); onOpenOpportunity("agencies"); }}>
+              <span className="attention-index">03</span>
+              <div><strong>7 контрактов пересекаются со штатными функциями</strong><small>Потенциал уточнения расходов · ₽11,4 млн в год</small></div>
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        </div>
+
+        <div className="section-card opportunity-preview">
+          <SectionHeading eyebrow="Optimization opportunity" title="Ближайший быстрый эффект" />
+          <button className="opportunity-feature" onClick={() => onOpenOpportunity("approval")}>
+            <span>01</span>
+            <h3>Матрица решений для операционных коммуникаций</h3>
+            <p>Освободить до 620 часов руководителей в год без изменения численности.</p>
+            <div><strong>94%</strong><small>уверенность модели</small><ArrowRight size={18} /></div>
+          </button>
+        </div>
+      </section>
+
+      <section className="org-section">
+        <SectionHeading eyebrow="Живая карта департамента" title="12 команд · 88 сотрудников" action="Сравнить команды" onAction={() => onNavigate("teams")} />
+        <div className="direction-grid">
+          <DirectionColumn direction="online" onOpenTeam={onOpenTeam} />
+          <DirectionColumn direction="offline" onOpenTeam={onOpenTeam} />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function SectionHeading({ eyebrow, title, action, onAction }: { eyebrow: string; title: string; action?: string; onAction?: () => void }) {
+  return (
+    <header className="section-heading">
+      <div><span>{eyebrow}</span><h2>{title}</h2></div>
+      {action && onAction && <button onClick={onAction}>{action}<ArrowRight size={16} /></button>}
+    </header>
+  );
+}
+
+function DirectionColumn({ direction, onOpenTeam }: { direction: Direction; onOpenTeam: (id: string) => void }) {
+  const directionTeams = teams.filter((team) => team.direction === direction);
+  const count = directionTeams.reduce((sum, team) => sum + team.count, 0);
+  const avgLoad = Math.round(directionTeams.reduce((sum, team) => sum + team.utilization * team.count, 0) / count);
+  return (
+    <div className="direction-column">
+      <header>
+        <div><span>{direction === "online" ? "01" : "02"}</span><strong>{direction === "online" ? "Онлайн-маркетинг" : "Офлайн, бренды и события"}</strong></div>
+        <small>{count} сотрудников · {avgLoad}% загрузка</small>
+      </header>
+      <div className="team-mini-grid">
+        {directionTeams.map((team) => (
+          <button key={team.id} className={team.utilization > 85 || team.utilization < 58 ? "has-signal" : ""} onClick={() => onOpenTeam(team.id)}>
+            <span className="team-mini-number">{String(teams.indexOf(team) + 1).padStart(2, "0")}</span>
+            <div><strong>{team.shortTitle}</strong><small>{team.count} чел. · {team.processes} процессов</small></div>
+            <div className="team-mini-load"><span>{team.utilization}%</span><i><b style={{ width: `${Math.min(team.utilization, 100)}%` }} /></i></div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TeamsScreen({ onOpenTeam }: { onOpenTeam: (id: string) => void }) {
+  const [direction, setDirection] = useState<"all" | Direction>("all");
+  const visibleTeams = direction === "all" ? teams : teams.filter((team) => team.direction === direction);
+  return (
+    <div className="screen-stack">
+      <section className="summary-strip">
+        <SummaryMetric label="Общий бюджет" value="₽39,4 млн / мес." note="+6% к плану" />
+        <SummaryMetric label="Активные процессы" value="149" note="23 ожидают решения" />
+        <SummaryMetric label="Выполнение в срок" value="79%" note="цель 90%" />
+        <SummaryMetric label="Вклад с понятным KPI" value="74%" note="+8 п.п. за квартал" />
+      </section>
+      <section className="section-card teams-board">
+        <div className="board-toolbar">
+          <div className="segmented-control">
+            <button className={direction === "all" ? "active" : ""} onClick={() => setDirection("all")}>Все</button>
+            <button className={direction === "online" ? "active" : ""} onClick={() => setDirection("online")}>Онлайн</button>
+            <button className={direction === "offline" ? "active" : ""} onClick={() => setDirection("offline")}>Офлайн</button>
+          </div>
+          <span>{visibleTeams.length} команд</span>
+        </div>
+        <div className="team-card-grid">
+          {visibleTeams.map((team, index) => <TeamCard key={team.id} team={team} number={teams.indexOf(team) + 1 || index + 1} onOpen={() => onOpenTeam(team.id)} />)}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function SummaryMetric({ label, value, note }: { label: string; value: string; note: string }) {
+  return <div><span>{label}</span><strong>{value}</strong><small>{note}</small></div>;
+}
+
+function TeamCard({ team, number, onOpen }: { team: Team; number: number; onOpen: () => void }) {
+  const loadTone = team.utilization > 85 ? "high" : team.utilization < 58 ? "low" : "normal";
+  return (
+    <button className="team-card" onClick={onOpen}>
+      <header><span>{String(number).padStart(2, "0")}</span><em>{team.direction === "online" ? "Online" : "Offline"}</em></header>
+      <h3>{team.title}</h3>
+      <p>{team.functions.slice(0, 3).join(" · ")}</p>
+      <div className="team-card-primary">
+        <div><strong>{team.count}</strong><span>сотрудников</span></div>
+        <div><strong className={`load-${loadTone}`}>{team.utilization}%</strong><span>загрузка</span></div>
+      </div>
+      <div className="team-progress"><i><b style={{ width: `${Math.min(team.utilization, 100)}%` }} /></i><span>{team.onTime}% в срок</span></div>
+      <dl>
+        <div><dt>Процессы</dt><dd>{team.processes}</dd></div>
+        <div><dt>Задачи</dt><dd>{team.tasks}</dd></div>
+        <div><dt>Бюджет</dt><dd>₽{formatMoney(team.budget)} млн</dd></div>
+        <div><dt>Проблемы</dt><dd className={team.issues > 2 ? "metric-alert" : ""}>{team.issues}</dd></div>
+      </dl>
+      <footer><span>Вклад в результат</span><strong>{team.impact}%</strong><ArrowUpRight size={17} /></footer>
+    </button>
+  );
+}
+
+function PeopleScreen({ filter, onFilter, onOpenEmployee }: { filter: PeopleFilter; onFilter: (filter: PeopleFilter) => void; onOpenEmployee: (id: string) => void }) {
+  const [query, setQuery] = useState("");
+  const [teamFilter, setTeamFilter] = useState("all");
+  const visibleEmployees = useMemo(() => employees.filter((employee) => {
+    const matchesFilter = filter === "all" || (filter === "critical" ? employee.dependencies >= 8 : employee.status === filter);
+    const matchesTeam = teamFilter === "all" || employee.teamId === teamFilter;
+    const haystack = `${employee.name} ${employee.role} ${teamById(employee.teamId)?.title}`.toLowerCase();
+    return matchesFilter && matchesTeam && haystack.includes(query.toLowerCase());
+  }), [filter, query, teamFilter]);
+
+  return (
+    <div className="screen-stack">
+      <section className="people-pulse">
+        <div><span>Устойчивая загрузка</span><strong>60 сотрудников</strong><small>68% департамента</small></div>
+        <div className="pulse-visual" aria-label="Распределение загрузки">
+          <span className="pulse-low" style={{ width: "19%" }}>17</span>
+          <span className="pulse-normal" style={{ width: "68%" }}>60</span>
+          <span className="pulse-high" style={{ width: "13%" }}>11</span>
+        </div>
+        <div className="pulse-legend"><span><i className="low" />Ниже 50%</span><span><i className="normal" />50–90%</span><span><i className="high" />Выше 90%</span></div>
+      </section>
+
+      <section className="section-card people-board">
+        <div className="people-toolbar">
+          <label className="search-field"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Имя, роль или команда" /></label>
+          <select value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)} aria-label="Фильтр по команде">
+            <option value="all">Все команды</option>
+            {teams.map((team) => <option key={team.id} value={team.id}>{team.shortTitle}</option>)}
+          </select>
+        </div>
+        <div className="people-filters">
+          <FilterButton active={filter === "all"} onClick={() => onFilter("all")} label="Все" count={88} />
+          <FilterButton active={filter === "underloaded"} onClick={() => onFilter("underloaded")} label="Недозагружены" count={17} />
+          <FilterButton active={filter === "overloaded"} onClick={() => onFilter("overloaded")} label="Перегружены" count={11} />
+          <FilterButton active={filter === "critical"} onClick={() => onFilter("critical")} label="Критические зависимости" count={employees.filter((employee) => employee.dependencies >= 8).length} />
+        </div>
+        <div className="people-result-count">Показано {visibleEmployees.length} из 88</div>
+        <div className="employee-table">
+          <div className="employee-table-head"><span>Сотрудник</span><span>Команда</span><span>Стоимость / мес.</span><span>Работа</span><span>Загрузка</span><span>В срок</span><span>Зависимости</span></div>
+          {visibleEmployees.map((employee) => <EmployeeRow key={employee.id} employee={employee} onOpen={() => onOpenEmployee(employee.id)} />)}
+        </div>
+        {visibleEmployees.length === 0 && <div className="empty-result"><Search size={22} /><strong>Ничего не найдено</strong><span>Измените запрос или фильтр.</span></div>}
+      </section>
+    </div>
+  );
+}
+
+function FilterButton({ active, onClick, label, count }: { active: boolean; onClick: () => void; label: string; count: number }) {
+  return <button className={active ? "active" : ""} onClick={onClick}><span>{label}</span><em>{count}</em></button>;
+}
+
+function EmployeeRow({ employee, onOpen }: { employee: Employee; onOpen: () => void }) {
+  const team = teamById(employee.teamId);
+  return (
+    <button className="employee-row" onClick={onOpen}>
+      <span className="employee-identity"><i>{employee.initials}</i><span><strong>{employee.name}</strong><small>{employee.role}</small></span></span>
+      <span className="employee-team"><strong>{team?.shortTitle}</strong><small>{employee.businessImpact}</small></span>
+      <span className="employee-cost">₽{employee.cost} тыс.</span>
+      <span className="employee-work"><strong>{employee.processes}</strong><small>процессов · {employee.tasks} задач</small></span>
+      <span className={`employee-load status-${employee.status}`}><strong>{employee.utilization}%</strong><i><b style={{ width: `${Math.min(employee.utilization, 100)}%` }} /></i></span>
+      <span className="employee-ontime">{employee.onTime}%</span>
+      <span className="employee-dependencies"><strong>{employee.dependencies}</strong><ChevronRight size={16} /></span>
+    </button>
+  );
+}
+
+function ProcessesScreen() {
+  const [selectedId, setSelectedId] = useState(processes[0].id);
+  const [selectedStep, setSelectedStep] = useState(3);
+  const selected = processes.find((process) => process.id === selectedId) ?? processes[0];
+  const activeStep = selected.steps[selectedStep] ?? selected.steps[0];
+
+  function selectProcess(id: string) {
+    setSelectedId(id);
+    setSelectedStep(id === "sms-approval" ? 3 : 7);
+  }
+
+  return (
+    <div className="screen-stack">
+      <section className="process-summary-grid">
+        <SummaryMetric label="Активные процессы" value="149" note="по 12 командам" />
+        <SummaryMetric label="Ожидают решения" value="23" note="19 часов в среднем" />
+        <SummaryMetric label="Узкие места" value="9" note="4 повторяются ежемесячно" />
+        <SummaryMetric label="Потери времени" value="1 340 ч" note="оценка за квартал" />
+      </section>
+
+      <section className="process-picker">
+        {processes.map((process) => (
+          <button key={process.id} className={selected.id === process.id ? "active" : ""} onClick={() => selectProcess(process.id)}>
+            <span className={`process-state process-state--${process.status}`}>{process.status === "risk" ? "Требует решения" : "В работе"}</span>
+            <h3>{process.title}</h3><p>{process.summary}</p>
+            <footer><span>{process.progress}% завершено</span><ArrowRight size={17} /></footer>
+          </button>
+        ))}
+      </section>
+
+      <section className="section-card process-detail-board">
+        <header className="process-board-header">
+          <div><span>{selected.kicker}</span><h2>{selected.title}</h2><p>{selected.summary}</p></div>
+          <div className="process-result"><span>Результат</span><strong>{selected.result}</strong><small>Бюджет {selected.budget}</small></div>
+        </header>
+
+        <div className="process-route">
+          {selected.steps.map((step, index) => (
+            <button key={`${selected.id}-${step.title}`} className={`${step.status} ${selectedStep === index ? "selected" : ""}`} onClick={() => setSelectedStep(index)}>
+              <span>{step.status === "done" ? <Check size={15} /> : String(index + 1).padStart(2, "0")}</span>
+              <strong>{step.title}</strong><small>{step.owner}</small>
+            </button>
+          ))}
+        </div>
+
+        <div className="step-inspector">
+          <div className="step-owner"><span>Выбранный этап</span><h3>{activeStep.title}</h3><p>{activeStep.owner}</p></div>
+          <div><span>Время на этапе</span><strong>{activeStep.duration}</strong></div>
+          <div><span>Статус</span><strong className={`step-status step-status--${activeStep.status}`}>{stepStatusLabel(activeStep.status)}</strong></div>
+          <div className="step-note"><span>Сигнал MOLECULE</span><strong>{activeStep.note ?? "Отклонений от целевого маршрута не обнаружено."}</strong></div>
+        </div>
+
+        <div className="process-consumers">
+          <span>{selected.id === "fashion-shoot" ? "Куда расходится результат" : "Кого затрагивает ожидание"}</span>
+          <div>
+            {selected.teamIds.map((teamId) => <em key={teamId}>{teamById(teamId)?.shortTitle}</em>)}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function stepStatusLabel(status: Process["steps"][number]["status"]) {
+  return { done: "Завершен", active: "В работе", waiting: "Ожидает", queued: "В очереди" }[status];
+}
+
+function FinanceScreen({ onOpenTeam, onOpenOpportunity }: { onOpenTeam: (id: string) => void; onOpenOpportunity: (id: string) => void }) {
+  return (
+    <div className="screen-stack">
+      <section className="finance-hero">
+        <div><span>Годовой маркетинговый бюджет</span><strong>₽312,4 млн</strong><small>утвержденный план 2026</small></div>
+        <div className="finance-plan">
+          <div><span>Факт YTD</span><strong>₽204,6 млн</strong><small>65% плана</small></div>
+          <div><span>Прогноз</span><strong>₽326,8 млн</strong><small className="metric-alert">+4,6% к плану</small></div>
+          <div><span>Потенциал</span><strong>₽26,8 млн</strong><small>без прямых сокращений</small></div>
+        </div>
+      </section>
+
+      <section className="finance-columns">
+        <div className="section-card spend-card">
+          <SectionHeading eyebrow="Структура бюджета" title="На что тратит маркетинг" />
+          <div className="spend-list">
+            {financeCategories.map((category) => (
+              <div key={category.label} className="spend-row">
+                <div><strong>{category.label}</strong><small>{category.share}% бюджета · ROI {category.roi}</small></div>
+                <div className="spend-bar"><i style={{ width: `${category.share * 2.75}%` }} /></div>
+                <strong>₽{formatMoney(category.value)} млн</strong>
+                <span className={category.delta > 7 ? "over" : category.delta < 0 ? "under" : ""}>{category.delta > 0 ? "+" : ""}{category.delta}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="section-card finance-signals">
+          <SectionHeading eyebrow="Расходы под наблюдением" title="Что проверить первым" />
+          <button onClick={() => onOpenOpportunity("agencies")}><CircleAlert size={19} /><div><strong>Агентства и сервисы</strong><span>7 контрактов пересекаются со штатными функциями</span><small>Потенциал ₽11,4 млн / год</small></div><ChevronRight size={18} /></button>
+          <button onClick={() => onOpenOpportunity("events-flow")}><TrendingUp size={19} /><div><strong>Мероприятия</strong><span>Прогноз превышения плана на 14%</span><small>4 версии брифа увеличивают цикл</small></div><ChevronRight size={18} /></button>
+          <button onClick={() => onOpenOpportunity("reuse")}><Zap size={19} /><div><strong>Fashion production</strong><span>Только 24% материалов используются повторно</span><small>Потенциал ₽6,2 млн / год</small></div><ChevronRight size={18} /></button>
+        </div>
+      </section>
+
+      <section className="section-card team-budget-table">
+        <SectionHeading eyebrow="Владельцы расходов" title="Бюджет по командам · в месяц" />
+        <div className="budget-table-head"><span>Команда</span><span>Бюджет</span><span>Задачи в срок</span><span>Вклад</span><span>Сигнал</span></div>
+        {[...teams].sort((a, b) => b.budget - a.budget).map((team) => (
+          <button key={team.id} onClick={() => onOpenTeam(team.id)}>
+            <span><strong>{team.shortTitle}</strong><small>{team.count} сотрудников</small></span>
+            <strong>₽{formatMoney(team.budget)} млн</strong>
+            <span>{team.onTime}%</span>
+            <span>{team.impact}%</span>
+            <span className={team.issues > 2 ? "signal-risk" : "signal-ok"}>{team.issues > 2 ? `${team.issues} проблемы` : "В норме"}</span>
+          </button>
+        ))}
+      </section>
+    </div>
+  );
+}
+
+function OpportunitiesScreen({ onOpenOpportunity }: { onOpenOpportunity: (id: string) => void }) {
+  return (
+    <div className="screen-stack">
+      <section className="opportunities-intro">
+        <div><Sparkles size={20} /><span>Optimization map</span><strong>₽26,8 млн</strong><small>оценочный годовой потенциал уже измеримых инициатив</small></div>
+        <p>MOLECULE не предлагает «кого уволить». Она показывает, где работа дублируется, зависает, стоит дороже результата или может быть перераспределена — с доказательствами для управленческого решения.</p>
+      </section>
+      <section className="opportunity-grid">
+        {opportunities.map((opportunity) => (
+          <button key={opportunity.id} className="opportunity-card" onClick={() => onOpenOpportunity(opportunity.id)}>
+            <header><span>{opportunity.number}</span><em>{opportunity.area}</em></header>
+            <h3>{opportunity.title}</h3><p>{opportunity.summary}</p>
+            <dl>
+              <div><dt>Эффект</dt><dd>{opportunity.impact}</dd></div>
+              <div><dt>Уверенность</dt><dd>{opportunity.confidence}%</dd></div>
+              <div><dt>Сложность</dt><dd>{opportunity.effort}</dd></div>
+            </dl>
+            <footer><span>Открыть доказательства</span><ArrowUpRight size={17} /></footer>
+          </button>
+        ))}
+      </section>
+    </div>
+  );
+}
+
+function TeamDetail({ team, onOpenEmployee }: { team: Team; onOpenEmployee: (id: string) => void }) {
+  const teamEmployees = employees.filter((employee) => employee.teamId === team.id);
+  return (
+    <div className="drawer-content">
+      <span className="drawer-eyebrow">Команда · {team.direction === "online" ? "Online" : "Offline"}</span>
+      <h2>{team.title}</h2><p className="drawer-lead">Руководитель: {team.lead}</p>
+      <div className="drawer-hero-metric"><div><strong>{team.utilization}%</strong><span>загрузка команды</span></div><i><b style={{ width: `${Math.min(team.utilization, 100)}%` }} /></i></div>
+      <div className="drawer-metrics">
+        <div><strong>{team.count}</strong><span>сотрудников</span></div><div><strong>{team.processes}</strong><span>процессов</span></div><div><strong>{team.tasks}</strong><span>задач</span></div><div><strong>{team.onTime}%</strong><span>в срок</span></div>
+      </div>
+      <DrawerSection title="Основные функции"><div className="tag-list">{team.functions.map((item) => <span key={item}>{item}</span>)}</div></DrawerSection>
+      <DrawerSection title="Экономика и результат">
+        <div className="drawer-result-grid"><div><span>Бюджет / месяц</span><strong>₽{formatMoney(team.budget)} млн</strong></div><div><span>Вклад в маркетинг</span><strong>{team.impact}%</strong></div><div><span>Проблемные процессы</span><strong>{team.issues}</strong></div></div>
+      </DrawerSection>
+      <DrawerSection title={`Сотрудники · ${teamEmployees.length}`}>
+        <div className="drawer-people-list">{teamEmployees.slice(0, 6).map((employee) => <button key={employee.id} onClick={() => onOpenEmployee(employee.id)}><i>{employee.initials}</i><span><strong>{employee.name}</strong><small>{employee.role}</small></span><em className={`status-${employee.status}`}>{employee.utilization}%</em><ChevronRight size={16} /></button>)}</div>
+      </DrawerSection>
+    </div>
+  );
+}
+
+function EmployeeDetail({ employee, onOpenTeam }: { employee: Employee; onOpenTeam: (id: string) => void }) {
+  const team = teamById(employee.teamId)!;
+  return (
+    <div className="drawer-content">
+      <div className="drawer-person-head"><i>{employee.initials}</i><div><span className="drawer-eyebrow">Сотрудник</span><h2>{employee.name}</h2><p>{employee.role}</p></div></div>
+      <button className="drawer-team-link" onClick={() => onOpenTeam(team.id)}><span>{team.title}</span><ChevronRight size={17} /></button>
+      <div className={`employee-load-card status-${employee.status}`}><div><span>Фактическая загрузка</span><strong>{employee.utilization}%</strong><small>{statusLabel(employee.status)}</small></div><i><b style={{ width: `${Math.min(employee.utilization, 100)}%` }} /></i></div>
+      <div className="drawer-metrics">
+        <div><strong>₽{employee.cost} тыс.</strong><span>стоимость / мес.</span></div><div><strong>{employee.processes}</strong><span>процессов</span></div><div><strong>{employee.tasks}</strong><span>задач / мес.</span></div><div><strong>{employee.onTime}%</strong><span>в срок</span></div>
+      </div>
+      <DrawerSection title="Функциональный профиль">
+        <div className="function-profile"><div><span>Уникальные функции</span><strong>{employee.uniqueFunctions}</strong></div><div><span>Дублируются другими</span><strong className={employee.duplicateFunctions > 0 ? "metric-alert" : ""}>{employee.duplicateFunctions}</strong></div><div><span>Зависимых процессов</span><strong>{employee.dependencies}</strong></div></div>
+      </DrawerSection>
+      <DrawerSection title="Связь с бизнес-результатом">
+        <div className="impact-chain"><span>{employee.name.split(" ")[0]}</span><ArrowRight size={15} /><span>{employee.role}</span><ArrowRight size={15} /><span>{team.shortTitle}</span><ArrowRight size={15} /><strong>{employee.businessImpact}</strong></div>
+      </DrawerSection>
+      <div className="drawer-note"><CircleAlert size={17} /><p>Показатели описывают работу позиции, а не оценивают личность сотрудника. Для решения нужна проверка с руководителем команды.</p></div>
+    </div>
+  );
+}
+
+function statusLabel(status: EmployeeStatus) {
+  if (status === "underloaded") return "Есть свободная емкость";
+  if (status === "overloaded") return "Выше устойчивого уровня";
+  return "В устойчивом диапазоне";
+}
+
+function OpportunityDetail({ opportunity }: { opportunity: Opportunity }) {
+  return (
+    <div className="drawer-content opportunity-detail">
+      <span className="drawer-eyebrow">Optimization opportunity · {opportunity.number}</span>
+      <h2>{opportunity.title}</h2><p className="drawer-lead">{opportunity.area}</p>
+      <div className="opportunity-impact"><span>Ожидаемый эффект</span><strong>{opportunity.impact}</strong><small>{opportunity.confidence}% уверенность · сложность: {opportunity.effort.toLowerCase()}</small></div>
+      <p className="opportunity-summary">{opportunity.summary}</p>
+      <DrawerSection title="На чем основан сигнал"><div className="evidence-list">{opportunity.evidence.map((evidence, index) => <div key={evidence}><span>{String(index + 1).padStart(2, "0")}</span><strong>{evidence}</strong></div>)}</div></DrawerSection>
+      <DrawerSection title="Следующий управленческий шаг"><div className="action-callout"><Target size={18} /><p>{opportunity.action}</p></div></DrawerSection>
+      <div className="drawer-note drawer-note--positive"><Check size={17} /><p>Гипотеза готова к валидации. После подтверждения эффект можно закрепить как инициативу и отслеживать в MOLECULE.</p></div>
+    </div>
+  );
+}
+
+function DrawerSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return <section className="drawer-section"><h3>{title}</h3>{children}</section>;
+}
+
+function MobileNavigation({ view, onNavigate }: { view: ViewId; onNavigate: (view: ViewId) => void }) {
+  const visible = navItems.filter((item) => item.id !== "teams");
+  return (
+    <nav className="mobile-navigation">
+      {visible.map((item) => {
+        const Icon = item.icon;
+        return <button key={item.id} className={view === item.id ? "active" : ""} onClick={() => onNavigate(item.id)}><Icon size={19} /><span>{item.mobileLabel}</span></button>;
+      })}
+    </nav>
+  );
+}
+
+export default App;
