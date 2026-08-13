@@ -4,13 +4,16 @@ import {
   Atom,
   BarChart3,
   BriefcaseBusiness,
+  CalendarDays,
   Check,
   CheckCircle2,
   ChevronRight,
   CircleAlert,
+  Clapperboard,
   Clock3,
   FilePlus2,
   FileText,
+  Flag,
   Focus,
   GitBranch,
   Link2,
@@ -18,9 +21,11 @@ import {
   LogOut,
   Maximize2,
   MessageCircle,
+  Megaphone,
   Minus,
   Network,
   Paperclip,
+  Palette,
   PauseCircle,
   PlayCircle,
   Plus,
@@ -29,6 +34,7 @@ import {
   ShieldCheck,
   Sparkles,
   Target,
+  TriangleAlert,
   UserRound,
   UsersRound,
   WalletCards,
@@ -52,7 +58,8 @@ import { teamById, teams } from "./data/tsumPrototype";
 
 type AccountRole = "manager" | "employee";
 type DemoAccount = { id: string; role: AccountRole; name: string; title: string; initials: string; login: string; employeeId?: string };
-type WorkspaceWindow = "employees" | "accounts" | "analytics" | "optimization" | "tasks" | "cost" | "process" | "node" | "create-task" | "create-node" | "create-link" | null;
+type WorkspaceWindow = "employees" | "accounts" | "analytics" | "optimization" | "tasks" | "cost" | "process" | "node" | "project-detail" | "create-task" | "create-node" | "create-link" | null;
+type WorkspaceMode = "employee" | "fashion-show";
 type WorkspaceNodeKind = EmployeeMapNode["kind"] | "custom";
 type WorkspaceNodeData = Omit<EmployeeMapNode, "kind"> & { kind: WorkspaceNodeKind; customType?: string };
 type NodePosition = { x: number; y: number };
@@ -61,6 +68,26 @@ type NodeMeta = { description?: string; files: NodeFile[] };
 type TaskQuestion = { id: string; author: string; role: AccountRole; text: string; time: string };
 type OpportunityCard = { id: string; title: string; evidence: string; effect: string; action: string; tone: "critical" | "warning" | "positive" };
 type DragState = { nodeId: string; pointerId: number; startClientX: number; startClientY: number; startPosition: NodePosition; moved: boolean };
+type FashionNodeKind = "owner" | "stream" | "checkpoint" | "milestone" | "risk" | "event" | "result";
+type FashionNodeStatus = "done" | "active" | "upcoming" | "risk";
+type FashionProjectNode = {
+  id: string;
+  kind: FashionNodeKind;
+  title: string;
+  eyebrow: string;
+  date: string;
+  owner: string;
+  status: FashionNodeStatus;
+  progress: number;
+  x: number;
+  y: number;
+  description: string;
+  input: string;
+  result: string;
+  recipients: string[];
+  tasks: string[];
+  impact?: string[];
+};
 
 const accounts: DemoAccount[] = [
   { id: "manager", role: "manager", name: "Виктория Соколова", title: "Директор по маркетингу", initials: "ВС", login: "manager@tsum.demo" },
@@ -77,13 +104,50 @@ const initialQuestions: Record<string, TaskQuestion[]> = {
 const surfaceWidth = 1160;
 const surfaceHeight = 640;
 
+const fashionProjectNodes: FashionProjectNode[] = [
+  { id: "project-owner", kind: "owner", title: "Руководитель проекта", eyebrow: "Операционный владелец", date: "15.08–31.10", owner: "Руководитель направления мероприятий", status: "active", progress: 38, x: 500, y: 58, description: "Управляет общим планом, зависимостями, бюджетом, подрядчиками и критическим путем проекта.", input: "Цели, формат, бюджет и KPI от директора по маркетингу", result: "Единый календарный план проекта", recipients: ["Все подразделения", "Подрядчики", "Руководство"], tasks: ["Назначить ответственных", "Собрать сроки и зависимости", "Проводить регулярный контроль"] },
+  { id: "fashion-stream", kind: "stream", title: "Производство показа", eyebrow: "Поток 01", date: "15.08–15.10", owner: "Директор по моде", status: "active", progress: 44, x: 135, y: 158, description: "От креативной идеи и брендов до образов, моделей и финального технического сценария.", input: "Цели проекта и утвержденный бюджет", result: "Готовый сценарий показа", recipients: ["Режиссер", "Продакшен", "Технические команды"], tasks: ["Подтвердить бренды", "Собрать образы", "Утвердить модели"] },
+  { id: "concept", kind: "checkpoint", title: "Концепция утверждена", eyebrow: "Контрольная точка №1", date: "20 августа", owner: "Креативный директор", status: "done", progress: 100, x: 365, y: 158, description: "Фиксирует идею, сценографию, подиум, световое и музыкальное направление.", input: "Бизнес-цели и формат мероприятия", result: "Утвержденная креативная концепция", recipients: ["Директор по моде", "Продакшен", "PR", "Social media"], tasks: ["Собрать референсы", "Зафиксировать сценографию", "Передать концепцию командам"] },
+  { id: "technical-sequence", kind: "milestone", title: "Образы и техсценарий", eyebrow: "Критический путь", date: "7–9 октября", owner: "Стилист + режиссер показа", status: "upcoming", progress: 58, x: 635, y: 158, description: "Финальная книга образов превращается в последовательность выходов, музыку, свет и видео.", input: "Образы, модели, технические чертежи", result: "Финальная последовательность выходов", recipients: ["Свет", "Звук", "Видео", "Закулисная команда"], tasks: ["7.10 зафиксировать образы", "8.10 собрать выходы", "9.10 утвердить техсценарий"] },
+  { id: "guest-stream", kind: "stream", title: "Клиентский контур", eyebrow: "Поток 02", date: "20.08–15.10", owner: "Отдел по работе с VIP-клиентами", status: "active", progress: 51, x: 135, y: 310, description: "Формирует аудиторию события: приглашения, подтверждения, рассадка и сервис гостей.", input: "Целевая аудитория и лимит гостей", result: "Подтвержденная клиентская аудитория", recipients: ["Руководитель проекта", "Службы мероприятия"], tasks: ["Сегментировать базу", "Отправить приглашения", "Собрать подтверждения"] },
+  { id: "guest-list", kind: "risk", title: "Финальный список гостей", eyebrow: "Критический риск", date: "Срок 11.10 · +2 дня", owner: "VIP-клиенты", status: "risk", progress: 82, x: 365, y: 310, description: "Список задержан на два дня. Система рассчитывает не только просрочку, но и влияние на зависимые процессы.", input: "Подтверждения гостей и категории сервиса", result: "Окончательный список гостей", recipients: ["Безопасность", "Регистрация", "Хостес", "Кейтеринг"], tasks: ["Закрыть неподтвержденные RSVP", "Зафиксировать категории гостей", "Передать единую версию службам"], impact: ["Рассадка", "Безопасность", "Регистрация", "Количество персонала", "Кейтеринг", "VIP-сервис"] },
+  { id: "guest-readiness", kind: "milestone", title: "Готовность гостевого сервиса", eyebrow: "Зависимый результат", date: "12–14 октября", owner: "Регистрация + безопасность", status: "risk", progress: 63, x: 635, y: 310, description: "Единый план доступа, рассадки, регистрации, хостес и обслуживания гостей.", input: "Финальный список гостей", result: "Готовность клиентского контура", recipients: ["Руководитель проекта", "Площадка"], tasks: ["Обновить план рассадки", "Загрузить списки регистрации", "Пересчитать кейтеринг"], impact: ["Репетиция гостевого пути", "Готовность площадки"] },
+  { id: "communications-stream", kind: "stream", title: "Коммуникации", eyebrow: "Поток 03", date: "20.08–31.10", owner: "Директор по PR", status: "active", progress: 47, x: 135, y: 462, description: "PR, social media, digital и медиаразмещение превращают проект в коммуникацию с аудиторией.", input: "Концепция и список брендов", result: "Единый коммуникационный план", recipients: ["СМИ", "Клиенты", "Digital-аудитория"], tasks: ["Согласовать PR-стратегию", "Собрать контент-план", "Запустить анонсы"] },
+  { id: "content", kind: "checkpoint", title: "Контент и приглашения", eyebrow: "Производство материалов", date: "20.09–10.10", owner: "Арт-отдел + PR", status: "active", progress: 61, x: 365, y: 462, description: "Приглашения, анонсы, баннеры, навигация, экранная графика и материалы для СМИ.", input: "Креативная концепция, бренды, список гостей", result: "Пакет материалов кампании", recipients: ["PR", "Social media", "Digital marketing"], tasks: ["Собрать key visual", "Подготовить приглашения", "Адаптировать digital-форматы"] },
+  { id: "media", kind: "milestone", title: "Медиа и digital готовы", eyebrow: "Коммуникационная готовность", date: "10–15 октября", owner: "PR + Social + Digital", status: "upcoming", progress: 54, x: 635, y: 462, description: "Команды готовы к освещению события, оперативной публикации фото, видео и материалов для СМИ.", input: "Финальные материалы и сценарий события", result: "План публикаций и дистрибуции", recipients: ["Аудитория", "СМИ", "Руководство"], tasks: ["Утвердить публикации дня показа", "Подготовить каналы передачи файлов", "Назначить ответственных"] },
+  { id: "rehearsal", kind: "checkpoint", title: "Генеральная репетиция", eyebrow: "Статус: готово к показу", date: "14 октября", owner: "Руководитель проекта", status: "upcoming", progress: 35, x: 850, y: 190, description: "Все творческие, технические и операционные команды проверяют единый сценарий.", input: "Образы, модели, музыка, свет, видео и площадка", result: "Статус «Готово к показу»", recipients: ["Все команды проекта"], tasks: ["Провести полный прогон", "Зафиксировать замечания", "Подтвердить готовность"] },
+  { id: "fashion-show", kind: "event", title: "МОДНЫЙ ПОКАЗ", eyebrow: "Единая точка сборки", date: "15 октября · 20:00", owner: "ЦУМ", status: "upcoming", progress: 38, x: 850, y: 380, description: "Три потока сходятся в одном событии: производство, клиентский сервис и коммуникации.", input: "Готовность всех подразделений и подрядчиков", result: "Проведенный модный показ", recipients: ["Гости", "Медиа", "Клиенты", "Руководство"], tasks: ["18:00 готовность площадки", "19:00 прибытие гостей", "20:00 начало показа"] },
+  { id: "analytics-result", kind: "result", title: "Результаты и KPI", eyebrow: "Завершение проекта", date: "16–31 октября", owner: "Аналитики маркетинга", status: "upcoming", progress: 0, x: 850, y: 545, description: "Охват, посещаемость, вовлеченность, фактические расходы и коммерческий эффект.", input: "Данные PR, social, VIP, finance и digital", result: "Итоговый отчет по эффективности", recipients: ["Директор по маркетингу", "Руководство"], tasks: ["Собрать фактические показатели", "Сравнить план и факт", "Зафиксировать выводы"] },
+];
+
+const fashionProjectEdges: EmployeeMapEdge[] = [
+  { from: "project-owner", to: "fashion-stream", label: "управляет", tone: "manager" },
+  { from: "project-owner", to: "guest-stream", tone: "manager" },
+  { from: "project-owner", to: "communications-stream", tone: "manager" },
+  { from: "fashion-stream", to: "concept", tone: "work" },
+  { from: "concept", to: "technical-sequence", label: "критический путь", tone: "manager" },
+  { from: "technical-sequence", to: "rehearsal", tone: "manager" },
+  { from: "guest-stream", to: "guest-list", tone: "work" },
+  { from: "guest-list", to: "guest-readiness", label: "+2 дня", tone: "risk", dashed: true },
+  { from: "guest-readiness", to: "fashion-show", tone: "risk", dashed: true },
+  { from: "communications-stream", to: "content", tone: "work" },
+  { from: "concept", to: "content", label: "концепция", tone: "interaction" },
+  { from: "content", to: "media", tone: "work" },
+  { from: "technical-sequence", to: "media", label: "сценарий", tone: "interaction" },
+  { from: "rehearsal", to: "fashion-show", label: "готово", tone: "manager" },
+  { from: "media", to: "fashion-show", tone: "work" },
+  { from: "fashion-show", to: "analytics-result", label: "факт", tone: "result" },
+];
+
 function App() {
   const [account, setAccount] = useState<DemoAccount | null>(null);
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("employee");
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("employee-27");
   const [taskOverrides, setTaskOverrides] = useState<Record<string, EmployeeWorkTask[]>>({});
   const [activeWindow, setActiveWindow] = useState<WorkspaceWindow>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [activeNodeId, setActiveNodeId] = useState("employee");
+  const [activeProjectNodeId, setActiveProjectNodeId] = useState("fashion-show");
   const [zoom, setZoom] = useState(1);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDeadline, setTaskDeadline] = useState("2026-08-19");
@@ -91,6 +155,7 @@ function App() {
   const [customNodesByEmployee, setCustomNodesByEmployee] = useState<Record<string, WorkspaceNodeData[]>>({});
   const [customEdgesByEmployee, setCustomEdgesByEmployee] = useState<Record<string, EmployeeMapEdge[]>>({});
   const [positionOverrides, setPositionOverrides] = useState<Record<string, Record<string, NodePosition>>>({});
+  const [projectPositionOverrides, setProjectPositionOverrides] = useState<Record<string, NodePosition>>({});
   const [nodeMetaByEmployee, setNodeMetaByEmployee] = useState<Record<string, Record<string, NodeMeta>>>({});
   const [questionsByTask, setQuestionsByTask] = useState<Record<string, TaskQuestion[]>>(initialQuestions);
   const [linkingSourceId, setLinkingSourceId] = useState<string | null>(null);
@@ -102,6 +167,7 @@ function App() {
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
+  const projectDragRef = useRef<DragState | null>(null);
 
   const profile = employeeWorkProfiles.find((item) => item.employee.id === selectedEmployeeId) ?? employeeWorkProfiles[0];
   const tasks = taskOverrides[profile.employee.id] ?? profile.tasks;
@@ -113,6 +179,8 @@ function App() {
   const edges = [...baseMap.edges, ...(customEdgesByEmployee[profile.employee.id] ?? [])];
   const activeTask = activeTaskId ? tasks.find((task) => task.id === activeTaskId) : undefined;
   const activeNode = nodes.find((node) => node.id === activeNodeId) ?? nodes[0];
+  const projectNodes = fashionProjectNodes.map((node) => ({ ...node, ...(projectPositionOverrides[node.id] ?? {}) }));
+  const activeProjectNode = projectNodes.find((node) => node.id === activeProjectNodeId) ?? projectNodes[0];
   const opportunities = useMemo(() => buildOpportunities(profile, tasks, alarms), [profile, tasks, alarms]);
   const canManage = account?.role === "manager";
 
@@ -124,10 +192,11 @@ function App() {
       canvas.scrollTop = 0;
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [selectedEmployeeId, zoom]);
+  }, [selectedEmployeeId, workspaceMode, zoom]);
 
   function login(nextAccount: DemoAccount) {
     setAccount(nextAccount);
+    setWorkspaceMode("employee");
     setSelectedEmployeeId(nextAccount.employeeId ?? "employee-27");
     setActiveWindow(null);
     setActiveNodeId("employee");
@@ -146,6 +215,7 @@ function App() {
     const nextProfile = employeeWorkProfiles.find((item) => item.employee.id === employeeId);
     if (!nextProfile) return;
     setSelectedEmployeeId(employeeId);
+    setWorkspaceMode("employee");
     setCollaborationTeamId(nextProfile.team.id);
     setActiveWindow(null);
     setActiveNodeId("employee");
@@ -181,6 +251,7 @@ function App() {
 
   function openCreateTask() {
     if (!canManage) return;
+    setWorkspaceMode("employee");
     setTaskTitle("");
     setTaskDeadline("2026-08-19");
     setCollaborationTeamId(profile.team.id);
@@ -333,51 +404,90 @@ function App() {
     canvas.scrollTo({ left: Math.max(0, (canvas.scrollWidth - canvas.clientWidth) / 2), top: 0, behavior: "smooth" });
   }
 
+  function openFashionProject() {
+    if (!canManage) return;
+    setWorkspaceMode("fashion-show");
+    setActiveWindow(null);
+    setLinkingSourceId(null);
+    setZoom(1);
+  }
+
+  function startProjectNodeDrag(event: ReactPointerEvent<HTMLButtonElement>, node: FashionProjectNode) {
+    if (event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    projectDragRef.current = { nodeId: node.id, pointerId: event.pointerId, startClientX: event.clientX, startClientY: event.clientY, startPosition: { x: node.x, y: node.y }, moved: false };
+  }
+
+  function moveProjectNode(event: ReactPointerEvent<HTMLButtonElement>) {
+    const drag = projectDragRef.current;
+    const surface = surfaceRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || !surface) return;
+    const rect = surface.getBoundingClientRect();
+    const dx = (event.clientX - drag.startClientX) / rect.width * 1000;
+    const dy = (event.clientY - drag.startClientY) / rect.height * 620;
+    if (Math.abs(event.clientX - drag.startClientX) > 3 || Math.abs(event.clientY - drag.startClientY) > 3) drag.moved = true;
+    const next = { x: clamp(drag.startPosition.x + dx, 65, 935), y: clamp(drag.startPosition.y + dy, 45, 575) };
+    setProjectPositionOverrides((current) => ({ ...current, [drag.nodeId]: next }));
+  }
+
+  function finishProjectNodeDrag(event: ReactPointerEvent<HTMLButtonElement>, node: FashionProjectNode) {
+    const drag = projectDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    projectDragRef.current = null;
+    if (drag.moved) return;
+    setActiveProjectNodeId(node.id);
+    setActiveWindow("project-detail");
+  }
+
   if (!account) return <LoginScreen onLogin={login} />;
 
   return (
     <div className={`molecule-app role-${account.role}`}>
       <header className="workspace-topbar">
         <div className="workspace-brand"><strong>ЦУМ</strong><i /><span>MOLECULE</span></div>
-        <button className={`employee-switch-button ${!canManage ? "is-locked" : ""}`} onClick={() => canManage && setActiveWindow("employees")} aria-label={canManage ? "Выбрать сотрудника" : "Моя рабочая карта"}>
-          <span className="employee-switch-avatar">{profile.employee.initials}</span>
-          <span><small>{canManage ? "Рабочая карта сотрудника" : "Моя рабочая карта"}</small><strong>{profile.employee.name}</strong><em>{profile.team.shortTitle} · {profile.employee.role}</em></span>
+        <button className={`employee-switch-button ${!canManage ? "is-locked" : ""} ${workspaceMode === "fashion-show" ? "project-mode" : ""}`} onClick={() => canManage && (workspaceMode === "fashion-show" ? (setWorkspaceMode("employee"), setActiveWindow(null)) : setActiveWindow("employees"))} aria-label={workspaceMode === "fashion-show" ? "Вернуться к картам сотрудников" : canManage ? "Выбрать сотрудника" : "Моя рабочая карта"}>
+          <span className="employee-switch-avatar">{workspaceMode === "fashion-show" ? <CalendarDays size={18} /> : profile.employee.initials}</span>
+          <span>{workspaceMode === "fashion-show" ? <><small>Конкретный процесс</small><strong>Модный показ «Осень–зима 2026»</strong><em>15 августа — 31 октября</em></> : <><small>{canManage ? "Рабочая карта сотрудника" : "Моя рабочая карта"}</small><strong>{profile.employee.name}</strong><em>{profile.team.shortTitle} · {profile.employee.role}</em></>}</span>
           {canManage ? <ChevronRight size={18} /> : <ShieldCheck size={17} />}
         </button>
         <div className="workspace-top-actions">
-          <span className={`workspace-health ${alarms.length ? "has-alarm" : "is-clear"}`}><i />{alarms.length ? countLabel(alarms.length, "сигнал", "сигнала", "сигналов") : "Отклонений нет"}</span>
-          {canManage && <button onClick={openCreateTask}><Plus size={17} /><span>Задача</span></button>}
+          <span className={`workspace-health ${workspaceMode === "fashion-show" || alarms.length ? "has-alarm" : "is-clear"}`}><i />{workspaceMode === "fashion-show" ? "1 критический риск" : alarms.length ? countLabel(alarms.length, "сигнал", "сигнала", "сигналов") : "Отклонений нет"}</span>
+          {canManage && workspaceMode === "employee" && <button onClick={openCreateTask}><Plus size={17} /><span>Задача</span></button>}
           <button className="workspace-account" onClick={() => setActiveWindow("accounts")} aria-label="Учетная запись"><span>{account.initials}</span><em>{account.role === "manager" ? "Руководитель" : "Исполнитель"}</em></button>
         </div>
       </header>
 
       <nav className="workspace-dock" aria-label="Инструменты MOLECULE">
-        <button className={!activeWindow || ["node", "process", "employees"].includes(activeWindow) ? "active" : ""} onClick={() => setActiveWindow(null)}><Atom size={20} /><span>Карта</span></button>
-        <button className={activeWindow === "tasks" || activeWindow === "create-task" ? "active" : ""} onClick={() => setActiveWindow("tasks")}><ListTodo size={20} /><span>Задачи</span><em>{tasks.length}</em></button>
-        {canManage && <button className={activeWindow === "analytics" ? "active" : ""} onClick={() => setActiveWindow("analytics")}><BarChart3 size={20} /><span>Аналитика</span></button>}
-        {canManage && <button className={activeWindow === "optimization" ? "active" : ""} onClick={() => setActiveWindow("optimization")}><Sparkles size={20} /><span>Оптимизация</span><em className="orange">{opportunities.length}</em></button>}
-        {canManage && <button className={activeWindow === "cost" ? "active" : ""} onClick={() => setActiveWindow("cost")}><WalletCards size={20} /><span>Расходы</span></button>}
+        <button className={workspaceMode === "employee" && (!activeWindow || ["node", "process", "employees"].includes(activeWindow)) ? "active" : ""} onClick={() => { setWorkspaceMode("employee"); setActiveWindow(null); }}><Atom size={20} /><span>Карта</span></button>
+        {canManage && <button className={workspaceMode === "fashion-show" ? "active" : ""} onClick={openFashionProject}><Clapperboard size={20} /><span>Показ</span><em className="orange">1</em></button>}
+        <button className={activeWindow === "tasks" || activeWindow === "create-task" ? "active" : ""} onClick={() => { setWorkspaceMode("employee"); setActiveWindow("tasks"); }}><ListTodo size={20} /><span>Задачи</span><em>{tasks.length}</em></button>
+        {canManage && <button className={activeWindow === "analytics" ? "active" : ""} onClick={() => { setWorkspaceMode("employee"); setActiveWindow("analytics"); }}><BarChart3 size={20} /><span>Аналитика</span></button>}
+        {canManage && <button className={activeWindow === "optimization" ? "active" : ""} onClick={() => { setWorkspaceMode("employee"); setActiveWindow("optimization"); }}><Sparkles size={20} /><span>Оптимизация</span><em className="orange">{opportunities.length}</em></button>}
+        {canManage && <button className={activeWindow === "cost" ? "active" : ""} onClick={() => { setWorkspaceMode("employee"); setActiveWindow("cost"); }}><WalletCards size={20} /><span>Расходы</span></button>}
       </nav>
 
       <main className="visual-workspace">
-        <div className="workspace-context"><span>Marketing / {profile.team.shortTitle}</span><strong>{countLabel(tasks.length, "бизнес-процесс", "бизнес-процесса", "бизнес-процессов")}</strong><em>Перетащите ноду, чтобы изменить карту</em></div>
-        {canManage && <div className="map-edit-actions"><button onClick={openCreateNode}><Plus size={16} />Нода</button><button className={linkingSourceId !== null ? "active" : ""} onClick={linkingSourceId !== null ? () => setLinkingSourceId(null) : startLinking}><Link2 size={16} />{linkingSourceId !== null ? "Отмена" : "Связь"}</button></div>}
-        {linkingSourceId !== null && <div className="linking-banner"><Link2 size={16} /><span>{linkingSourceId === "" ? "Выберите первую ноду" : `Источник: ${nodeLabel(nodes, linkingSourceId)}. Теперь выберите вторую ноду.`}</span><button onClick={() => setLinkingSourceId(null)}><X size={15} /></button></div>}
+        <div className="workspace-context">{workspaceMode === "fashion-show" ? <><span>Проект / Fashion show</span><strong>3 параллельных потока</strong><em>Критический путь до 15 октября 2026</em></> : <><span>Marketing / {profile.team.shortTitle}</span><strong>{countLabel(tasks.length, "бизнес-процесс", "бизнес-процесса", "бизнес-процессов")}</strong><em>Перетащите ноду, чтобы изменить карту</em></>}</div>
+        {canManage && workspaceMode === "employee" && <div className="map-edit-actions"><button onClick={openCreateNode}><Plus size={16} />Нода</button><button className={linkingSourceId !== null ? "active" : ""} onClick={linkingSourceId !== null ? () => setLinkingSourceId(null) : startLinking}><Link2 size={16} />{linkingSourceId !== null ? "Отмена" : "Связь"}</button></div>}
+        {workspaceMode === "fashion-show" && <div className="project-legend"><span><i className="done" />Готово</span><span><i className="active" />В работе</span><span><i className="risk" />Критический риск</span></div>}
+        {workspaceMode === "employee" && linkingSourceId !== null && <div className="linking-banner"><Link2 size={16} /><span>{linkingSourceId === "" ? "Выберите первую ноду" : `Источник: ${nodeLabel(nodes, linkingSourceId)}. Теперь выберите вторую ноду.`}</span><button onClick={() => setLinkingSourceId(null)}><X size={15} /></button></div>}
 
         <div className="visual-canvas" ref={canvasRef}>
           <div className="visual-surface" ref={surfaceRef} style={{ width: `${surfaceWidth * zoom}px`, height: `${surfaceHeight * zoom}px` }}>
             <div className="visual-aura visual-aura--one" /><div className="visual-aura visual-aura--two" />
             <svg className="visual-edges" viewBox="0 0 1000 620" preserveAspectRatio="none" aria-hidden="true">
               <defs><filter id="edgeGlow"><feGaussianBlur stdDeviation="2.2" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter></defs>
-              {edges.map((edge, index) => {
-                const from = nodes.find((node) => node.id === edge.from);
-                const to = nodes.find((node) => node.id === edge.to);
+              {(workspaceMode === "fashion-show" ? fashionProjectEdges : edges).map((edge, index) => {
+                const currentNodes = workspaceMode === "fashion-show" ? projectNodes : nodes;
+                const from = currentNodes.find((node) => node.id === edge.from);
+                const to = currentNodes.find((node) => node.id === edge.to);
                 if (!from || !to) return null;
                 const middle = (from.x + to.x) / 2;
                 return <g key={`${edge.from}-${edge.to}-${edge.label ?? "edge"}-${index}`} className={`visual-edge visual-edge--${edge.tone} ${edge.dashed ? "is-dashed" : ""}`}><path d={`M ${from.x} ${from.y} C ${middle} ${from.y}, ${middle} ${to.y}, ${to.x} ${to.y}`} /><circle cx={to.x} cy={to.y} r="4" />{edge.label && <text x={middle} y={(from.y + to.y) / 2 - 8} textAnchor="middle">{edge.label}</text>}</g>;
               })}
             </svg>
-            {nodes.map((node) => <WorkspaceNode key={node.id} node={node} profile={profile} dragging={dragRef.current?.nodeId === node.id} linkSource={linkingSourceId === node.id} onPointerDown={(event) => startNodeDrag(event, node)} onPointerMove={moveNode} onPointerUp={(event) => finishNodeDrag(event, node)} />)}
+            {workspaceMode === "fashion-show" ? projectNodes.map((node) => <FashionProjectNodeView key={node.id} node={node} dragging={projectDragRef.current?.nodeId === node.id} onPointerDown={(event) => startProjectNodeDrag(event, node)} onPointerMove={moveProjectNode} onPointerUp={(event) => finishProjectNodeDrag(event, node)} />) : nodes.map((node) => <WorkspaceNode key={node.id} node={node} profile={profile} dragging={dragRef.current?.nodeId === node.id} linkSource={linkingSourceId === node.id} onPointerDown={(event) => startNodeDrag(event, node)} onPointerMove={moveNode} onPointerUp={(event) => finishNodeDrag(event, node)} />)}
           </div>
         </div>
 
@@ -392,6 +502,7 @@ function App() {
       {activeWindow === "cost" && canManage && <CostWindow profile={profile} tasks={tasks} onClose={() => setActiveWindow(null)} />}
       {activeWindow === "process" && activeTask && <ProcessWindow profile={profile} task={activeTask} alarms={alarms.filter((alarm) => alarm.taskId === activeTask.id)} role={account.role} meta={getNodeMeta(`task-${activeTask.id}`, `${activeTask.workFunction}. ${activeTask.result}.`)} questions={questionsByTask[activeTask.id] ?? []} onStatusChange={(status) => updateTaskStatus(activeTask.id, status)} onDescriptionChange={(description) => updateNodeDescription(`task-${activeTask.id}`, description)} onAddFiles={(files) => addNodeFiles(`task-${activeTask.id}`, files)} onRemoveFile={(fileId) => removeNodeFile(`task-${activeTask.id}`, fileId)} onAddQuestion={(text) => addQuestion(activeTask.id, text)} onClose={() => setActiveWindow(null)} />}
       {activeWindow === "node" && activeNode && <NodeWindow profile={profile} node={activeNode} tasks={tasks} role={account.role} meta={getNodeMeta(activeNode.id, activeNode.description)} onDescriptionChange={(description) => updateNodeDescription(activeNode.id, description)} onAddFiles={(files) => addNodeFiles(activeNode.id, files)} onRemoveFile={(fileId) => removeNodeFile(activeNode.id, fileId)} onClose={() => setActiveWindow(null)} />}
+      {activeWindow === "project-detail" && workspaceMode === "fashion-show" && activeProjectNode && <FashionProjectWindow node={activeProjectNode} onClose={() => setActiveWindow(null)} />}
       {activeWindow === "create-task" && canManage && <CreateTaskWindow profile={profile} taskTitle={taskTitle} taskDeadline={taskDeadline} collaborationTeamId={collaborationTeamId} onTitleChange={setTaskTitle} onDeadlineChange={setTaskDeadline} onTeamChange={setCollaborationTeamId} onSubmit={assignTask} onClose={() => setActiveWindow(null)} />}
       {activeWindow === "create-node" && canManage && <CreateNodeWindow title={newNodeTitle} description={newNodeDescription} type={newNodeType} onTitleChange={setNewNodeTitle} onDescriptionChange={setNewNodeDescription} onTypeChange={setNewNodeType} onSubmit={createNode} onClose={() => setActiveWindow(null)} />}
       {activeWindow === "create-link" && canManage && pendingLink && <CreateLinkWindow from={nodeLabel(nodes, pendingLink.from)} to={nodeLabel(nodes, pendingLink.to)} label={linkLabel} onLabelChange={setLinkLabel} onSubmit={createLink} onClose={() => { setPendingLink(null); setLinkingSourceId(null); setActiveWindow(null); }} />}
@@ -408,6 +519,21 @@ function WorkspaceNode({ node, profile, dragging, linkSource, onPointerDown, onP
   return <button data-node-id={node.id} className={`workspace-node workspace-node--${node.kind} status-${node.status} ${isProcess ? "is-process" : "is-orb"} ${dragging ? "is-dragging" : ""} ${linkSource ? "link-source" : ""}`} style={{ left: `${node.x / 10}%`, top: `${node.y / 6.2}%` }} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} aria-label={`${node.kind === "task" ? "Бизнес-процесс" : nodeKindLabel(node.kind)}: ${node.label}`}>
     {isProcess ? <><span className="process-node-status"><i />{node.status === "risk" ? "Требует внимания" : node.status === "done" ? "Принято" : "В работе"}</span><strong>{node.label}</strong><small>{node.metric}</small><ChevronRight size={15} /></> : <><span className="workspace-orb">{nodeIcon(node, profile)}</span><span className="workspace-node-copy"><em>{nodeKindLabel(node.kind)}</em><strong>{node.label}</strong><small>{node.metric}</small></span>{node.status === "risk" && <i className="node-alert"><CircleAlert size={12} /></i>}</>}
   </button>;
+}
+
+function FashionProjectNodeView({ node, dragging, onPointerDown, onPointerMove, onPointerUp }: { node: FashionProjectNode; dragging: boolean; onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void; onPointerMove: (event: ReactPointerEvent<HTMLButtonElement>) => void; onPointerUp: (event: ReactPointerEvent<HTMLButtonElement>) => void }) {
+  const isOrb = ["owner", "event", "result"].includes(node.kind);
+  return <button data-project-node-id={node.id} className={`workspace-node fashion-project-node fashion-project-node--${node.kind} status-${node.status} ${isOrb ? "is-project-orb" : "is-project-card"} ${dragging ? "is-dragging" : ""}`} style={{ left: `${node.x / 10}%`, top: `${node.y / 6.2}%` }} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} aria-label={`Проектный узел: ${node.title}`}>
+    {isOrb ? <><span className="project-orb">{fashionNodeIcon(node)}</span><span className="workspace-node-copy"><em>{node.eyebrow}</em><strong>{node.title}</strong><small>{node.date}</small></span>{node.status === "risk" && <i className="node-alert"><CircleAlert size={12} /></i>}</> : <><span className="project-node-status"><i />{fashionStatusLabel(node.status)}</span><strong>{node.title}</strong><small>{node.owner}</small><em>{node.date}</em><span className="project-node-progress"><i><b style={{ width: `${node.progress}%` }} /></i><strong>{node.progress}%</strong></span><ChevronRight size={15} /></>}
+  </button>;
+}
+
+function FashionProjectWindow({ node, onClose }: { node: FashionProjectNode; onClose: () => void }) {
+  return <WorkspaceModal eyebrow={node.eyebrow} title={node.title} icon={fashionNodeIcon(node)} onClose={onClose}><div className={`process-window-hero project-window-hero status-${node.status}`}><div><span>{fashionStatusLabel(node.status)}</span><strong>{node.progress}%</strong><small>готовность результата</small></div><i><b style={{ width: `${node.progress}%` }} /></i><dl><div><dt>Ответственный</dt><dd>{node.owner}<small>Операционный владелец результата</small></dd></div><div><dt>Срок</dt><dd>{node.date}</dd></div></dl></div>
+    <section className="project-node-overview"><header><span>Роль в общем процессе</span><h3>Входящие данные → работа → результат</h3></header><p>{node.description}</p><div className="project-dependency-route"><article><i><Paperclip size={17} /></i><span>Что поступает</span><strong>{node.input}</strong></article><ChevronRight size={20} /><article><i><BriefcaseBusiness size={17} /></i><span>Ответственный</span><strong>{node.owner}</strong></article><ChevronRight size={20} /><article><i><Flag size={17} /></i><span>Результат</span><strong>{node.result}</strong></article></div></section>
+    {node.impact && <section className="project-impact"><header><TriangleAlert size={19} /><div><span>Автоматический расчет влияния</span><h3>{node.status === "risk" ? "Задержка распространяется на зависимые процессы" : "Зависимые процессы требуют контроля"}</h3></div></header><div>{node.impact.map((item) => <span key={item}><CircleAlert size={14} />{item}</span>)}</div><p>MOLECULE повышает риск проекта и показывает руководителю не только просрочку, но и все затронутые команды и результаты.</p></section>}
+    <div className="project-detail-columns"><section><header><span>Задачи узла</span><h3>Что должно быть выполнено</h3></header><div className="project-task-list">{node.tasks.map((task, index) => <article key={task}><span>{String(index + 1).padStart(2, "0")}</span><strong>{task}</strong><em>{index < Math.round(node.tasks.length * node.progress / 100) ? "Готово" : "В работе"}</em></article>)}</div></section><section><header><span>Передача результата</span><h3>Кто зависит от результата</h3></header><div className="project-recipient-list">{node.recipients.map((recipient) => <span key={recipient}><UsersRound size={16} />{recipient}</span>)}</div></section></div>
+  </WorkspaceModal>;
 }
 
 function WorkspaceModal({ eyebrow, title, icon, onClose, size = "wide", children }: { eyebrow: string; title: string; icon: ReactNode; onClose: () => void; size?: "wide" | "compact"; children: ReactNode }) {
@@ -498,6 +624,17 @@ function nodeIcon(node: WorkspaceNodeData, profile: EmployeeWorkProfile) {
   return <CircleAlert size={22} />;
 }
 
+function fashionNodeIcon(node: FashionProjectNode) {
+  if (node.kind === "owner") return <UserRound size={22} />;
+  if (node.kind === "event") return <Clapperboard size={24} />;
+  if (node.kind === "result") return <Activity size={22} />;
+  if (node.id.includes("communications") || node.id === "media") return <Megaphone size={21} />;
+  if (node.id.includes("guest")) return <UsersRound size={21} />;
+  if (node.id === "concept" || node.id === "content") return <Palette size={21} />;
+  if (node.kind === "risk") return <TriangleAlert size={21} />;
+  return <Flag size={21} />;
+}
+
 function MetricCard({ label, value, note }: { label: string; value: string; note: string }) { return <div><span>{label}</span><strong>{value}</strong><small>{note}</small></div>; }
 
 function buildOpportunities(profile: EmployeeWorkProfile, tasks: EmployeeWorkTask[], alarms: EmployeeWorkAlarm[]): OpportunityCard[] {
@@ -514,6 +651,7 @@ function buildOpportunities(profile: EmployeeWorkProfile, tasks: EmployeeWorkTas
 }
 
 function taskStatusLabel(status: EmployeeWorkTaskStatus) { return { active: "В работе", blocked: "Заблокирован", done: "Завершен", looped: "Зациклен", overdue: "Просрочен", not_started: "Не в работе", in_progress: "В работе", review: "Передано на проверку", accepted: "Принято", rejected: "Не принято" }[status]; }
+function fashionStatusLabel(status: FashionNodeStatus) { return { done: "Готово", active: "В работе", upcoming: "Предстоит", risk: "Критический риск" }[status]; }
 function alarmSeverityLabel(severity: EmployeeWorkAlarm["severity"]) { return { critical: "Критично", warning: "Внимание", info: "Информация" }[severity]; }
 function nodeKindLabel(kind: WorkspaceNodeKind) { return kind === "custom" ? "Нода" : employeeMapKindLabels[kind]; }
 function nodeLabel(nodes: WorkspaceNodeData[], id: string) { return nodes.find((node) => node.id === id)?.label ?? "Нода"; }
