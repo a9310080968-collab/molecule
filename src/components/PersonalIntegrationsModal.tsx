@@ -9,11 +9,14 @@ type PersonalIntegrationsModalProps = {
   user: ProjectParticipant;
   role: DemoUserRole;
   access: DemoAccess;
+  allowRoleChange?: boolean;
+  pilotSession?: boolean;
+  integrationsEnabled?: boolean;
   onClose: () => void;
-  onRoleChange: (role: DemoUserRole) => void;
+  onRoleChange?: (role: DemoUserRole) => void;
   onLogout: () => void;
   onSaveProfile: (participantId: string, name: string, avatarUrl: string | undefined, email: string, phone: string) => void;
-  onChangePassword: () => void;
+  onChangePassword: (currentPassword: string, newPassword: string) => Promise<void> | void;
   onSaveIntegrations: (participantId: string, integrations: UserIntegration[]) => void;
   onImportDemo: (provider: IntegrationProvider, participantId: string) => void;
   onImportTestFile: (provider: IntegrationProvider, participantId: string, mode: "tagged" | "untagged", tag?: string) => void;
@@ -53,6 +56,9 @@ export function PersonalIntegrationsModal({
   user,
   role,
   access,
+  allowRoleChange = true,
+  pilotSession = false,
+  integrationsEnabled = true,
   onClose,
   onRoleChange,
   onLogout,
@@ -71,6 +77,7 @@ export function PersonalIntegrationsModal({
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl ?? "");
   const [profileEmail, setProfileEmail] = useState(user.email);
   const [profilePhone, setProfilePhone] = useState(user.phone);
+  const [profileError, setProfileError] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -89,26 +96,32 @@ export function PersonalIntegrationsModal({
     setAvatarUrl(user.avatarUrl ?? "");
     setProfileEmail(user.email);
     setProfilePhone(user.phone);
+    setProfileError("");
     setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
     setSecurityError("");
   }, [user.avatarUrl, user.email, user.id, user.name, user.phone]);
 
-  function handlePasswordChange() {
-    if (!currentPassword || newPassword.length < 4) {
-      setSecurityError("Укажите текущий и новый пароль от 4 символов.");
+  async function handlePasswordChange() {
+    const minimumLength = pilotSession ? 12 : 4;
+    if (!currentPassword || newPassword.length < minimumLength) {
+      setSecurityError(pilotSession ? "Use at least 12 characters for the new password." : "Укажите текущий и новый пароль от 4 символов.");
       return;
     }
     if (newPassword !== confirmPassword) {
       setSecurityError("Новые пароли не совпадают.");
       return;
     }
-    setSecurityError("");
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    onChangePassword();
+    try {
+      await onChangePassword(currentPassword, newPassword);
+      setSecurityError("");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (error) {
+      setSecurityError(error instanceof Error ? error.message : "Could not update the password.");
+    }
   }
 
   function save(next: UserIntegration[]) {
@@ -164,6 +177,15 @@ export function PersonalIntegrationsModal({
     if (!file) {
       return;
     }
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      setProfileError("Use a PNG, JPEG, or WebP image.");
+      return;
+    }
+    if (file.size > 512 * 1024) {
+      setProfileError("The avatar must be smaller than 512 KB.");
+      return;
+    }
+    setProfileError("");
     const reader = new FileReader();
     reader.addEventListener("load", () => {
       if (typeof reader.result === "string") {
@@ -212,21 +234,23 @@ export function PersonalIntegrationsModal({
             <div className="section-title">
               <UserRoundCog size={18} />
               <div>
-                <h3>{t("Демо-роль")}</h3>
+                <h3>{pilotSession ? "Account role" : t("Демо-роль")}</h3>
                 <p>{user.position} · {user.email}</p>
               </div>
             </div>
-            <div className="personal-role-switch" role="group" aria-label={t("Демо-роль пользователя")}>
-              {demoRoles.map((item) => (
-                <button
-                  key={item}
-                  className={item === role ? "active" : ""}
-                  onClick={() => onRoleChange(item)}
-                >
-                  {t(getDemoRoleLabel(item))}
-                </button>
-              ))}
-            </div>
+            {allowRoleChange ? (
+              <div className="personal-role-switch" role="group" aria-label={t("Демо-роль пользователя")}>
+                {demoRoles.map((item) => (
+                  <button
+                    key={item}
+                    className={item === role ? "active" : ""}
+                    onClick={() => onRoleChange?.(item)}
+                  >
+                    {t(getDemoRoleLabel(item))}
+                  </button>
+                ))}
+              </div>
+            ) : <div className="personal-role-switch"><button className="active" disabled>{t(getDemoRoleLabel(role))}</button></div>}
             <button className="personal-logout" onClick={onLogout}>
               <LogOut size={16} />
               {t("Выйти")}
@@ -249,7 +273,7 @@ export function PersonalIntegrationsModal({
                 ref={avatarInputRef}
                 className="hidden-file-input"
                 type="file"
-                accept="image/*"
+                accept="image/png,image/jpeg,image/webp"
                 onChange={(event) => handleAvatarSelect(event.currentTarget.files?.[0])}
               />
             </div>
@@ -260,13 +284,14 @@ export function PersonalIntegrationsModal({
               </label>
               <label>
                 <span>{t("Логин / рабочая почта")}</span>
-                <input type="email" value={profileEmail} onChange={(event) => setProfileEmail(event.currentTarget.value)} />
+                <input type="email" value={profileEmail} disabled={pilotSession} onChange={(event) => setProfileEmail(event.currentTarget.value)} />
               </label>
               <label>
                 <span>{t("Телефон")}</span>
                 <input value={profilePhone} onChange={(event) => setProfilePhone(event.currentTarget.value)} />
               </label>
             </div>
+            {profileError ? <small className="personal-profile-error" role="alert">{profileError}</small> : null}
             <button
               className="personal-profile-save"
               onClick={() => onSaveProfile(user.id, profileName, avatarUrl || undefined, profileEmail, profilePhone)}
@@ -282,7 +307,7 @@ export function PersonalIntegrationsModal({
               <KeyRound size={18} />
               <div>
                 <h3>{t("Безопасность")}</h3>
-                <p>{t("Пароль демо-аккаунта")}</p>
+                <p>{pilotSession ? "Server account password" : t("Пароль демо-аккаунта")}</p>
               </div>
             </div>
             <div className="personal-password-fields">
@@ -300,7 +325,7 @@ export function PersonalIntegrationsModal({
               </label>
             </div>
             <div className="personal-security-actions">
-              {securityError ? <span>{t(securityError)}</span> : <span>{t("Демо: пароль не отправляется на сервер.")}</span>}
+              {securityError ? <span>{t(securityError)}</span> : <span>{pilotSession ? "At least 12 characters with a letter and a number." : t("Демо: пароль не отправляется на сервер.")}</span>}
               <button onClick={handlePasswordChange}>
                 <Save size={16} />
                 {t("Обновить пароль")}
@@ -308,7 +333,7 @@ export function PersonalIntegrationsModal({
             </div>
           </section>
 
-          <section className="integration-section">
+          {integrationsEnabled ? <><section className="integration-section">
             <div className="section-title">
               <Mail size={18} />
               <div>
@@ -420,7 +445,17 @@ export function PersonalIntegrationsModal({
                 );
               })}
             </div>
-          </section>
+          </section></> : (
+            <section className="integration-section">
+              <div className="section-title">
+                <ShieldCheck size={18} />
+                <div>
+                  <h3>External integrations</h3>
+                  <p>Connectors remain disabled until server-side OAuth and credential storage are configured.</p>
+                </div>
+              </div>
+            </section>
+          )}
         </div>
       </article>
     </div>

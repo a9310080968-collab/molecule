@@ -67,7 +67,13 @@ const legacyEnglishCorrections = new Map([
   ["Leading general plan specialist", "Lead Master Planning Engineer"],
   ["Not accepted", "Rejected"],
   ["Not verified", "Not reviewed"],
+  ["AP0", "AR0"],
+  ["AP1", "AR1"],
+  ["AP2", "AR2"],
+  ["AP4", "AR4"],
+  ["AP5", "AR5"],
   ["Third Party Interior Developer", "External Interior Design Consultant"],
+  ["ZAV", "MFR"],
   ["1st category constructor", "Structural Engineer, Category I"],
 ]);
 
@@ -102,6 +108,15 @@ export function toEnglishContent(value: string, upgradeLegacyTransliteration = f
       normalized = normalized.split(source).join(target);
     });
     normalized = normalized.replace(/\bGIP\b/g, "LPE");
+  }
+
+  normalized = normalized
+    .replace(/\bAP([0-5](?:\.\d+)?)\b/g, "AR$1")
+    .replace(/\bZAV\b/g, "MFR");
+
+  const legacyAcceptedContainer = normalized.match(/^Prinyal konteyner «(.*?)» v rabotu, zhdu finalnyy komplekt\.$/);
+  if (legacyAcceptedContainer) {
+    return `Accepted container "${legacyAcceptedContainer[1]}" for work; waiting for the final package.`;
   }
 
   normalized = normalized

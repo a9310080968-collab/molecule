@@ -588,6 +588,7 @@ const english: Record<string, string> = {
   "Контейнер принят в работу через событие мессенджера.": "The container was accepted for work through a messenger event.",
   "Сообщение добавлено во входящие для ручной привязки.": "The message was added to incoming files for manual linking.",
   "Поступило новое задание без тега. Нужна ручная привязка к процессу.": "A new task arrived without a tag. It must be linked to a process manually.",
+  "Принял контейнер «{title}» в работу, жду финальный комплект.": "Accepted container \"{title}\" for work; waiting for the final package.",
   "Срок бизнес-процесса просрочен": "Business process deadline missed",
   "До срока бизнес-процесса меньше суток": "Business process deadline is less than a day away",
   "Срок бизнес-процесса близко": "Business process deadline approaching",

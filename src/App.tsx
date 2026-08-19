@@ -13,6 +13,7 @@ import { ProcessBuilderModal } from "./components/ProcessBuilderModal";
 import { ProcessDetailModal } from "./components/ProcessDetailModal";
 import { PersonalIntegrationsModal } from "./components/PersonalIntegrationsModal";
 import { DemoLogin } from "./components/DemoLogin";
+import { PilotLogin } from "./components/PilotLogin";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { MvpGuide } from "./components/MvpGuide";
 import { demoProjects, initialNotifications } from "./data/mockProject";
@@ -45,6 +46,7 @@ import { createBlankProjectTemplate, createDefaultProjectTemplate, createProject
 import { buildRoleProject, canEditNode, canEditProcess, demoAccessByRole, resolveDemoUser } from "./lib/demoAccess";
 import { normalizeProjectPeople, normalizeTemplatePeople, toEnglishData } from "./lib/englishContent";
 import { useI18n } from "./lib/i18n";
+import { isPilotMode, usePilotAuth } from "./lib/pilotAuth";
 import type {
   BusinessProcess,
   ChatMessage,
@@ -76,6 +78,7 @@ type HistorySnapshot = {
 
 const HISTORY_LIMIT = 60;
 const STORAGE_KEY = "molecule-mvp-state-v2";
+const LAYOUT_VERSION = 2;
 type LevelTransition = "down" | "up";
 
 type DeletionRequest = {
@@ -98,6 +101,7 @@ type PersistedAppState = {
   guideDismissed?: boolean;
   demoRole?: DemoUserRole;
   demoAuthenticated?: boolean;
+  layoutVersion?: number;
 };
 
 let cachedPersistedState: PersistedAppState | null | undefined;
@@ -118,10 +122,14 @@ function getPersistedState() {
       cachedPersistedState = null;
     } else {
       const state = toEnglishData(JSON.parse(raw) as PersistedAppState);
+      const needsLayoutUpgrade = state.layoutVersion !== LAYOUT_VERSION;
       cachedPersistedState = {
         ...state,
-        projects: state.projects.map(normalizeProjectPeople),
+        projects: state.projects.map((project) => normalizeProjectPeople(
+          needsLayoutUpgrade ? upgradePersistedProjectLayout(project) : project,
+        )),
         projectTemplates: state.projectTemplates?.map(normalizeTemplatePeople) ?? [],
+        layoutVersion: LAYOUT_VERSION,
       };
     }
   } catch {
@@ -171,8 +179,24 @@ function mergeDemoNotifications(savedNotifications: DemoNotification[] | undefin
   ];
 }
 
+function upgradePersistedProjectLayout(project: DemoProject): DemoProject {
+  if (project.id !== "project-roga-kopyta" || !project.nodePositions) {
+    return project;
+  }
+
+  const rootLevel = project.levels.find((level) => !level.parentLevelId);
+  if (!rootLevel || !project.nodePositions[rootLevel.id]) {
+    return project;
+  }
+
+  const nodePositions = { ...project.nodePositions };
+  delete nodePositions[rootLevel.id];
+  return { ...project, nodePositions };
+}
+
 export default function App() {
   const { t } = useI18n();
+  const pilotAuth = usePilotAuth(isPilotMode);
   const persistedState = getPersistedState();
   const defaultTemplates = useMemo(() => toEnglishData([
     createBlankProjectTemplate(),
@@ -221,8 +245,18 @@ export default function App() {
 
   const hasProjects = projects.length > 0;
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0] ?? demoProjects[0];
-  const access = demoAccessByRole[demoRole];
-  const currentUser = resolveDemoUser(activeProject, demoRole);
+  const effectiveRole = isPilotMode ? pilotAuth.user?.role ?? "employee" : demoRole;
+  const access = demoAccessByRole[effectiveRole];
+  const currentUser = resolveDemoUser(activeProject, effectiveRole);
+  const settingsUser = pilotAuth.user && currentUser
+    ? {
+        ...currentUser,
+        name: pilotAuth.user.name,
+        email: pilotAuth.user.email,
+        phone: pilotAuth.user.phone,
+        avatarUrl: pilotAuth.user.avatarUrl ?? undefined,
+      }
+    : currentUser;
   const visibleProject = useMemo(() => buildRoleProject(activeProject, currentUser, access), [access, activeProject, currentUser]);
   const activeLevel = getLevelById(visibleProject, activeLevelId);
   const levelNodes = useMemo(() => getLevelNodes(visibleProject, activeLevel), [activeLevel, visibleProject]);
@@ -265,6 +299,7 @@ export default function App() {
       guideDismissed,
       demoRole,
       demoAuthenticated,
+      layoutVersion: LAYOUT_VERSION,
     };
 
     try {
@@ -376,14 +411,14 @@ export default function App() {
   }
 
   function saveLevelPositions(levelId: string, positions: Record<string, Vec2>, record = true) {
-    if (!access.canEditStructure) {
-      return;
-    }
     updateActiveProject((project) => ({
       ...project,
       nodePositions: {
         ...(project.nodePositions ?? {}),
-        [levelId]: positions,
+        [levelId]: {
+          ...(project.nodePositions?.[levelId] ?? {}),
+          ...positions,
+        },
       },
     }), record);
   }
@@ -1546,8 +1581,8 @@ export default function App() {
       author: "Павел Андреев",
       role: "ГИП",
       text: targetProcess
-        ? `Принял контейнер «${targetProcess.title}» в работу, жду финальный комплект.`
-        : "Поступило новое задание без тега. Нужна ручная привязка к процессу.",
+        ? t("Принял контейнер «{title}» в работу, жду финальный комплект.", { title: targetProcess.title })
+        : t("Поступило новое задание без тега. Нужна ручная привязка к процессу."),
       time: "только что",
       processId: targetProcess?.id,
     };
@@ -1911,6 +1946,36 @@ export default function App() {
     setDemoAuthenticated(false);
   }
 
+  async function logoutCurrentSession() {
+    setPersonalSettingsOpen(false);
+    if (isPilotMode) {
+      await pilotAuth.logout();
+      return;
+    }
+    logoutDemo();
+  }
+
+  async function saveCurrentProfile(participantId: string, name: string, avatarUrl: string | undefined, email: string, phone: string) {
+    if (isPilotMode) {
+      try {
+        await pilotAuth.updateProfile({ name, phone, avatarUrl });
+      } catch {
+        showToast("Could not save the server profile. Check the avatar format and try again.");
+        return;
+      }
+    }
+    updateParticipantProfile(participantId, name, avatarUrl, email, phone);
+  }
+
+  async function changeCurrentPassword(currentPassword: string, newPassword: string) {
+    if (isPilotMode) {
+      await pilotAuth.changePassword(currentPassword, newPassword);
+      showToast("Password updated. Other sessions were signed out.");
+      return;
+    }
+    showToast(t("Демо-пароль обновлен для текущей сессии."));
+  }
+
   function toggleFullscreen() {
     if (document.fullscreenElement) {
       void document.exitFullscreen();
@@ -1920,7 +1985,15 @@ export default function App() {
     void document.documentElement.requestFullscreen();
   }
 
-  if (!demoAuthenticated) {
+  if (isPilotMode && pilotAuth.status === "loading") {
+    return <PilotLogin loading onLogin={pilotAuth.login} />;
+  }
+
+  if (isPilotMode && !pilotAuth.user) {
+    return <PilotLogin onLogin={pilotAuth.login} />;
+  }
+
+  if (!isPilotMode && !demoAuthenticated) {
     return <DemoLogin accounts={demoAccounts} initialRole={demoRole} onLogin={loginDemo} />;
   }
 
@@ -1996,7 +2069,7 @@ export default function App() {
         onMenuClick={() => setMobileMenuOpen(true)}
         projects={projects}
         activeProjectId={activeProjectId}
-        user={currentUser}
+        user={settingsUser}
         access={access}
         onProjectChange={selectProject}
         onProjectDelete={deleteProject}
@@ -2132,18 +2205,21 @@ export default function App() {
           onCreateProject={createProject}
         />
       ) : null}
-      {personalSettingsOpen && currentUser ? (
+      {personalSettingsOpen && settingsUser ? (
         <PersonalIntegrationsModal
           project={visibleProject}
-          user={currentUser}
-          role={demoRole}
+          user={settingsUser}
+          role={effectiveRole}
           access={access}
+          allowRoleChange={!isPilotMode}
+          pilotSession={isPilotMode}
+          integrationsEnabled={!isPilotMode}
           onClose={() => setPersonalSettingsOpen(false)}
           onRoleChange={changeDemoRole}
-          onLogout={logoutDemo}
+          onLogout={() => void logoutCurrentSession()}
           onSaveIntegrations={saveParticipantIntegrations}
-          onSaveProfile={updateParticipantProfile}
-          onChangePassword={() => showToast(t("Демо-пароль обновлен для текущей сессии."))}
+          onSaveProfile={(...args) => void saveCurrentProfile(...args)}
+          onChangePassword={changeCurrentPassword}
           onImportDemo={importDemoIntegration}
           onImportTestFile={importIntegrationTestFile}
           onImportFiles={(provider, participantId, files) => {
