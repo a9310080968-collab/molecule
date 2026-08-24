@@ -708,7 +708,8 @@ function getDemoFileUrl(fileType: FileType) {
     txt: "demo-note.txt",
   };
   const file = files[fileType];
-  return file ? `${import.meta.env.BASE_URL}demo-files/${file}` : undefined;
+  const baseUrl = import.meta.env?.BASE_URL ?? "/";
+  return file ? `${baseUrl}demo-files/${file}` : undefined;
 }
 
 function buildPreview(title: string, fileType: FileType): { text?: string; rows?: string[][] } {

@@ -3,24 +3,48 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "packageManager": "pnpm@11.16.0",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "dev:client": "vite",
+    "dev:server": "tsx watch server/index.ts",
+    "dev:stack": "concurrently -k -n api,web -c cyan,magenta \"pnpm dev:server\" \"pnpm dev:client\"",
+    "db:migrate": "tsx server/db/migrate.ts",
+    "db:create-user": "tsx server/scripts/create-user.ts",
+    "audit:western": "tsx scripts/audit-westernization.ts",
+    "test": "tsx --test server/**/*.test.ts",
+    "build": "pnpm build:client && pnpm build:server",
+    "build:client": "tsc --noEmit -p tsconfig.json && vite build",
+    "build:server": "tsc -p tsconfig.server.json",
+    "preview": "vite preview",
+    "start:server": "node dist-server/index.js"
   },
   "dependencies": {
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/cors": "^11.1.0",
+    "@fastify/helmet": "^13.0.2",
+    "@fastify/rate-limit": "^10.3.0",
+    "bcryptjs": "^3.0.2",
     "clsx": "^2.1.1",
+    "dotenv": "^17.2.1",
+    "fastify": "^5.5.0",
     "lucide-react": "^0.468.0",
+    "pg": "^8.16.3",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "zod": "^4.1.5"
   },
   "devDependencies": {
+    "@types/node": "^24.3.0",
+    "@types/pg": "^8.15.5",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^9.2.1",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.20.5",
     "typescript": "^5.7.2",
     "vite": "^6.0.5"
   }

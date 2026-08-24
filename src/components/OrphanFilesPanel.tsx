@@ -32,7 +32,7 @@ export function OrphanFilesPanel({
   const { t, system } = useI18n();
   const [tag, setTag] = useState("");
   const [dropActive, setDropActive] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [contextMenu, setContextMenu] = useState<{ documentId: string; x: number; y: number } | null>(null);
   const files = project.inboxDocuments;
   const contextDocument = contextMenu

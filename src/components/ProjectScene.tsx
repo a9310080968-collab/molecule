@@ -183,10 +183,20 @@ export function ProjectScene({
   const fittedLevelRef = useRef<string | null>(null);
   const centerNodeId = level.centralNodeId;
   const nodeIdsKey = useMemo(() => nodes.map((node) => node.id).join("|"), [nodes]);
+  const processLayoutKey = useMemo(
+    () => processes.map((process) => `${process.id}:${process.from}:${process.to}`).join("|"),
+    [processes],
+  );
   const savedPositions = project.nodePositions?.[level.id];
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [view, setView] = useState<ViewState>(INITIAL_VIEW);
-  const [positions, setPositions] = useState<Record<string, Vec2>>(() => buildLevelPositions(nodes, level.id, centerNodeId, savedPositions));
+  const [positions, setPositions] = useState<Record<string, Vec2>>(() => buildReadableLevelPositions(
+    nodes,
+    processes,
+    level.id,
+    centerNodeId,
+    savedPositions,
+  ));
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
   const [dragUi, setDragUi] = useState<DragUiState | null>(null);
@@ -223,8 +233,8 @@ export function ProjectScene({
   }, []);
 
   useEffect(() => {
-    setPositions(buildLevelPositions(nodes, level.id, centerNodeId, savedPositions));
-  }, [centerNodeId, level.id, nodeIdsKey, nodes, savedPositions]);
+    setPositions(buildReadableLevelPositions(nodes, processes, level.id, centerNodeId, savedPositions));
+  }, [centerNodeId, level.id, nodeIdsKey, nodes, processLayoutKey, processes, savedPositions]);
 
   useEffect(() => {
     setView(INITIAL_VIEW);
@@ -407,7 +417,7 @@ export function ProjectScene({
     if (node.id === centerNodeId || node.type === "central") {
       return;
     }
-    if (node.type === "document" ? !access.canUploadFiles : !access.canEditStructure) {
+    if (node.type === "document" && !access.canUploadFiles) {
       return;
     }
     if (node.positionLocked) {
@@ -880,7 +890,7 @@ export function ProjectScene({
             <span className="node-orb">
               {isCenter ? <i style={{ height: `${progress}%` }} /> : null}
             </span>
-            <span className="node-label">
+            <span className={clsx("node-label", isCenter && label.primary.length > 18 && "long-label")}>
               <strong>{label.primary}</strong>
               <em>{label.secondary}</em>
             </span>
@@ -1794,6 +1804,21 @@ function resolveNodeScreenCollisions(
   return result;
 }
 
+function buildReadableLevelPositions(
+  nodes: ProjectNode[],
+  processes: BusinessProcess[],
+  levelId: string,
+  centralNodeId: string,
+  savedPositions?: Record<string, Vec2>,
+) {
+  const positions = buildLevelPositions(nodes, levelId, centralNodeId, savedPositions);
+  if (savedPositions) {
+    return positions;
+  }
+
+  return buildNormalizedPositions(nodes, processes, levelId, centralNodeId, positions);
+}
+
 function getScreenCollisionRadius(node: ProjectNode, centralNodeId: string) {
   if (node.id === centralNodeId || node.type === "central") return 92;
   if (node.type === "document") return 45;
@@ -1816,7 +1841,7 @@ function buildFittedView(positions: Record<string, Vec2>, size: { width: number;
     ? {
         left: Math.round(352 * interfaceScale),
         right: Math.round(376 * interfaceScale),
-        top: Math.round(128 * interfaceScale),
+        top: Math.round(252 * interfaceScale),
         bottom: Math.round(118 * interfaceScale),
       }
     : { left: 28, right: 28, top: 126, bottom: 112 };

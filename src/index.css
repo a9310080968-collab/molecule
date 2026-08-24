@@ -1475,6 +1475,7 @@ button {
   background: transparent;
   color: #fff;
   cursor: grab;
+  touch-action: none;
   scale: var(--node-visual-scale, 1);
   transition: opacity 160ms ease, transform 160ms ease, scale 180ms ease, filter 160ms ease;
   --node-fill: #818899;
@@ -1689,6 +1690,14 @@ button {
   font-size: var(--fs-30);
 }
 
+.node-central .node-label.long-label strong {
+  display: -webkit-box;
+  font-size: var(--fs-19);
+  line-height: 1.02;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
 .node-document .node-label strong {
   font-size: var(--fs-12);
   line-height: 1.05;
@@ -1822,11 +1831,22 @@ button {
 }
 
 .orphan-files-panel.collapsed {
-  width: min(250px, calc(100vw - var(--left-width) - var(--right-width) - 90px));
+  width: 48px;
+  padding: 7px;
+  border-radius: 50%;
 }
 
 .orphan-files-panel.collapsed header {
   margin-bottom: 0;
+}
+
+.orphan-files-panel.collapsed header > div:first-child {
+  display: none;
+}
+
+.orphan-files-panel.collapsed .orphan-header-actions,
+.orphan-files-panel.collapsed .orphan-collapse-button {
+  width: 100%;
 }
 
 .orphan-files-panel.drop-active {
@@ -6336,6 +6356,36 @@ button {
   opacity: 0.42;
 }
 
+.pilot-login-panel {
+  max-width: 520px;
+}
+
+.pilot-login-loading {
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.demo-login-error,
+.personal-profile-error {
+  margin: 0;
+  color: #ff9a9a;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.spin {
+  animation: molecule-spin 0.9s linear infinite;
+}
+
+@keyframes molecule-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .personal-settings-backdrop {
   z-index: 98;
 }
@@ -7106,6 +7156,27 @@ button {
 
   .user-chip {
     min-width: 210px;
+  }
+}
+
+@media (min-width: 1025px) and (max-width: 1600px) {
+  .topbar {
+    grid-template-columns: minmax(220px, 1.2fr) minmax(180px, 1fr) 118px;
+  }
+
+  .project-selector .project-add-tab {
+    min-width: 42px;
+  }
+
+  .project-selector .project-add-tab span,
+  .user-chip > div {
+    display: none;
+  }
+
+  .user-chip {
+    grid-template-columns: 38px 32px 32px;
+    gap: 6px;
+    min-width: 118px;
   }
 }
 
