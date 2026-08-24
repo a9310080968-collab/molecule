@@ -164,6 +164,9 @@ const westernExactCorrections = new Map([
   ["Red lines", "Site boundaries"],
   ["Eastern façade", "East facade"],
   ["Western façade", "West facade"],
+  ["Customer", "Client"],
+  ["Customer comments", "Client comments"],
+  ["UTIL and connection conditions", "Utility connection requirements"],
 ]);
 
 const westernContentFragments = [
@@ -171,10 +174,11 @@ const westernContentFragments = [
   ["Horns and Hooves", "Northbridge"],
   ["Horns_and_hooves", "Northbridge"],
   ["Roga i Kopyta", "Northbridge"],
+  ["Sirius Residential Complex", "Harbor Point Residences"],
+  ["Harbor Point Residential Complex", "Harbor Point Residences"],
+  ["Vega Business Center", "Westgate Business Center"],
   ["Sirius", "Harbor Point"],
   ["Vega", "Westgate"],
-  ["Sirius Residential Complex", "Harbor Point Residences"],
-  ["Vega Business Center", "Westgate Business Center"],
   ["business center Vega", "Westgate Business Center"],
   ["12 Kosmicheskaya Street", "12 Meridian Street"],
   ["7 Nauchny Avenue", "7 Innovation Avenue"],
@@ -216,6 +220,7 @@ const westernContentFragments = [
   ["Customer: LLC \"...\"", "Client: Meridian Developments"],
   ["General designer: LLC \"...\"", "Lead design consultant: Northbridge Design"],
   ["Duration: 01.01.2026 – 01.12.2026", "Schedule: Jan 1, 2026 – Dec 1, 2026"],
+  ["LEAD:", "Project Lead:"],
   ["Alisa Bishop", "Alice Bishop"],
   ["Victoria Roman", "Victoria Rhodes"],
   ["Yandex Mail", "Google Workspace Mail"],
@@ -299,7 +304,11 @@ export function westernizeEnglishContent(value: string) {
     normalized = normalized.replace(pattern, target);
   });
 
-  return normalized;
+  westernContentFragments.forEach(([source, target]) => {
+    normalized = normalized.split(source).join(target);
+  });
+
+  return westernExactCorrections.get(normalized) ?? normalized;
 }
 
 export function getEnglishContentTranslation(value: string) {
