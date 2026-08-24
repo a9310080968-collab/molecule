@@ -45,6 +45,16 @@ jobs:
           GITHUB_PAGES: "true"
           VITE_APP_MODE: "demo"
 
+      - name: Build landing site
+        run: |
+          git clone --depth 1 \
+            --branch agent/embed-live-demo \
+            https://github.com/a9310080968-collab/molecule_landing.git \
+            /tmp/molecule-landing
+          cd /tmp/molecule-landing
+          pnpm install --frozen-lockfile
+          pnpm build
+
       - name: Write deployment version
         run: |
           printf '{"sha":"%s","deployedAt":"%s"}\n' \
@@ -67,6 +77,18 @@ jobs:
           sshpass -e ssh ${SSH_OPTIONS} "${SSH_TARGET}" \
             "mkdir -p '${DEPLOY_DIR}' && find '${DEPLOY_DIR}' -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +"
           sshpass -e scp ${SSH_OPTIONS} -r dist/. "${SSH_TARGET}:${DEPLOY_DIR}/"
+
+      - name: Deploy landing to mlcule.com
+        env:
+          SSHPASS: ${{ secrets.REG_RU_SSH_PASSWORD }}
+          REG_RU_SSH_HOST: ${{ secrets.REG_RU_SSH_HOST }}
+          REG_RU_SSH_USER: ${{ secrets.REG_RU_SSH_USER }}
+        run: |
+          SSH_TARGET="${REG_RU_SSH_USER}@${REG_RU_SSH_HOST}"
+          SSH_OPTIONS="-o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30"
+          sshpass -e scp ${SSH_OPTIONS} -r \
+            /tmp/molecule-landing/dist/public/. \
+            "${SSH_TARGET}:www/mlcule.com/"
 
       - name: Publish to gh-pages
         run: |
