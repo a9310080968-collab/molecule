@@ -2530,11 +2530,11 @@ function upsertIntegration(integrations: UserIntegration[], provider: Integratio
 
 function getDemoIntegrationFiles(provider: IntegrationProvider) {
   const files: Record<IntegrationProvider, string[]> = {
-    outlook: ["Расчетная_схема_КР.pdf", "Письмо_АР.docx", "Уточнение_ХЗ.xlsx"],
-    yandex: ["Технические_условия_ВК.pdf", "Сметная_таблица_СМ.xlsx", "Вложение_БезТега.docx"],
-    gmail: ["Пояснения_ПЗ.docx", "Сводка_ЭОМ.xlsx", "Презентация_ABC.pptx"],
-    telegram: ["Скрин_ОВ.png", "Планировка_АР.pdf", "Комментарий_QA.txt"],
-    folder: ["Ведомость_ВК.xlsx", "Стройгенплан_ПОС.pdf", "Материалы_UnknownTag.docx"],
+    outlook: ["Structural_calculation_model.pdf", "ARCH_design_note.docx", "Coordination_query.xlsx"],
+    yandex: ["Plumbing_utility_requirements.pdf", "Cost_plan.xlsx", "Untagged_attachment.docx"],
+    gmail: ["Design_narrative.docx", "Electrical_load_summary.xlsx", "Project_presentation.pptx"],
+    telegram: ["HVAC_site_photo.png", "ARCH_floor_plan.pdf", "Review_comment.txt"],
+    folder: ["Plumbing_fixture_schedule.xlsx", "Construction_logistics_plan.pdf", "Materials_UnknownTag.docx"],
   };
   return files[provider];
 }
@@ -2542,10 +2542,10 @@ function getDemoIntegrationFiles(provider: IntegrationProvider) {
 function getIntegrationProviderLabel(provider: IntegrationProvider) {
   const labels: Record<IntegrationProvider, string> = {
     outlook: "Outlook",
-    yandex: "Яндекс Почта",
+    yandex: "Google Workspace Mail",
     gmail: "Gmail",
     telegram: "Telegram Desktop",
-    folder: "Рабочая папка",
+    folder: "Work folder",
   };
   return labels[provider];
 }

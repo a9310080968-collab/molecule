@@ -1020,17 +1020,17 @@ function getDocumentSourceLabel(document: ProcessDocument) {
   const source = document.integrationProvider ?? document.source;
   const labels: Record<string, string> = {
     outlook: "Outlook",
-    yandex: "Яндекс Почта",
+    yandex: "Google Workspace Mail",
     gmail: "Gmail",
     telegram: "Telegram",
-    folder: "Рабочая папка",
-    mail: "Почта",
-    chat: "Мессенджер",
-    drop: "Загрузка",
-    manual: "Создан вручную",
-    demo: "Демо-данные",
+    folder: "Work folder",
+    mail: "Email",
+    chat: "Messenger",
+    drop: "Upload",
+    manual: "Created manually",
+    demo: "Demo data",
   };
-  return source ? labels[source] ?? "Внешний источник" : "Источник не указан";
+  return source ? labels[source] ?? "External source" : "Source not specified";
 }
 
 function parseVersionScore(value: string) {
@@ -1281,11 +1281,11 @@ function ParticipantsManager({
             </label>
             <label>
               <span>{t("Почта *")}</span>
-              <input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.currentTarget.value })} placeholder="name@company.ru" />
+              <input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.currentTarget.value })} placeholder="name@company.com" />
             </label>
             <label>
               <span>{t("Телефон *")}</span>
-              <input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.currentTarget.value })} placeholder="+7 900 000-00-00" />
+              <input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.currentTarget.value })} placeholder="+1 415 555-0100" />
             </label>
             <label>
               <span>{t("Мессенджер")}</span>
@@ -1293,7 +1293,7 @@ function ParticipantsManager({
             </label>
             <label>
               <span>{t("Другие способы связи")}</span>
-              <input value={form.otherContacts ?? ""} onChange={(event) => setForm({ ...form, otherContacts: event.currentTarget.value })} placeholder={t("Teams, Диадок, внутренний номер")} />
+              <input value={form.otherContacts ?? ""} onChange={(event) => setForm({ ...form, otherContacts: event.currentTarget.value })} placeholder="Teams, Procore, extension" />
             </label>
             <label>
               <span>{t("Видимость в проекте")}</span>

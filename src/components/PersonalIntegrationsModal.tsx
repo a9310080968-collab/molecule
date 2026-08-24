@@ -29,18 +29,18 @@ const demoRoles: DemoUserRole[] = ["employee", "gip", "director"];
 
 const providerLabels: Record<IntegrationProvider, string> = {
   outlook: "Outlook",
-  yandex: "Яндекс Почта",
+  yandex: "Google Workspace Mail",
   gmail: "Gmail",
   telegram: "Telegram Desktop",
-  folder: "Рабочая папка",
+  folder: "Work folder",
 };
 
 const providerDescriptions: Record<IntegrationProvider, string> = {
-  outlook: "Рабочая почта Microsoft. В демо подключение имитирует OAuth и импорт вложений.",
-  yandex: "Рабочая Яндекс Почта. Файлы из писем попадают в пул проекта по тегам.",
-  gmail: "Рабочая Gmail. Для продакшена нужен безопасный OAuth через backend.",
-  telegram: "Папка Telegram Desktop или выгрузок из переписок. Доступ даётся выбором папки.",
-  folder: "Любая рабочая папка: мессенджер, сетевой диск, локальная директория проекта.",
+  outlook: "Microsoft 365 work email. The demo simulates OAuth and attachment import.",
+  yandex: "Google Workspace email. Email attachments are routed to the project pool by tags.",
+  gmail: "Google Workspace email. Production requires secure backend OAuth.",
+  telegram: "Telegram Desktop folder or exported chats. Access is granted by selecting a folder.",
+  folder: "Any work folder: messenger, network drive, or local project directory.",
 };
 
 const providerIcons: Record<IntegrationProvider, typeof Mail> = {
@@ -338,7 +338,7 @@ export function PersonalIntegrationsModal({
               <Mail size={18} />
               <div>
                 <h3>{t("Почтовые сервисы")}</h3>
-                <p>{t("Outlook, Яндекс и Gmail подключаются каждым пользователем в личных настройках.")}</p>
+                <p>{t("Each user connects Microsoft 365 or Google Workspace in their account settings.")}</p>
               </div>
             </div>
             <div className="integration-cards">

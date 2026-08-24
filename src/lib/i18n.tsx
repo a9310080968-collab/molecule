@@ -1,5 +1,5 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo } from "react";
-import { getEnglishContentTranslation, toEnglishContent } from "./englishContent";
+import { getEnglishContentTranslation, toEnglishContent, westernizeEnglishContent } from "./englishContent";
 
 export type Language = "en";
 export type TranslationParams = Record<string, string | number>;
@@ -141,10 +141,10 @@ const english: Record<string, string> = {
   "внутри ноды: {owner} · {version}": "inside node: {owner} · {version}",
   "раздел": "section",
   "входящие без связи · {version}": "unassigned incoming · {version}",
-  "Яндекс Почта": "Yandex Mail",
+  "Яндекс Почта": "Google Workspace Mail",
   "Рабочая папка": "Work folder",
   "Рабочая почта Microsoft. В демо подключение имитирует OAuth и импорт вложений.": "Microsoft work email. The demo simulates OAuth and attachment import.",
-  "Рабочая Яндекс Почта. Файлы из писем попадают в пул проекта по тегам.": "Yandex work email. Email attachments are routed to the project pool by tags.",
+  "Рабочая Яндекс Почта. Файлы из писем попадают в пул проекта по тегам.": "Google Workspace email. Email attachments are routed to the project pool by tags.",
   "Рабочая Gmail. Для продакшена нужен безопасный OAuth через backend.": "Work Gmail. Production requires secure backend OAuth.",
   "Папка Telegram Desktop или выгрузок из переписок. Доступ даётся выбором папки.": "Telegram Desktop folder or exported chats. Access is granted by selecting a folder.",
   "Любая рабочая папка: мессенджер, сетевой диск, локальная директория проекта.": "Any work folder: messenger, network drive, or local project directory.",
@@ -176,7 +176,7 @@ const english: Record<string, string> = {
   "Демо: пароль не отправляется на сервер.": "Demo: the password is not sent to a server.",
   "Обновить пароль": "Update password",
   "Почтовые сервисы": "Email services",
-  "Outlook, Яндекс и Gmail подключаются каждым пользователем в личных настройках.": "Each user connects Outlook, Yandex, and Gmail in their account settings.",
+  "Outlook, Яндекс и Gmail подключаются каждым пользователем в личных настройках.": "Each user connects Microsoft 365 or Google Workspace in their account settings.",
   "Рабочий аккаунт": "Work account",
   "Отключить": "Disconnect",
   "Подключить демо": "Connect demo",
@@ -272,7 +272,7 @@ const english: Record<string, string> = {
   "Создать документ с тегом": "Create tagged document",
   "Если тег совпадет с тегом ноды, документ сразу попадет внутрь этой ноды.": "If the tag matches a node tag, the document is placed directly inside that node.",
   "Название файла": "File name",
-  "Например: Планировка_АР.pdf": "For example: Планировка_АР.pdf",
+  "Например: Планировка_АР.pdf": "For example: ARCH_Floor_plan.pdf",
   "Тег маршрутизации": "Routing tag",
   "Создать документ": "Create document",
   "Входящие без связи": "Unassigned incoming",
@@ -564,7 +564,7 @@ const english: Record<string, string> = {
   "БП «Задание ГП → АР» близко к дедлайну": "BP \"Task GP → AR\" is nearing its deadline",
   "Архитектурная группа должна принять пакет генплана и подтвердить состав исходных данных.": "The architecture team must accept the master plan package and confirm the source data set.",
   "Файл из почты распределен по тегу АР": "Email file routed by the AR tag",
-  "Вложение «АР_Фасады_замечания.pdf» автоматически попало в архитектурный контур проекта.": "Attachment \"АР_Фасады_замечания.pdf\" was automatically routed to the project's architecture area.",
+  "Вложение «АР_Фасады_замечания.pdf» автоматически попало в архитектурный контур проекта.": "Attachment \"ARCH_Facade_review_comments.pdf\" was automatically routed to the project's architecture area.",
   "Письмо привязано к процессу АР -> ПЗ": "Email linked to the AR -> EN process",
   "Вложение с тегом АР автоматически добавлено в контейнер передачи пояснительной записки.": "The attachment tagged AR was automatically added to the explanatory note transfer container.",
   "ЭОМ не принято": "EOM rejected",
@@ -644,17 +644,17 @@ export function useI18n() {
 }
 
 export function translate(source: string, language: Language, params?: TranslationParams) {
-  const template = english[source] ?? getEnglishContentTranslation(source) ?? toEnglishContent(source);
+  const template = westernizeEnglishContent(english[source] ?? getEnglishContentTranslation(source) ?? toEnglishContent(source));
   if (!params) {
     return template;
   }
-  return Object.entries(params).reduce(
+  return westernizeEnglishContent(Object.entries(params).reduce(
     (result, [key, value]) => result.split(`{${key}}`).join(String(value)),
     template,
-  );
+  ));
 }
 
-export function localizeSystemText(value: string | undefined, language: Language): string {
+function localizeSystemTextRaw(value: string | undefined, language: Language): string {
   if (!value) {
     return "";
   }
@@ -733,4 +733,8 @@ export function localizeSystemText(value: string | undefined, language: Language
     .replace(/^завтра(?=\b|,)/i, "tomorrow")
     .replace(/^вчера(?=\b|,)/i, "yesterday");
   return toEnglishContent(normalized);
+}
+
+export function localizeSystemText(value: string | undefined, language: Language): string {
+  return westernizeEnglishContent(localizeSystemTextRaw(value, language));
 }

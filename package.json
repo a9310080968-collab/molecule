@@ -11,6 +11,7 @@
     "dev:stack": "concurrently -k -n api,web -c cyan,magenta \"pnpm dev:server\" \"pnpm dev:client\"",
     "db:migrate": "tsx server/db/migrate.ts",
     "db:create-user": "tsx server/scripts/create-user.ts",
+    "audit:western": "tsx scripts/audit-westernization.ts",
     "test": "tsx --test server/**/*.test.ts",
     "build": "pnpm build:client && pnpm build:server",
     "build:client": "tsc --noEmit -p tsconfig.json && vite build",

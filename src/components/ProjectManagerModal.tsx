@@ -11,11 +11,11 @@ type ProjectManagerModalProps = {
 };
 
 const baseTeam: ProjectParticipantSeed[] = [
-  member("Павел Андреев", "ГИП / администратор проекта", "admin", "p.andreev@alfaproject.ru", "+7 916 110-12-40", "@pavel_gip", "all"),
-  member("Анна Лебедева", "Руководитель группы АР", "architect", "a.lebedeva@alfaproject.ru", "+7 916 220-18-41", "@anna_ar", "assigned"),
-  member("Игорь Мельников", "Ведущий конструктор", "constructor", "i.melnikov@alfaproject.ru", "+7 916 330-22-09", "@igor_kr", "assigned"),
-  member("Мария Соколова", "Координатор документации", "coordinator", "m.sokolova@alfaproject.ru", "+7 916 440-63-12", "@maria_docs", "all"),
-  member("Ольга Данилова", "Сметчик", "estimator", "o.danilova@alfaproject.ru", "+7 916 550-71-30", "@olga_est", "assigned"),
+  member("Paul Anderson", "Lead Project Engineer / Project Administrator", "admin", "paul.anderson@northbridge-design.com", "+1 415 555-0140", "@paul_anderson", "all"),
+  member("Alice Bishop", "Architecture Lead", "architect", "alice.bishop@northbridge-design.com", "+1 415 555-0141", "@alice_bishop", "assigned"),
+  member("Ian Miller", "Lead Structural Engineer", "constructor", "ian.miller@northbridge-design.com", "+1 415 555-0109", "@ian_miller", "assigned"),
+  member("Maria Stone", "Document Control Coordinator", "coordinator", "maria.stone@northbridge-design.com", "+1 415 555-0112", "@maria_stone", "all"),
+  member("Olivia Daniels", "Cost Manager", "estimator", "olivia.daniels@northbridge-design.com", "+1 415 555-0130", "@olivia_daniels", "assigned"),
 ];
 
 const generatedTeam: ProjectParticipantSeed[] = Array.from({ length: 36 }, (_, index) => {
@@ -23,11 +23,11 @@ const generatedTeam: ProjectParticipantSeed[] = Array.from({ length: 36 }, (_, i
   const role = roles[index % roles.length];
   const number = index + 1;
   return member(
-    `Участник ${number}`,
-    role === "engineer" ? "Инженер раздела" : role === "contractor" ? "Подрядчик" : role === "observer" ? "Наблюдатель заказчика" : "Координатор",
+    `Team Member ${number}`,
+    role === "engineer" ? "Discipline Engineer" : role === "contractor" ? "Contractor" : role === "observer" ? "Client Observer" : "Coordinator",
     role,
-    `user${number}@demo-project.ru`,
-    `+7 900 ${String(100 + number).slice(-3)}-${String(10 + number).slice(-2)}-${String(20 + number).slice(-2)}`,
+    `user${number}@northbridge-demo.com`,
+    `+1 415 555-${String(1000 + number).slice(-4)}`,
     `@user_${number}`,
     role === "observer" ? "custom" : "assigned",
   );
@@ -60,14 +60,14 @@ export function ProjectManagerModal({
   );
   const selectedTeam = teamDirectory.filter((member) => selectedTeamEmails.includes(member.email));
   const filteredTeam = teamDirectory.filter((member) => {
-    const query = teamQuery.trim().toLocaleLowerCase("ru-RU");
+    const query = teamQuery.trim().toLocaleLowerCase("en-US");
     if (!query) {
       return true;
     }
     return [member.name, member.position, member.role, member.email, member.phone, member.messenger]
       .filter(Boolean)
       .join(" ")
-      .toLocaleLowerCase("ru-RU")
+      .toLocaleLowerCase("en-US")
       .includes(query);
   });
   const canCreate = Boolean(projectTitle.trim() && projectAddress.trim() && selectedTemplate);
