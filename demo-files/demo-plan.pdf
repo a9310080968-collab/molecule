@@ -1,0 +1,50 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 308 >>
+stream
+BT
+/F1 20 Tf
+72 760 Td
+(Demo PDF: Project Documentation Sheet) Tj
+/F1 12 Tf
+0 -34 Td
+(Project: Molecule MVP) Tj
+0 -22 Td
+(Section: Architecture / coordination package) Tj
+0 -22 Td
+(Status: Sent to validation) Tj
+0 -44 Td
+(This file is a real static PDF used by the document preview.) Tj
+0 -22 Td
+(In production the viewer will open uploaded project files.) Tj
+ET
+1 w
+72 90 451 610 re S
+72 705 451 36 re S
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000311 00000 n 
+trailer
+<< /Root 1 0 R /Size 6 >>
+startxref
+669
+%%EOF

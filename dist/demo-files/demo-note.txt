@@ -1,0 +1,3 @@
+Demo TXT
+This file was received from a messenger and added to the project pool.
+It can be attached to the relevant node or business process.
